@@ -23,6 +23,14 @@ class UserFirestoreService {
 
   final ValueNotifier<String?> _fallbackDocId = ValueNotifier<String?>(null);
 
+  String? get currentUserDocId {
+    final String? uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null && uid.isNotEmpty) return uid;
+    final String? fallbackDocId = _fallbackDocId.value;
+    if (fallbackDocId != null && fallbackDocId.isNotEmpty) return fallbackDocId;
+    return null;
+  }
+
   void setFallbackDocId(String? docId) {
     _fallbackDocId.value = docId;
   }
