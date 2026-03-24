@@ -1,12 +1,18 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:carousel_slider/carousel_slider.dart';
+import '../data/user_firestore_service.dart';
+import '../l10n/app_text.dart';
 import 'search_screen.dart';
+import 'setting_screen.dart';
+import 'transfer_money.dart';
+import 'phone_recharge.dart';
+import 'QR.dart';
+import 'credit_card.dart';
+import 'chat_placeholder_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  
-const HomeScreen({super.key, required this.fullName});
-  final String fullName;
+  const HomeScreen({super.key});
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
@@ -15,6 +21,8 @@ class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
   bool _isBalanceVisible = false;
   int _currentBannerIndex = 0;
+
+  String _t(String vi, String en) => AppText.tr(context, vi, en);
 
   // --- DỮ LIỆU BANNER (Kiểm tra kỹ đuôi file máy bro nhé) ---
   final List<String> bannerImages = [
@@ -71,20 +79,30 @@ class _HomeScreenState extends State<HomeScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          "Xin chào,",
+                          _t("Xin chào,", "Hello,"),
                           style: GoogleFonts.poppins(
                             color: Colors.white70,
-                            fontSize: 14,
+                            fontSize: 16,
                           ),
                         ),
-                        Text(
-      widget.fullName.toUpperCase(), 
-      style: GoogleFonts.poppins(
-        color: Colors.white,
-        fontSize: 18,
-        fontWeight: FontWeight.bold,
-      ),
-    ),
+                        StreamBuilder<UserProfileData?>(
+                          stream: UserFirestoreService.instance
+                              .currentUserProfileStream(),
+                          builder: (context, snapshot) {
+                            final String name = snapshot.hasError
+                                ? _t('Không tìm thấy user', 'User not found')
+                                : (snapshot.data?.fullname ?? '...');
+
+                            return Text(
+                              name.toUpperCase(),
+                              style: GoogleFonts.poppins(
+                                color: Colors.white,
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            );
+                          },
+                        ),
                       ],
                     ),
                     const Spacer(),
@@ -104,9 +122,9 @@ class _HomeScreenState extends State<HomeScreen> {
                               color: Colors.red,
                               shape: BoxShape.circle,
                             ),
-                            child: const Text(
+                            child: Text(
                               '2',
-                              style: TextStyle(
+                              style: GoogleFonts.poppins(
                                 color: Colors.white,
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold,
@@ -352,7 +370,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       Row(
                         children: [
                           Text(
-                            "Lịch sử giao dịch >",
+                            _t('Lịch sử giao dịch >', 'Transaction history >'),
                             style: GoogleFonts.poppins(
                               color: Colors.white70,
                               fontSize: 10.5,
@@ -424,50 +442,100 @@ class _HomeScreenState extends State<HomeScreen> {
           _actionItem(
             Icons.account_balance_wallet,
             Colors.purple,
-            "Chuyển tiền",
+            _t("Chuyển tiền", "Transfer"),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const TransferMoneyScreen(),
+                ),
+              );
+            },
           ),
-          _actionItem(Icons.receipt_long, Colors.green, "Thanh toán\nhóa đơn"),
-          _actionItem(Icons.atm, Colors.blue, "Rút tiền"),
-          _actionItem(Icons.qr_code_scanner, Colors.pink, "Quét QR"),
+          _actionItem(
+            Icons.receipt_long,
+            Colors.green,
+            _t("Thanh toán\nhóa đơn", "Bill\npayment"),
+          ),
+          _actionItem(Icons.atm, Colors.blue, _t("Rút tiền", "Withdraw")),
+          _actionItem(
+            Icons.qr_code_scanner,
+            Colors.pink,
+            _t("Quét QR", "Scan QR"),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const QrScreen()),
+              );
+            },
+          ),
           _actionItem(
             Icons.phone_android,
             Colors.orange,
-            "Nạp tiền\nđiện thoại",
+            _t("Nạp tiền\nđiện thoại", "Phone\nTop up"),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const PhoneRechargeScreen(),
+                ),
+              );
+            },
           ),
-          _actionItem(Icons.credit_card, Colors.deepOrange, "Thẻ tín dụng"),
+          _actionItem(
+            Icons.credit_card,
+            Colors.deepOrange,
+            _t("Thẻ tín dụng", "Credit card"),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const CreditCardScreen(),
+                ),
+              );
+            },
+          ),
         ],
       ),
     );
   }
 
-  Widget _actionItem(IconData icon, Color color, String title) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: color, size: 28),
-          const SizedBox(height: 8),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.poppins(
-              fontSize: 10,
-              fontWeight: FontWeight.w500,
-              color: const Color(0xFF343434),
+  Widget _actionItem(
+    IconData icon,
+    Color color,
+    String title, {
+    VoidCallback? onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
             ),
-          ),
-        ],
+          ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: color, size: 28),
+            const SizedBox(height: 8),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+                color: const Color(0xFF343434),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -629,7 +697,7 @@ class _HomeScreenState extends State<HomeScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            "Mua sắm - Giải trí",
+            _t("Mua sắm - Giải trí", "Shopping - Entertainment"),
             style: GoogleFonts.poppins(
               fontWeight: FontWeight.bold,
               fontSize: 14,
@@ -887,7 +955,7 @@ class _HomeScreenState extends State<HomeScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              "Thống kê tiêu dùng ⌄",
+              _t('Thống kê tiêu dùng ⌄', 'Spending statistics ⌄'),
               style: GoogleFonts.poppins(color: Colors.grey, fontSize: 11),
             ),
             Text(
@@ -915,17 +983,26 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 5),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: ["T2", "T3", "T4", "T5", "T6", "T7", "CN"]
-                  .map(
-                    (e) => Text(
-                      e,
-                      style: GoogleFonts.poppins(
-                        fontSize: 9,
-                        color: Colors.grey,
-                      ),
-                    ),
-                  )
-                  .toList(),
+              children:
+                  [
+                        _t('T2', 'Mon'),
+                        _t('T3', 'Tue'),
+                        _t('T4', 'Wed'),
+                        _t('T5', 'Thu'),
+                        _t('T6', 'Fri'),
+                        _t('T7', 'Sat'),
+                        _t('CN', 'Sun'),
+                      ]
+                      .map(
+                        (e) => Text(
+                          e,
+                          style: GoogleFonts.poppins(
+                            fontSize: 9,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      )
+                      .toList(),
             ),
           ],
         ),
@@ -951,7 +1028,7 @@ class _HomeScreenState extends State<HomeScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            "Giao dịch gần đây",
+            _t('Giao dịch gần đây', 'Recent transactions'),
             style: GoogleFonts.poppins(
               fontWeight: FontWeight.bold,
               fontSize: 14,
@@ -960,28 +1037,28 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 10),
           _transactionItem(
             Icons.atm,
-            "Rút tiền",
+            _t('Rút tiền', 'Withdraw'),
             "25/04/2026",
             "- 150.000.000",
             Colors.red,
           ),
           _transactionItem(
             Icons.water_drop,
-            "Thanh toán hóa đơn nước",
+            _t('Thanh toán hóa đơn nước', 'Water bill payment'),
             "18/04/2026",
             "- 1.342.545",
             Colors.red,
           ),
           _transactionItem(
             Icons.electric_bolt,
-            "Thanh toán hóa đơn điện",
+            _t('Thanh toán hóa đơn điện', 'Electric bill payment'),
             "05/04/2026",
             "- 854.000",
             Colors.red,
           ),
           _transactionItem(
             Icons.account_balance_wallet,
-            "Nạp tiền",
+            _t('Nạp tiền', 'Top up'),
             "22/03/2026",
             "+ 1.500.000",
             Colors.green,
@@ -1048,7 +1125,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            _pillNavItem(Icons.home, "Trang chính", 0),
+            _pillNavItem(Icons.home, _t("Trang chính", "Home"), 0),
             _pillNavItem(Icons.search, "", 1),
             _pillNavItem(Icons.chat_bubble_outline, "", 2),
             _pillNavItem(Icons.settings_outlined, "", 3),
@@ -1062,13 +1139,29 @@ class _HomeScreenState extends State<HomeScreen> {
     bool isSelected = _selectedIndex == index;
     return GestureDetector(
       onTap: () {
-        if (index == 1) { // Bấm vào Tìm kiếm
-          Navigator.push(
+        if (index == 0) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const HomeScreen()),
+          );
+        } else if (index == 1) {
+          Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (context) => const SearchScreen()),
           );
+        } else if (index == 2) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const ChatPlaceholderScreen(),
+            ),
+          );
+        } else if (index == 3) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const SettingScreen()),
+          );
         }
-        // Nếu bấm vào index 0 (Trang chủ) thì không làm gì vì đang ở đây rồi
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

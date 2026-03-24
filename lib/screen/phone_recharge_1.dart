@@ -1,4 +1,7 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../data/user_firestore_service.dart';
+import '../l10n/app_text.dart';
 
 class ConfirmTopUpScreen extends StatelessWidget {
   final String selectedAmount;
@@ -12,9 +15,13 @@ class ConfirmTopUpScreen extends StatelessWidget {
     required this.selectedPhoneNumber,
   });
 
-  String get _amountDisplay {
+  String _t(BuildContext context, String vi, String en) {
+    return AppText.tr(context, vi, en);
+  }
+
+  String _amountDisplay(BuildContext context) {
     if (selectedAmount == 'Số khác') {
-      return selectedAmount;
+      return _t(context, 'Số khác', 'Other');
     }
     return '$selectedAmount VND';
   }
@@ -32,9 +39,12 @@ class ConfirmTopUpScreen extends StatelessWidget {
           icon: const Icon(Icons.arrow_back_ios, color: Colors.black54),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
-          'Nạp tiền điện thoại',
-          style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold),
+        title: Text(
+          _t(context, 'Nạp tiền điện thoại', 'Phone Top-Up'),
+          style: GoogleFonts.poppins(
+            color: Colors.black87,
+            fontWeight: FontWeight.bold,
+          ),
         ),
       ),
       body: Column(
@@ -47,8 +57,8 @@ class ConfirmTopUpScreen extends StatelessWidget {
             child: Column(
               children: [
                 Text(
-                  _amountDisplay,
-                  style: TextStyle(
+                  _amountDisplay(context),
+                  style: GoogleFonts.poppins(
                     color: Colors.white,
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -57,9 +67,16 @@ class ConfirmTopUpScreen extends StatelessWidget {
                 SizedBox(height: 5),
                 Text(
                   selectedAmount == 'Số khác'
-                      ? "Vui lòng nhập số tiền mong muốn"
-                      : "Số tiền bạn đã chọn",
-                  style: TextStyle(color: Colors.white70, fontSize: 14),
+                      ? _t(
+                          context,
+                          'Vui lòng nhập số tiền mong muốn',
+                          'Please enter your desired amount',
+                        )
+                      : _t(context, 'Số tiền bạn đã chọn', 'Selected amount'),
+                  style: GoogleFonts.poppins(
+                    color: Colors.white70,
+                    fontSize: 14,
+                  ),
                 ),
               ],
             ),
@@ -72,9 +89,9 @@ class ConfirmTopUpScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Mục Trích từ
-                  const Text(
-                    "Trích từ",
-                    style: TextStyle(
+                  Text(
+                    _t(context, 'Trích từ', 'From account'),
+                    style: GoogleFonts.poppins(
                       color: Colors.grey,
                       fontWeight: FontWeight.bold,
                     ),
@@ -91,13 +108,16 @@ class ConfirmTopUpScreen extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         RichText(
-                          text: const TextSpan(
-                            style: TextStyle(color: Colors.black, fontSize: 14),
+                          text: TextSpan(
+                            style: GoogleFonts.poppins(
+                              color: Colors.black,
+                              fontSize: 14,
+                            ),
                             children: [
                               TextSpan(text: "STK: "),
                               TextSpan(
                                 text: "123 568 567 456",
-                                style: TextStyle(
+                                style: GoogleFonts.poppins(
                                   color: Colors.blue,
                                   fontWeight: FontWeight.bold,
                                 ),
@@ -106,9 +126,25 @@ class ConfirmTopUpScreen extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 5),
-                        const Text(
-                          "PHUNG THANH D",
-                          style: TextStyle(fontWeight: FontWeight.bold),
+                        StreamBuilder<UserProfileData?>(
+                          stream: UserFirestoreService.instance
+                              .currentUserProfileStream(),
+                          builder: (context, snapshot) {
+                            final String senderName = snapshot.hasError
+                                ? _t(
+                                    context,
+                                    'Không tìm thấy user',
+                                    'User not found',
+                                  )
+                                : (snapshot.data?.fullname ?? '...');
+
+                            return Text(
+                              senderName.toUpperCase(),
+                              style: GoogleFonts.poppins(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            );
+                          },
                         ),
                       ],
                     ),
@@ -117,9 +153,9 @@ class ConfirmTopUpScreen extends StatelessWidget {
                   const SizedBox(height: 30),
 
                   // Mục Thông tin chi tiết
-                  const Text(
-                    "Thông tin chi tiết",
-                    style: TextStyle(
+                  Text(
+                    _t(context, 'Thông tin chi tiết', 'Details'),
+                    style: GoogleFonts.poppins(
                       color: Colors.grey,
                       fontWeight: FontWeight.bold,
                     ),
@@ -132,23 +168,27 @@ class ConfirmTopUpScreen extends StatelessWidget {
                     ),
                     child: Column(
                       children: [
-                        _buildInfoRow("Loại dịch vụ", "Nạp ĐTDD", isBlue: true),
+                        _buildInfoRow(
+                          _t(context, 'Loại dịch vụ', 'Service type'),
+                          _t(context, 'Nạp ĐTDD', 'Mobile top-up'),
+                          isBlue: true,
+                        ),
                         const Divider(height: 1),
                         _buildInfoRow(
-                          "Nhà cung cấp",
+                          _t(context, 'Nhà cung cấp', 'Provider'),
                           selectedProvider,
                           isBlue: true,
                         ),
                         const Divider(height: 1),
                         _buildInfoRow(
-                          "Số điện thoại",
+                          _t(context, 'Số điện thoại', 'Phone number'),
                           selectedPhoneNumber,
                           isBlue: true,
                         ),
                         const Divider(height: 1),
                         _buildInfoRow(
-                          "Mệnh giá (VND)",
-                          _amountDisplay,
+                          _t(context, 'Mệnh giá (VND)', 'Amount (VND)'),
+                          _amountDisplay(context),
                           isBlue: true,
                         ),
                       ],
@@ -171,9 +211,9 @@ class ConfirmTopUpScreen extends StatelessWidget {
                           borderRadius: BorderRadius.circular(25),
                         ),
                       ),
-                      child: const Text(
-                        "Xác nhận",
-                        style: TextStyle(
+                      child: Text(
+                        _t(context, 'Xác nhận', 'Confirm'),
+                        style: GoogleFonts.poppins(
                           color: Colors.white,
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -199,14 +239,14 @@ class ConfirmTopUpScreen extends StatelessWidget {
         children: [
           Text(
             label,
-            style: const TextStyle(
+            style: GoogleFonts.poppins(
               color: Colors.black87,
               fontWeight: FontWeight.w500,
             ),
           ),
           Text(
             value,
-            style: TextStyle(
+            style: GoogleFonts.poppins(
               color: isBlue ? Colors.blue.shade900 : Colors.black,
               fontWeight: FontWeight.bold,
             ),

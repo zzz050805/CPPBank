@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../l10n/app_text.dart';
 import 'choose_a_bank.dart';
 
 void main() => runApp(const MyApp());
@@ -12,6 +13,15 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       home: ContactListScreen(),
     );
+  }
+}
+
+class TransferMoneyScreen extends StatelessWidget {
+  const TransferMoneyScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const ContactListScreen();
   }
 }
 
@@ -37,6 +47,8 @@ class _ContactListScreenState extends State<ContactListScreen>
   late final AnimationController _controller;
   late final Animation<double> _fadeAnimation;
   late final Animation<Offset> _slideAnimation;
+
+  String _t(String vi, String en) => AppText.tr(context, vi, en);
 
   @override
   void initState() {
@@ -88,9 +100,14 @@ class _ContactListScreenState extends State<ContactListScreen>
                     // Thanh tìm kiếm
                     TextField(
                       decoration: InputDecoration(
-                        hintText: "Tìm kiếm",
-                        prefixIcon: const Icon(Icons.search, color: Colors.grey),
-                        contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                        hintText: _t("Tìm kiếm", "Search"),
+                        prefixIcon: const Icon(
+                          Icons.search,
+                          color: Colors.grey,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 10,
+                        ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(15),
                           borderSide: BorderSide(color: Colors.grey.shade300),
@@ -125,8 +142,8 @@ class _ContactListScreenState extends State<ContactListScreen>
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text(
-                              "Thêm người nhận mới",
+                            Text(
+                              _t("Thêm người nhận mới", "Add new beneficiary"),
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w500,
@@ -146,10 +163,10 @@ class _ContactListScreenState extends State<ContactListScreen>
               ),
 
               const SizedBox(height: 20),
-              const Padding(
+              Padding(
                 padding: EdgeInsets.symmetric(horizontal: 20),
                 child: Text(
-                  "Đã lưu",
+                  _t("Đã lưu", "Saved"),
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
               ),
@@ -194,10 +211,10 @@ class _ContactListScreenState extends State<ContactListScreen>
                 ),
               ),
 
-              const Padding(
+              Padding(
                 padding: EdgeInsets.symmetric(horizontal: 20),
                 child: Text(
-                  "Gần đây",
+                  _t("Gần đây", "Recent"),
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
               ),
@@ -207,7 +224,8 @@ class _ContactListScreenState extends State<ContactListScreen>
               Expanded(
                 child: ListView.separated(
                   itemCount: recentContacts.length,
-                  separatorBuilder: (context, index) => const Divider(height: 1),
+                  separatorBuilder: (context, index) =>
+                      const Divider(height: 1),
                   itemBuilder: (context, index) {
                     final contact = recentContacts[index];
                     return ListTile(
@@ -224,7 +242,10 @@ class _ContactListScreenState extends State<ContactListScreen>
                       ),
                       subtitle: Text(
                         contact['id']!,
-                        style: const TextStyle(color: Colors.grey, fontSize: 12),
+                        style: const TextStyle(
+                          color: Colors.grey,
+                          fontSize: 12,
+                        ),
                       ),
                       onTap: () {},
                     );

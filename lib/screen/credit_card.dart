@@ -1,4 +1,7 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../data/user_firestore_service.dart';
+import '../l10n/app_text.dart';
 
 void main() => runApp(const MyApp());
 
@@ -33,6 +36,8 @@ class _CreditCardScreenState extends State<CreditCardScreen>
   late final Animation<double> _statsFade;
   late final Animation<Offset> _statsSlide;
 
+  String _t(String vi, String en) => AppText.tr(context, vi, en);
+
   @override
   void initState() {
     super.initState();
@@ -45,57 +50,49 @@ class _CreditCardScreenState extends State<CreditCardScreen>
       parent: _controller,
       curve: const Interval(0.0, 0.35, curve: Curves.easeOut),
     );
-    _card1Slide = Tween<Offset>(
-      begin: const Offset(0, 0.12),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.0, 0.35, curve: Curves.easeOutCubic),
-      ),
-    );
+    _card1Slide = Tween<Offset>(begin: const Offset(0, 0.12), end: Offset.zero)
+        .animate(
+          CurvedAnimation(
+            parent: _controller,
+            curve: const Interval(0.0, 0.35, curve: Curves.easeOutCubic),
+          ),
+        );
 
     _card2Fade = CurvedAnimation(
       parent: _controller,
       curve: const Interval(0.2, 0.55, curve: Curves.easeOut),
     );
-    _card2Slide = Tween<Offset>(
-      begin: const Offset(0, 0.12),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.2, 0.55, curve: Curves.easeOutCubic),
-      ),
-    );
+    _card2Slide = Tween<Offset>(begin: const Offset(0, 0.12), end: Offset.zero)
+        .animate(
+          CurvedAnimation(
+            parent: _controller,
+            curve: const Interval(0.2, 0.55, curve: Curves.easeOutCubic),
+          ),
+        );
 
     _addButtonFade = CurvedAnimation(
       parent: _controller,
       curve: const Interval(0.45, 0.78, curve: Curves.easeOut),
     );
-    _addButtonSlide = Tween<Offset>(
-      begin: const Offset(0, 0.12),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.45, 0.78, curve: Curves.easeOutCubic),
-      ),
-    );
+    _addButtonSlide =
+        Tween<Offset>(begin: const Offset(0, 0.12), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _controller,
+            curve: const Interval(0.45, 0.78, curve: Curves.easeOutCubic),
+          ),
+        );
 
     _statsFade = CurvedAnimation(
       parent: _controller,
       curve: const Interval(0.62, 1.0, curve: Curves.easeOut),
     );
-    _statsSlide = Tween<Offset>(
-      begin: const Offset(0, 0.12),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.62, 1.0, curve: Curves.easeOutCubic),
-      ),
-    );
+    _statsSlide = Tween<Offset>(begin: const Offset(0, 0.12), end: Offset.zero)
+        .animate(
+          CurvedAnimation(
+            parent: _controller,
+            curve: const Interval(0.62, 1.0, curve: Curves.easeOutCubic),
+          ),
+        );
 
     _controller.forward();
   }
@@ -128,9 +125,12 @@ class _CreditCardScreenState extends State<CreditCardScreen>
           icon: const Icon(Icons.arrow_back_ios, color: Colors.black87),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
-          'Thẻ tín dụng',
-          style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold),
+        title: Text(
+          _t('Thẻ tín dụng', 'Credit card'),
+          style: GoogleFonts.poppins(
+            color: Colors.black87,
+            fontWeight: FontWeight.bold,
+          ),
         ),
       ),
       body: SingleChildScrollView(
@@ -167,7 +167,9 @@ class _CreditCardScreenState extends State<CreditCardScreen>
             _buildAnimatedSection(
               fade: _addButtonFade,
               slide: _addButtonSlide,
-              child: const AddNewCardButton(),
+              child: AddNewCardButton(
+                title: _t('Thêm thẻ mới', 'Add new card'),
+              ),
             ),
 
             const SizedBox(height: 25),
@@ -176,7 +178,11 @@ class _CreditCardScreenState extends State<CreditCardScreen>
             _buildAnimatedSection(
               fade: _statsFade,
               slide: _statsSlide,
-              child: const StatisticsWidget(),
+              child: StatisticsWidget(
+                title: _t('Thống kê theo tuần', 'Weekly statistics'),
+                mainLegend: _t('Mua sắm-Tiêu dùng', 'Shopping-Spending'),
+                subLegend: _t('Giải trí', 'Entertainment'),
+              ),
             ),
             const SizedBox(height: 20),
           ],
@@ -249,14 +255,14 @@ class CreditCardWidget extends StatelessWidget {
                     children: [
                       Text(
                         cardType,
-                        style: TextStyle(
+                        style: GoogleFonts.poppins(
                           color: textColor,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      const Text(
+                      Text(
                         "CCP BANK",
-                        style: TextStyle(
+                        style: GoogleFonts.poppins(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
                           fontSize: 12,
@@ -275,20 +281,34 @@ class CreditCardWidget extends StatelessWidget {
                     ),
                   ),
                   const Spacer(),
-                  Text(
-                    "PHUNG THANH D",
-                    style: TextStyle(
-                      color: textColor,
-                      fontWeight: FontWeight.w500,
-                    ),
+                  StreamBuilder<UserProfileData?>(
+                    stream: UserFirestoreService.instance
+                        .currentUserProfileStream(),
+                    builder: (context, snapshot) {
+                      final String fullname = snapshot.hasError
+                          ? AppText.tr(
+                              context,
+                              'Không tìm thấy user',
+                              'User not found',
+                            )
+                          : (snapshot.data?.fullname ?? '...');
+
+                      return Text(
+                        fullname.toUpperCase(),
+                        style: GoogleFonts.poppins(
+                          color: textColor,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(height: 5),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
+                      Text(
                         "123 568 576 456",
-                        style: TextStyle(
+                        style: GoogleFonts.poppins(
                           color: Colors.white,
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -333,7 +353,9 @@ class CreditCardWidget extends StatelessWidget {
 
 // --- WIDGET NÚT THÊM THẺ MỚI ---
 class AddNewCardButton extends StatelessWidget {
-  const AddNewCardButton({super.key});
+  const AddNewCardButton({super.key, required this.title});
+
+  final String title;
 
   @override
   Widget build(BuildContext context) {
@@ -351,8 +373,8 @@ class AddNewCardButton extends StatelessWidget {
       ),
       child: Center(
         child: Text(
-          "Thêm thẻ mới",
-          style: TextStyle(
+          title,
+          style: GoogleFonts.poppins(
             color: Colors.blue.shade900,
             fontWeight: FontWeight.w500,
           ),
@@ -364,7 +386,20 @@ class AddNewCardButton extends StatelessWidget {
 
 // --- WIDGET THỐNG KÊ ---
 class StatisticsWidget extends StatelessWidget {
-  const StatisticsWidget({super.key});
+  const StatisticsWidget({
+    super.key,
+    required this.title,
+    required this.mainLegend,
+    required this.subLegend,
+  });
+
+  final String title;
+  final String mainLegend;
+  final String subLegend;
+
+  String _t(BuildContext context, String vi, String en) {
+    return AppText.tr(context, vi, en);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -385,11 +420,11 @@ class StatisticsWidget extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
               Text(
-                "Thống kê theo tuần",
-                style: TextStyle(
+                title,
+                style: GoogleFonts.poppins(
                   fontWeight: FontWeight.bold,
                   color: Colors.black87,
                 ),
@@ -398,9 +433,9 @@ class StatisticsWidget extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 5),
-          const Text(
+          Text(
             "8.600.343 VND",
-            style: TextStyle(
+            style: GoogleFonts.poppins(
               fontSize: 20,
               fontWeight: FontWeight.bold,
               color: Color(0xFF1A1A75),
@@ -411,9 +446,9 @@ class StatisticsWidget extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              _buildLegend(const Color(0xFF1A1A75), "Mua sắm-Tiêu dùng"),
+              _buildLegend(const Color(0xFF1A1A75), mainLegend),
               const SizedBox(width: 15),
-              _buildLegend(const Color(0xFF42A5F5), "Giải trí"),
+              _buildLegend(const Color(0xFF42A5F5), subLegend),
             ],
           ),
           const SizedBox(height: 20),
@@ -424,13 +459,13 @@ class StatisticsWidget extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                _buildBar("T2", 0.4, 0.2),
-                _buildBar("T3", 0.6, 0.3),
-                _buildBar("T4", 0.8, 0.4),
-                _buildBar("T5", 0.5, 0.3, isSelected: true),
-                _buildBar("T6", 0.4, 0.2),
-                _buildBar("T7", 0.7, 0.3),
-                _buildBar("CN", 0.5, 0.2),
+                _buildBar(_t(context, 'T2', 'Mon'), 0.4, 0.2),
+                _buildBar(_t(context, 'T3', 'Tue'), 0.6, 0.3),
+                _buildBar(_t(context, 'T4', 'Wed'), 0.8, 0.4),
+                _buildBar(_t(context, 'T5', 'Thu'), 0.5, 0.3, isSelected: true),
+                _buildBar(_t(context, 'T6', 'Fri'), 0.4, 0.2),
+                _buildBar(_t(context, 'T7', 'Sat'), 0.7, 0.3),
+                _buildBar(_t(context, 'CN', 'Sun'), 0.5, 0.2),
               ],
             ),
           ),
@@ -450,7 +485,7 @@ class StatisticsWidget extends StatelessWidget {
         const SizedBox(width: 5),
         Text(
           label,
-          style: const TextStyle(
+          style: GoogleFonts.poppins(
             fontSize: 11,
             fontStyle: FontStyle.italic,
             color: Colors.black54,
@@ -493,7 +528,7 @@ class StatisticsWidget extends StatelessWidget {
         const SizedBox(height: 10),
         Text(
           day,
-          style: TextStyle(
+          style: GoogleFonts.poppins(
             fontSize: 12,
             color: isSelected ? const Color(0xFF1A1A75) : Colors.grey,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,

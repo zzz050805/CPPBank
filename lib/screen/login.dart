@@ -1,8 +1,10 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'dart:ui'; 
-import 'package:cloud_firestore/cloud_firestore.dart'; 
+import 'dart:ui';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../data/user_firestore_service.dart';
 import 'home_screen.dart';
 import 'register.dart';
 
@@ -16,7 +18,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _cccdController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  
+
   bool _isLoginEnabled = false;
   String? _cccdError;
   String? _passwordError;
@@ -30,8 +32,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _checkInput() {
     setState(() {
-      _isLoginEnabled = _cccdController.text.isNotEmpty && _passwordController.text.isNotEmpty;
-      
+      _isLoginEnabled =
+          _cccdController.text.isNotEmpty &&
+          _passwordController.text.isNotEmpty;
+
       if (_cccdController.text.isNotEmpty) {
         _cccdError = null;
       }
@@ -52,70 +56,236 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     });
 
-    if (_isLoginEnabled) {
-      try {
-        // Hiện loading
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => const Center(child: CircularProgressIndicator(color: Colors.white)),
-        );
+    if (!_isLoginEnabled) return;
 
-        String inputAccount = _cccdController.text.trim();
-        String inputPass = _passwordController.text.trim();
+    bool isConfigurationNotFound(FirebaseAuthException e) {
+      final String code = e.code.toLowerCase();
+      final String message = (e.message ?? '').toLowerCase();
+      return code.contains('configuration-not-found') ||
+          code.contains('configuration_not_found') ||
+          message.contains('configuration_not_found') ||
+          message.contains('configuration-not-found');
+    }
 
-        // TRUY VẤN: Tìm user có pass đúng VÀ (SĐT khớp HOẶC CCCD khớp)
-        var userQuery = await FirebaseFirestore.instance
-            .collection('users')
-            .where('password', isEqualTo: inputPass)
-            .where(Filter.or(
-              Filter('phoneNumber', isEqualTo: inputAccount),
-              Filter('cccd', isEqualTo: inputAccount),
-            ))
-            .get();
+    bool loadingShown = false;
 
+    void closeLoadingDialog() {
+      if (!loadingShown || !mounted) return;
+      final NavigatorState navigator = Navigator.of(
+        context,
+        rootNavigator: true,
+      );
+      if (navigator.canPop()) {
+        navigator.pop();
+      }
+      loadingShown = false;
+    }
+
+    QueryDocumentSnapshot<Map<String, dynamic>>? foundLegacyDoc;
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) =>
+            const Center(child: CircularProgressIndicator(color: Colors.white)),
+      );
+      loadingShown = true;
+
+      final String inputAccount = _cccdController.text.trim();
+      final String inputPass = _passwordController.text.trim();
+
+      final QuerySnapshot<Map<String, dynamic>> userQuery =
+          await FirebaseFirestore.instance
+              .collection('users')
+              .where(
+                Filter.or(
+                  Filter('phoneNumber', isEqualTo: inputAccount),
+                  Filter('cccd', isEqualTo: inputAccount),
+                ),
+              )
+              .limit(1)
+              .get();
+
+      if (userQuery.docs.isEmpty) {
         if (!mounted) return;
-        Navigator.pop(context); // Tắt loading
+        closeLoadingDialog();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Tài khoản hoặc mật khẩu không chính xác!"),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
 
-        if (userQuery.docs.isNotEmpty) {
-          // Lấy tên thật từ bản ghi đầu tiên tìm thấy
-          String realName = userQuery.docs.first.get('fullName');
+      final QueryDocumentSnapshot<Map<String, dynamic>> legacyDoc =
+          userQuery.docs.first;
+      foundLegacyDoc = legacyDoc;
+      final Map<String, dynamic> data = legacyDoc.data();
+      final String authEmailRaw = (data['authEmail'] ?? '').toString().trim();
+      final String storedLegacyPassword = (data['password'] ?? '')
+          .toString()
+          .trim();
+      final String phone = (data['phoneNumber'] ?? inputAccount).toString();
+      final String normalizedPhone = phone.replaceAll(RegExp(r'\D'), '');
+      final String generatedEmail = normalizedPhone.isEmpty
+          ? 'cppbank_${legacyDoc.id}@cppbank.local'
+          : 'cppbank_$normalizedPhone@cppbank.local';
 
-          // Vào trang Home
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) => HomeScreen(fullName: realName),
-            ),
-          );
-        } else {
+      UserCredential credential;
+
+      if (authEmailRaw.isEmpty) {
+        // Legacy account: xác thực bằng mật khẩu đang lưu trong Firestore rồi migrate.
+        if (storedLegacyPassword != inputPass) {
+          if (!mounted) return;
+          closeLoadingDialog();
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text("Tài khoản hoặc mật khẩu không chính xác!"),
               backgroundColor: Colors.red,
             ),
           );
+          return;
         }
-      } catch (e) {
-        if (mounted) Navigator.pop(context);
-        print("Lỗi: $e");
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Lỗi hệ thống: $e"), backgroundColor: Colors.red),
-        );
+
+        try {
+          credential = await FirebaseAuth.instance
+              .createUserWithEmailAndPassword(
+                email: generatedEmail,
+                password: inputPass,
+              );
+        } on FirebaseAuthException catch (e) {
+          if (isConfigurationNotFound(e)) {
+            UserFirestoreService.instance.setFallbackDocId(legacyDoc.id);
+            await legacyDoc.reference.set({
+              'lastLoginAt': FieldValue.serverTimestamp(),
+            }, SetOptions(merge: true));
+            if (!mounted) return;
+            closeLoadingDialog();
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const HomeScreen()),
+            );
+            return;
+          }
+          if (e.code == 'email-already-in-use') {
+            credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+              email: generatedEmail,
+              password: inputPass,
+            );
+          } else {
+            rethrow;
+          }
+        }
+
+        final String uid = credential.user!.uid;
+        await FirebaseFirestore.instance.collection('users').doc(uid).set({
+          ...data,
+          'fullname': (data['fullname'] ?? data['fullName'] ?? '').toString(),
+          'fullName': (data['fullName'] ?? data['fullname'] ?? '').toString(),
+          'authEmail': generatedEmail,
+          'email': (data['email'] ?? generatedEmail).toString(),
+          'authUid': uid,
+          'migratedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+
+        // Đánh dấu lại bản ghi cũ để lần sau không bị thiếu auth info.
+        await legacyDoc.reference.set({
+          'authEmail': generatedEmail,
+          'authUid': uid,
+        }, SetOptions(merge: true));
+      } else {
+        try {
+          credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+            email: authEmailRaw,
+            password: inputPass,
+          );
+        } on FirebaseAuthException catch (e) {
+          if (isConfigurationNotFound(e)) {
+            UserFirestoreService.instance.setFallbackDocId(legacyDoc.id);
+            await legacyDoc.reference.set({
+              'lastLoginAt': FieldValue.serverTimestamp(),
+            }, SetOptions(merge: true));
+            if (!mounted) return;
+            closeLoadingDialog();
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const HomeScreen()),
+            );
+            return;
+          }
+          rethrow;
+        }
+
+        final String uid = credential.user!.uid;
+        await FirebaseFirestore.instance.collection('users').doc(uid).set({
+          'fullname': (data['fullname'] ?? data['fullName'] ?? '').toString(),
+          'fullName': (data['fullName'] ?? data['fullname'] ?? '').toString(),
+          'authEmail': authEmailRaw,
+          'email': (data['email'] ?? authEmailRaw).toString(),
+          'authUid': uid,
+          'lastLoginAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
       }
+
+      if (!mounted) return;
+      closeLoadingDialog();
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const HomeScreen()),
+      );
+    } on FirebaseAuthException catch (e) {
+      if (isConfigurationNotFound(e) && foundLegacyDoc != null) {
+        UserFirestoreService.instance.setFallbackDocId(foundLegacyDoc.id);
+        await foundLegacyDoc.reference.set({
+          'lastLoginAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+
+        if (!mounted) return;
+        closeLoadingDialog();
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+        );
+        return;
+      }
+
+      if (!mounted) return;
+      closeLoadingDialog();
+      final String message =
+          (e.code == 'wrong-password' ||
+              e.code == 'invalid-credential' ||
+              e.code == 'user-not-found')
+          ? "Tài khoản hoặc mật khẩu không chính xác!"
+          : "Lỗi đăng nhập: ${e.message ?? e.code}";
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: Colors.red),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      closeLoadingDialog();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Lỗi hệ thống: $e"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      closeLoadingDialog();
     }
   }
 
   void _showSuccessPopup(BuildContext context) {
     showDialog(
       context: context,
-      barrierColor: Colors.black26, 
+      barrierColor: Colors.black26,
       builder: (BuildContext context) {
         return Center(
           child: ClipRRect(
             borderRadius: BorderRadius.circular(24),
             child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10), 
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
               child: Container(
                 width: 180,
                 height: 180,
@@ -130,10 +300,14 @@ class _LoginScreenState extends State<LoginScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: const BoxDecoration(
-                        color: Color(0xFF52D5BA), 
+                        color: Color(0xFF52D5BA),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.check, color: Colors.white, size: 40),
+                      child: const Icon(
+                        Icons.check,
+                        color: Colors.white,
+                        size: 40,
+                      ),
                     ),
                     const SizedBox(height: 16),
                     Text(
@@ -142,7 +316,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
                         color: const Color(0xFF343434),
-                        decoration: TextDecoration.none, 
+                        decoration: TextDecoration.none,
                       ),
                     ),
                   ],
@@ -181,15 +355,20 @@ class _LoginScreenState extends State<LoginScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 20.0),
               child: Row(
                 children: [
-                  const Text(
+                  Text(
                     "9:09",
-                    style: TextStyle(
-                        color: Colors.white, 
-                        fontWeight: FontWeight.w600, 
-                        fontSize: 14),
+                    style: GoogleFonts.poppins(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
                   ),
                   const Spacer(),
-                  const Icon(Icons.signal_cellular_4_bar, color: Colors.white, size: 16),
+                  const Icon(
+                    Icons.signal_cellular_4_bar,
+                    color: Colors.white,
+                    size: 16,
+                  ),
                   const SizedBox(width: 4),
                   const Icon(Icons.wifi, color: Colors.white, size: 16),
                   const SizedBox(width: 4),
@@ -197,7 +376,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 80), 
+            const SizedBox(height: 80),
             Expanded(
               child: Container(
                 width: double.infinity,
@@ -211,10 +390,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     return SingleChildScrollView(
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 24,
+                      ),
                       child: ConstrainedBox(
                         constraints: BoxConstraints(
-                          minHeight: constraints.maxHeight - 48, 
+                          minHeight: constraints.maxHeight - 48,
                         ),
                         child: IntrinsicHeight(
                           child: Column(
@@ -238,66 +420,75 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               ),
                               const SizedBox(height: 15),
-                              
+
                               Center(
                                 child: Transform.scale(
-                                  scale: 1.1, 
+                                  scale: 1.1,
                                   child: _buildLockIllustration(),
                                 ),
                               ),
                               const SizedBox(height: 20),
-                              
+
                               _buildTextField(
                                 "Số điện thoại/CCCD",
                                 controller: _cccdController,
                                 errorText: _cccdError,
-                                keyboardType: TextInputType.text, 
-                                textInputAction: TextInputAction.next, 
+                                keyboardType: TextInputType.text,
+                                textInputAction: TextInputAction.next,
                                 inputFormatters: [
                                   LengthLimitingTextInputFormatter(20),
                                 ],
                               ),
                               const SizedBox(height: 16),
-                              
+
                               _buildTextField(
                                 "Mật khẩu",
                                 controller: _passwordController,
                                 errorText: _passwordError,
                                 isObscured: true,
-                                keyboardType: TextInputType.visiblePassword, 
-                                textInputAction: TextInputAction.done, 
+                                keyboardType: TextInputType.visiblePassword,
+                                textInputAction: TextInputAction.done,
                               ),
-                              
+
                               const SizedBox(height: 12),
                               Align(
                                 alignment: Alignment.centerRight,
                                 child: Text(
                                   "Quên mật khẩu ?",
                                   style: GoogleFonts.poppins(
-                                    color: const Color.fromARGB(255, 68, 67, 67),
+                                    color: const Color.fromARGB(
+                                      255,
+                                      68,
+                                      67,
+                                      67,
+                                    ),
                                     fontSize: 14,
                                   ),
                                 ),
                               ),
                               const SizedBox(height: 24),
-                              
+
                               Center(
                                 child: SizedBox(
                                   width: double.infinity,
                                   height: 50,
                                   child: ElevatedButton(
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: _isLoginEnabled ? const Color(0xFF000DC0) : const Color(0xFFF2F4FB),
+                                      backgroundColor: _isLoginEnabled
+                                          ? const Color(0xFF000DC0)
+                                          : const Color(0xFFF2F4FB),
                                       elevation: 0,
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(20),
                                       ),
                                     ),
-                                    onPressed: _handleLogin, 
+                                    onPressed: _handleLogin,
                                     child: Text(
                                       "ĐĂNG NHẬP",
                                       style: GoogleFonts.poppins(
-                                        color: _isLoginEnabled ? Colors.white : const Color(0xFF000DC0),
+                                        color: _isLoginEnabled
+                                            ? Colors.white
+                                            : const Color(0xFF000DC0),
                                         fontSize: 16,
                                         fontWeight: FontWeight.w600,
                                       ),
@@ -306,7 +497,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               ),
                               const SizedBox(height: 20),
-                              
+
                               Center(
                                 child: IconButton(
                                   iconSize: 60,
@@ -319,15 +510,18 @@ class _LoginScreenState extends State<LoginScreen> {
                                   },
                                 ),
                               ),
-                              
-                              const Spacer(), 
-                              
+
+                              const Spacer(),
+
                               Center(
                                 child: GestureDetector(
                                   onTap: () {
                                     Navigator.push(
                                       context,
-                                      MaterialPageRoute(builder: (context) => const RegisterScreen()),
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            const RegisterScreen(),
+                                      ),
                                     );
                                   },
                                   child: RichText(
@@ -373,23 +567,26 @@ class _LoginScreenState extends State<LoginScreen> {
     TextInputAction? textInputAction,
     TextEditingController? controller,
     List<TextInputFormatter>? inputFormatters,
-    String? errorText, 
+    String? errorText,
   }) {
     return TextField(
       controller: controller,
       obscureText: isObscured,
-      keyboardType: keyboardType,   
-      textInputAction: textInputAction, 
+      keyboardType: keyboardType,
+      textInputAction: textInputAction,
       inputFormatters: inputFormatters,
       decoration: InputDecoration(
         hintText: hintText,
-        errorText: errorText, 
+        errorText: errorText,
         errorStyle: GoogleFonts.poppins(color: Colors.red, fontSize: 12),
         hintStyle: GoogleFonts.poppins(
           color: const Color(0xFFCBCBCB),
           fontSize: 14,
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 20,
+          vertical: 16,
+        ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Color(0xFFCBCBCB), width: 1),
@@ -421,7 +618,7 @@ class _LoginScreenState extends State<LoginScreen> {
             width: 100,
             height: 100,
             decoration: const BoxDecoration(
-              color: Color(0xFFE5E2FF), 
+              color: Color(0xFFE5E2FF),
               shape: BoxShape.circle,
             ),
           ),
@@ -432,13 +629,37 @@ class _LoginScreenState extends State<LoginScreen> {
               color: const Color(0xFF5655B9),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.lock_outline, color: Colors.white, size: 28),
+            child: const Icon(
+              Icons.lock_outline,
+              color: Colors.white,
+              size: 28,
+            ),
           ),
-          Positioned(top: 15, left: 35, child: _buildDot(const Color(0xFF281C9D), 6)),
-          Positioned(top: 30, right: 20, child: _buildDot(const Color(0xFFFF4267), 10)),
-          Positioned(bottom: 25, left: 15, child: _buildDot(const Color(0xFFFFA600), 8)),
-          Positioned(left: 10, top: 60, child: _buildDot(const Color(0xFF52D5BA), 5)),
-          Positioned(bottom: 45, right: 25, child: _buildDot(const Color(0xFF0890FE), 5)),
+          Positioned(
+            top: 15,
+            left: 35,
+            child: _buildDot(const Color(0xFF281C9D), 6),
+          ),
+          Positioned(
+            top: 30,
+            right: 20,
+            child: _buildDot(const Color(0xFFFF4267), 10),
+          ),
+          Positioned(
+            bottom: 25,
+            left: 15,
+            child: _buildDot(const Color(0xFFFFA600), 8),
+          ),
+          Positioned(
+            left: 10,
+            top: 60,
+            child: _buildDot(const Color(0xFF52D5BA), 5),
+          ),
+          Positioned(
+            bottom: 45,
+            right: 25,
+            child: _buildDot(const Color(0xFF0890FE), 5),
+          ),
         ],
       ),
     );
@@ -448,10 +669,7 @@ class _LoginScreenState extends State<LoginScreen> {
     return Container(
       width: size,
       height: size,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-      ),
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
     );
   }
 }

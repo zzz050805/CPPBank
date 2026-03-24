@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../data/user_firestore_service.dart';
 
 void main() => runApp(const MyApp());
 
@@ -100,44 +101,76 @@ class SuccessTransactionScreen extends StatelessWidget {
 
                     const SizedBox(height: 30),
 
-                    // --- BẢNG THÔNG TIN CHI TIẾT ---
-                    const Divider(height: 1),
-                    _buildInfoRow("Từ", "PHUNG THANH D\n****** 456"),
-                    const Divider(height: 1),
-                    _buildInfoRow("Đến", "TRAN THANH B\nMC-BANK\n312 555 867"),
-                    const Divider(height: 1),
-                    _buildInfoRow("Chuyển lúc", "12/12/2025 , 10:10:21"),
-                    const Divider(height: 1),
-                    _buildInfoRow("Phí", "Miễn phí"),
-                    const Divider(height: 1),
-                    _buildInfoRow("Mã giao dịch", "3421"),
-                    const Divider(height: 1),
+                    StreamBuilder<UserProfileData?>(
+                      stream: UserFirestoreService.instance
+                          .currentUserProfileStream(),
+                      builder: (context, snapshot) {
+                        final String senderName = snapshot.hasError
+                            ? 'Không tìm thấy user'
+                            : (snapshot.data?.fullname ?? '...');
+
+                        return Column(
+                          children: [
+                            const Divider(height: 1),
+                            _buildInfoRow(
+                              "Từ",
+                              "${senderName.toUpperCase()}\n****** 456",
+                            ),
+                            const Divider(height: 1),
+                            _buildInfoRow(
+                              "Đến",
+                              "TRAN THANH B\nMC-BANK\n312 555 867",
+                            ),
+                            const Divider(height: 1),
+                            _buildInfoRow(
+                              "Chuyển lúc",
+                              "12/12/2025 , 10:10:21",
+                            ),
+                            const Divider(height: 1),
+                            _buildInfoRow("Phí", "Miễn phí"),
+                            const Divider(height: 1),
+                            _buildInfoRow("Mã giao dịch", "3421"),
+                            const Divider(height: 1),
+                          ],
+                        );
+                      },
+                    ),
 
                     // Nội dung chuyển tiền
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "Nội dung",
-                            style: GoogleFonts.poppins(
-                              color: Colors.grey,
-                              fontSize: 13,
-                            ),
+                    StreamBuilder<UserProfileData?>(
+                      stream: UserFirestoreService.instance
+                          .currentUserProfileStream(),
+                      builder: (context, snapshot) {
+                        final String senderName = snapshot.hasError
+                            ? 'Không tìm thấy user'
+                            : (snapshot.data?.fullname ?? '...');
+
+                        return Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "Nội dung",
+                                style: GoogleFonts.poppins(
+                                  color: Colors.grey,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              const SizedBox(height: 5),
+                              Text(
+                                "${senderName.toUpperCase()} CHUYEN TIEN",
+                                style: GoogleFonts.poppins(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 5),
-                          Text(
-                            "PHUNG THANH D CHUYEN TIEN",
-                            style: GoogleFonts.poppins(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                              color: Colors.black87,
-                            ),
-                          ),
-                        ],
-                      ),
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -154,8 +187,9 @@ class SuccessTransactionScreen extends StatelessWidget {
                     child: SizedBox(
                       height: 55,
                       child: OutlinedButton(
-                        onPressed: () =>
-                            Navigator.of(context).popUntil((route) => route.isFirst),
+                        onPressed: () => Navigator.of(
+                          context,
+                        ).popUntil((route) => route.isFirst),
                         style: OutlinedButton.styleFrom(
                           backgroundColor: const Color(0xFFF0F2F8),
                           side: BorderSide.none,

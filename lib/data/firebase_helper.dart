@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
 
 class FirebaseHelper {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'register_password_screen.dart'; // Đã đổi sang trang Password
@@ -473,3 +473,4 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 }
+

@@ -1,5 +1,8 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import '../data/user_firestore_service.dart';
+import '../l10n/app_text.dart';
 
 void main() => runApp(const MyApp());
 
@@ -14,6 +17,10 @@ class MyApp extends StatelessWidget {
 
 class QRCodeScreen extends StatelessWidget {
   const QRCodeScreen({super.key});
+
+  String _t(BuildContext context, String vi, String en) {
+    return AppText.tr(context, vi, en);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -49,14 +56,30 @@ class QRCodeScreen extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text(
-                    "PHUNG THANH D",
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  StreamBuilder<UserProfileData?>(
+                    stream: UserFirestoreService.instance
+                        .currentUserProfileStream(),
+                    builder: (context, snapshot) {
+                      final String fullname = snapshot.hasError
+                          ? _t(context, 'Không tìm thấy user', 'User not found')
+                          : (snapshot.data?.fullname ?? '...');
+
+                      return Text(
+                        fullname.toUpperCase(),
+                        style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(height: 4),
-                  const Text(
+                  Text(
                     "123 568 567 456",
-                    style: TextStyle(color: Colors.black87, fontSize: 16),
+                    style: GoogleFonts.poppins(
+                      color: Colors.black87,
+                      fontSize: 16,
+                    ),
                   ),
                   const SizedBox(height: 20),
                   // Mã QR (Dùng thư viện qr_flutter)
@@ -85,9 +108,9 @@ class QRCodeScreen extends StatelessWidget {
                   TextButton.icon(
                     onPressed: () {},
                     icon: const Icon(Icons.add, color: Colors.black),
-                    label: const Text(
-                      "Thêm số tiền",
-                      style: TextStyle(
+                    label: Text(
+                      _t(context, 'Thêm số tiền', 'Add amount'),
+                      style: GoogleFonts.poppins(
                         color: Colors.black,
                         fontWeight: FontWeight.w500,
                       ),
@@ -113,9 +136,12 @@ class QRCodeScreen extends StatelessWidget {
                       ),
                     ),
                     onPressed: () {},
-                    child: const Text(
-                      "Lưu ảnh",
-                      style: TextStyle(color: Colors.white, fontSize: 16),
+                    child: Text(
+                      _t(context, 'Lưu ảnh', 'Save image'),
+                      style: GoogleFonts.poppins(
+                        color: Colors.white,
+                        fontSize: 16,
+                      ),
                     ),
                   ),
                 ),
@@ -130,9 +156,12 @@ class QRCodeScreen extends StatelessWidget {
                       ),
                     ),
                     onPressed: () {},
-                    child: const Text(
-                      "Gửi",
-                      style: TextStyle(color: Colors.white, fontSize: 16),
+                    child: Text(
+                      _t(context, 'Gửi', 'Send'),
+                      style: GoogleFonts.poppins(
+                        color: Colors.white,
+                        fontSize: 16,
+                      ),
                     ),
                   ),
                 ),
@@ -151,14 +180,14 @@ class QRCodeScreen extends StatelessWidget {
             Navigator.of(context).maybePop();
           }
         },
-        items: const [
+        items: [
           BottomNavigationBarItem(
             icon: Icon(Icons.qr_code_scanner),
-            label: 'Quét mã',
+            label: _t(context, 'Quét mã', 'Scan code'),
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.qr_code_2),
-            label: 'Mã QR nhận tiền',
+            label: _t(context, 'Mã QR nhận tiền', 'Receive QR code'),
           ),
         ],
       ),

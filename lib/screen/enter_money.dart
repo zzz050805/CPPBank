@@ -1,6 +1,8 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/services.dart';
+import '../data/user_firestore_service.dart';
+import '../l10n/app_text.dart';
 import 'confirm_money.dart';
 
 void main() => runApp(const MyApp());
@@ -32,6 +34,8 @@ class _TransferScreenState extends State<TransferScreen> {
   final TextEditingController _amountController = TextEditingController();
   String? _amountError;
 
+  String _t(String vi, String en) => AppText.tr(context, vi, en);
+
   @override
   void dispose() {
     _amountController.dispose();
@@ -45,7 +49,10 @@ class _TransferScreenState extends State<TransferScreen> {
       if (value.isEmpty) {
         _amountError = null;
       } else if (amount > _availableBalance) {
-        _amountError = "Số dư trong tài khoản không đủ";
+        _amountError = _t(
+          "Số dư trong tài khoản không đủ",
+          "Insufficient account balance",
+        );
       } else {
         _amountError = null;
       }
@@ -74,9 +81,9 @@ class _TransferScreenState extends State<TransferScreen> {
               Navigator.pop(context);
               Navigator.pop(context);
             },
-            child: const Text(
-              "Hủy",
-              style: TextStyle(color: Colors.white, fontSize: 16),
+            child: Text(
+              _t('Hủy', 'Cancel'),
+              style: GoogleFonts.poppins(color: Colors.white, fontSize: 16),
             ),
           ),
           const SizedBox(width: 10),
@@ -103,15 +110,18 @@ class _TransferScreenState extends State<TransferScreen> {
                     const SizedBox(height: 30),
 
                     // --- Số dư tài khoản ---
-                    const Text(
-                      "Số dư tài khoản",
-                      style: TextStyle(color: Colors.grey, fontSize: 13),
+                    Text(
+                      _t('Số dư tài khoản', 'Account balance'),
+                      style: GoogleFonts.poppins(
+                        color: Colors.grey,
+                        fontSize: 13,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     _buildCustomBox(
-                      child: const Text(
+                      child: Text(
                         "1.000.000.000 VND",
-                        style: TextStyle(
+                        style: GoogleFonts.poppins(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
                         ),
@@ -130,20 +140,36 @@ class _TransferScreenState extends State<TransferScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            "Từ tài khoản",
-                            style: TextStyle(color: Colors.grey, fontSize: 12),
+                          Text(
+                            _t('Từ tài khoản', 'From account'),
+                            style: GoogleFonts.poppins(
+                              color: Colors.grey,
+                              fontSize: 12,
+                            ),
                           ),
                           const SizedBox(height: 5),
-                          _buildAccountInfoCard(
-                            name: "PHUNG THANH D",
-                            id: "123 568 567 456",
-                            isBlue: false,
+                          StreamBuilder<UserProfileData?>(
+                            stream: UserFirestoreService.instance
+                                .currentUserProfileStream(),
+                            builder: (context, snapshot) {
+                              final String senderName = snapshot.hasError
+                                  ? _t('Không tìm thấy user', 'User not found')
+                                  : (snapshot.data?.fullname ?? '...');
+
+                              return _buildAccountInfoCard(
+                                name: senderName.toUpperCase(),
+                                id: '123 568 567 456',
+                                isBlue: false,
+                              );
+                            },
                           ),
                           const SizedBox(height: 15),
-                          const Text(
-                            "Đến tài khoản",
-                            style: TextStyle(color: Colors.grey, fontSize: 12),
+                          Text(
+                            _t('Đến tài khoản', 'To account'),
+                            style: GoogleFonts.poppins(
+                              color: Colors.grey,
+                              fontSize: 12,
+                            ),
                           ),
                           const SizedBox(height: 5),
                           _buildAccountInfoCard(
@@ -171,22 +197,26 @@ class _TransferScreenState extends State<TransferScreen> {
                               inputFormatters: [
                                 FilteringTextInputFormatter.digitsOnly,
                               ],
-                              decoration: const InputDecoration(
-                                hintText: "Nhập số tiền",
-                                hintStyle: TextStyle(color: Colors.grey),
+                              decoration: InputDecoration(
+                                hintText: _t('Nhập số tiền', 'Enter amount'),
+                                hintStyle: GoogleFonts.poppins(
+                                  color: Colors.grey,
+                                ),
                                 border: InputBorder.none,
                                 isCollapsed: true,
                               ),
-                              style: const TextStyle(
+                              style: GoogleFonts.poppins(
                                 color: Colors.black87,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
                           const SizedBox(width: 8),
-                          const Text(
+                          Text(
                             "VND",
-                            style: TextStyle(fontWeight: FontWeight.bold),
+                            style: GoogleFonts.poppins(
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ],
                       ),
@@ -197,7 +227,7 @@ class _TransferScreenState extends State<TransferScreen> {
                         padding: const EdgeInsets.only(left: 10),
                         child: Text(
                           _amountError!,
-                          style: const TextStyle(
+                          style: GoogleFonts.poppins(
                             color: Colors.red,
                             fontSize: 13,
                             fontWeight: FontWeight.w500,
@@ -221,13 +251,13 @@ class _TransferScreenState extends State<TransferScreen> {
                             RegExp(r"[a-zA-ZÀ-ỹà-ỹ\s]"),
                           ),
                         ],
-                        decoration: const InputDecoration(
-                          hintText: "Nhập nội dung",
-                          hintStyle: TextStyle(color: Colors.grey),
+                        decoration: InputDecoration(
+                          hintText: _t('Nhập nội dung', 'Enter message'),
+                          hintStyle: GoogleFonts.poppins(color: Colors.grey),
                           border: InputBorder.none,
                           isCollapsed: true,
                         ),
-                        style: const TextStyle(
+                        style: GoogleFonts.poppins(
                           color: Colors.black87,
                           fontWeight: FontWeight.w500,
                         ),
@@ -258,9 +288,9 @@ class _TransferScreenState extends State<TransferScreen> {
                             borderRadius: BorderRadius.circular(30),
                           ),
                         ),
-                        child: const Text(
-                          "Tiếp theo",
-                          style: TextStyle(
+                        child: Text(
+                          _t('Tiếp theo', 'Next'),
+                          style: GoogleFonts.poppins(
                             color: Colors.white,
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -285,7 +315,7 @@ class _TransferScreenState extends State<TransferScreen> {
       padding: const EdgeInsets.only(left: 10, bottom: 8),
       child: Text(
         label,
-        style: TextStyle(
+        style: GoogleFonts.poppins(
           color: Colors.grey.shade400,
           fontWeight: FontWeight.w500,
         ),
@@ -340,7 +370,7 @@ class _TransferScreenState extends State<TransferScreen> {
         children: [
           Text(
             name,
-            style: TextStyle(
+            style: GoogleFonts.poppins(
               color: isBlue ? Colors.white : Colors.black87,
               fontWeight: FontWeight.bold,
               fontSize: 16,
@@ -349,7 +379,7 @@ class _TransferScreenState extends State<TransferScreen> {
           if (bank != null)
             Text(
               bank,
-              style: const TextStyle(color: Colors.white70, fontSize: 12),
+              style: GoogleFonts.poppins(color: Colors.white70, fontSize: 12),
             ),
           const SizedBox(height: 5),
           Row(
@@ -363,7 +393,7 @@ class _TransferScreenState extends State<TransferScreen> {
               if (isBlue) const SizedBox(width: 5),
               Text(
                 id,
-                style: TextStyle(
+                style: GoogleFonts.poppins(
                   color: isBlue ? Colors.white : Colors.black54,
                   fontWeight: isBlue ? FontWeight.w500 : FontWeight.bold,
                   fontSize: 15,

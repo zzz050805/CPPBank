@@ -1,271 +1,442 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../app_preferences.dart';
+import '../data/user_firestore_service.dart';
+import '../l10n/app_text.dart';
+import 'search_screen.dart';
 import 'home_screen.dart';
 
-void main() {
-  runApp(const MyApp());
-}
-
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class SettingScreen extends StatefulWidget {
+  const SettingScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(fontFamily: 'Roboto'), // Hoặc font tương đương
-      home: const SettingsScreen(),
-    );
+  State<SettingScreen> createState() => _SettingScreenState();
+}
+
+class _SettingScreenState extends State<SettingScreen> {
+  int _selectedIndex = 3;
+  bool _isDarkMode = false; // Chức năng Dark Mode
+
+  String _t(String vi, String en) => AppText.tr(context, vi, en);
+
+  String get _languageLabel {
+    return AppPreferences.instance.locale.languageCode == 'en'
+        ? 'English'
+        : 'Tiếng Việt';
   }
-}
 
-class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key});
-
-  @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
-}
-
-class _SettingsScreenState extends State<SettingsScreen> {
-  bool _isFaceIdEnabled = false;
-  int _selectedBottomIndex = 3;
-  static const Duration _navAnimationDuration = Duration(milliseconds: 280);
+  // --- HỆ THỐNG MÀU SẮC THEO THEME ---
+  Color get _primaryBlue => const Color(0xFF000DC0);
+  Color get _bg =>
+      _isDarkMode ? const Color(0xFF0B0B0F) : const Color(0xFFF8F9FE);
+  Color get _cardColor => _isDarkMode ? const Color(0xFF1A1A23) : Colors.white;
+  Color get _textColor => _isDarkMode ? Colors.white : const Color(0xFF1A1A1A);
+  Color get _subTextColor => _isDarkMode ? Colors.white60 : Colors.grey;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Cài đặt',
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF333333),
-                ),
-              ),
-              const SizedBox(height: 25),
-
-              // Nhóm cài đặt chính
-              Container(
-                decoration: _cardDecoration(),
-                child: Column(
-                  children: [
-                    _buildSettingItem("Xác thực khuôn mặt"),
-                    _buildDivider(),
-                    _buildSettingItem("CCP Safe key"),
-                    _buildDivider(),
-                    _buildSettingItem("Quản lý thiết bị truy cập"),
-                    _buildDivider(),
-                    _buildSettingItem("Đổi mật khẩu"),
-                    _buildDivider(),
-                    _buildSettingItem("Đổi tên truy cập"),
-                    _buildDivider(),
-                    _buildSwitchItem("Kích hoạt Face ID"),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              // Nhóm thông báo
-              Container(
-                decoration: _cardDecoration(),
-                child: _buildSettingItem("Quản lý thông báo"),
-              ),
-
-              const SizedBox(height: 30),
-
-              // Nút Đăng xuất
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {},
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFF2F4F7),
-                    foregroundColor: Colors.red,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(15),
+      backgroundColor: _bg,
+      body: Stack(
+        children: [
+          CustomScrollView(
+            slivers: [
+              // 1. HEADER GRADIENT XỊN
+              SliverAppBar(
+                expandedHeight: 180,
+                pinned: true,
+                backgroundColor: _primaryBlue,
+                elevation: 0,
+                flexibleSpace: FlexibleSpaceBar(
+                  background: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [_primaryBlue, const Color(0xFF000766)],
+                      ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 60, left: 25),
+                      child: Row(
+                        children: [
+                          _buildAvatar(),
+                          const SizedBox(width: 15),
+                          _buildUserInfo(),
+                        ],
+                      ),
                     ),
                   ),
-                  child: const Text(
-                    'Đăng xuất',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+
+              // 2. DANH SÁCH CÀI ĐẶT
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _sectionTitle(
+                        _t("GIAO DIỆN & TIỆN ÍCH", "DISPLAY & UTILITIES"),
+                      ),
+                      _buildSettingsGroup([
+                        _buildToggleItem(
+                          Icons.dark_mode_outlined,
+                          _t("Chế độ tối", "Dark mode"),
+                          _isDarkMode,
+                          (v) {
+                            setState(() => _isDarkMode = v);
+                          },
+                        ),
+                        _buildSettingItem(
+                          Icons.language_outlined,
+                          _t("Ngôn ngữ", "Language"),
+                          trailingText: _languageLabel,
+                          onTap: _showLanguagePicker,
+                        ),
+                      ]),
+
+                      const SizedBox(height: 25),
+                      _sectionTitle(_t("BẢO MẬT", "SECURITY")),
+                      _buildSettingsGroup([
+                        _buildSettingItem(
+                          Icons.key_outlined,
+                          _t("Quản lý Smart OTP", "Manage Smart OTP"),
+                        ),
+                        _buildSettingItem(
+                          Icons.devices_outlined,
+                          _t("Thiết bị tin cậy", "Trusted devices"),
+                        ),
+                        _buildSettingItem(
+                          Icons.lock_outline,
+                          _t("Đổi mật khẩu", "Change password"),
+                        ),
+                      ]),
+
+                      const SizedBox(height: 25),
+                      _sectionTitle(_t("THÔNG TIN", "INFORMATION")),
+                      _buildSettingsGroup([
+                        _buildSettingItem(
+                          Icons.info_outline,
+                          _t("Về ứng dụng", "About app"),
+                          trailingText: "v2.0.4",
+                        ),
+                        _buildSettingItem(
+                          Icons.help_outline,
+                          _t("Trung tâm trợ giúp", "Help center"),
+                        ),
+                      ]),
+
+                      const SizedBox(height: 30),
+                      _buildLogoutButton(),
+                    ],
                   ),
                 ),
               ),
             ],
           ),
-        ),
+
+          // 3. BOTTOM NAV (KHỚP 100% VỚI CÁC TRANG TRƯỚC)
+          _buildPillBottomNav(),
+        ],
       ),
-      bottomNavigationBar: _buildBottomTab(),
     );
   }
 
-  // Widget cho các mục cài đặt thông thường
-  Widget _buildSettingItem(String title) {
+  // --- WIDGET PHỤ TRỢ ---
+
+  Widget _buildAvatar() {
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: const BoxDecoration(
+        color: Colors.white24,
+        shape: BoxShape.circle,
+      ),
+      child: const CircleAvatar(
+        radius: 35,
+        backgroundImage: NetworkImage(
+          'https://i.pravatar.cc/150?img=68',
+        ), // Avatar mẫu
+      ),
+    );
+  }
+
+  Widget _buildUserInfo() {
+    return StreamBuilder<UserProfileData?>(
+      stream: UserFirestoreService.instance.currentUserProfileStream(),
+      builder: (context, snapshot) {
+        final String fullname = snapshot.hasError
+            ? _t('Không tìm thấy user', 'User not found')
+            : (snapshot.data?.fullname ?? '...');
+        final String email = snapshot.hasError
+            ? _t('Không tìm thấy user', 'User not found')
+            : (snapshot.data?.email ?? '...');
+
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              fullname.toUpperCase(),
+              style: GoogleFonts.poppins(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              email,
+              style: GoogleFonts.poppins(color: Colors.white70, fontSize: 12),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              margin: const EdgeInsets.only(top: 5),
+              decoration: BoxDecoration(
+                color: Colors.amber,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                _t("HẠNG VÀNG", "GOLD"),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _sectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 5, bottom: 10),
+      child: Text(
+        title,
+        style: GoogleFonts.poppins(
+          color: _subTextColor,
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 1,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSettingsGroup(List<Widget> children) {
+    return Container(
+      decoration: BoxDecoration(
+        color: _cardColor,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(children: children),
+    );
+  }
+
+  Widget _buildSettingItem(
+    IconData icon,
+    String title, {
+    String? trailingText,
+    VoidCallback? onTap,
+  }) {
     return ListTile(
+      leading: Icon(icon, color: _primaryBlue, size: 22),
       title: Text(
         title,
-        style: const TextStyle(
-          color: Color(0xFF0033CC),
-          fontWeight: FontWeight.w600,
-          fontSize: 16,
+        style: GoogleFonts.poppins(
+          color: _textColor,
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
         ),
       ),
-      trailing: const Icon(Icons.chevron_right, color: Color(0xFF0033CC)),
-      onTap: () {},
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (trailingText != null)
+            Text(
+              trailingText,
+              style: TextStyle(color: _subTextColor, fontSize: 13),
+            ),
+          Icon(Icons.chevron_right, color: _subTextColor, size: 20),
+        ],
+      ),
+      onTap: onTap,
     );
   }
 
-  // Widget cho mục có Switch (Face ID)
-  Widget _buildSwitchItem(String title) {
-    return ListTile(
-      title: Text(
-        title,
-        style: const TextStyle(
-          color: Color(0xFF0033CC),
-          fontWeight: FontWeight.w600,
-          fontSize: 16,
-        ),
+  Future<void> _showLanguagePicker() async {
+    final Locale? selected = await showModalBottomSheet<Locale>(
+      context: context,
+      backgroundColor: _cardColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      trailing: Switch(
-        value: _isFaceIdEnabled,
-        activeColor: Colors.white,
-        activeTrackColor: const Color(0xFF0033CC),
-        onChanged: (value) {
-          setState(() {
-            _isFaceIdEnabled = value;
-          });
-        },
-      ),
-    );
-  }
-
-  Widget _buildDivider() {
-    return const Divider(height: 1, thickness: 1, color: Color(0xFFF0F0F0));
-  }
-
-  BoxDecoration _cardDecoration() {
-    return BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(25),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.05),
-          blurRadius: 15,
-          offset: const Offset(0, 5),
-        ),
-      ],
-      border: Border.all(color: const Color(0xFFF0F0F0)),
-    );
-  }
-
-  // Thanh Bottom Navigation tùy chỉnh
-  Widget _buildBottomTab() {
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-        child: Container(
-          height: 60,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(30),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.08),
-                blurRadius: 15,
-                offset: const Offset(0, 5),
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                title: Text(
+                  'Tiếng Việt',
+                  style: GoogleFonts.poppins(color: _textColor),
+                ),
+                trailing: AppPreferences.instance.locale.languageCode == 'vi'
+                    ? Icon(Icons.check, color: _primaryBlue)
+                    : null,
+                onTap: () => Navigator.pop(context, const Locale('vi')),
+              ),
+              ListTile(
+                title: Text(
+                  'English',
+                  style: GoogleFonts.poppins(color: _textColor),
+                ),
+                trailing: AppPreferences.instance.locale.languageCode == 'en'
+                    ? Icon(Icons.check, color: _primaryBlue)
+                    : null,
+                onTap: () => Navigator.pop(context, const Locale('en')),
               ),
             ],
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _bottomNavItem(Icons.home_outlined, '', 0),
-              _bottomNavItem(Icons.search, '', 1),
-              _bottomNavItem(Icons.mail_outline, '', 2),
-              _bottomNavItem(Icons.settings, 'Setting', 3),
-            ],
+        );
+      },
+    );
+
+    if (selected == null) return;
+    AppPreferences.instance.setLocale(selected);
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  Widget _buildToggleItem(
+    IconData icon,
+    String title,
+    bool value,
+    Function(bool) onChanged,
+  ) {
+    return ListTile(
+      leading: Icon(icon, color: _primaryBlue, size: 22),
+      title: Text(
+        title,
+        style: GoogleFonts.poppins(
+          color: _textColor,
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      trailing: Switch.adaptive(
+        value: value,
+        activeColor: _primaryBlue,
+        onChanged: onChanged,
+      ),
+    );
+  }
+
+  Widget _buildLogoutButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: TextButton(
+        onPressed: () {},
+        style: TextButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 15),
+        ),
+        child: Text(
+          _t("Đăng xuất", "Log out"),
+          style: const TextStyle(
+            color: Colors.redAccent,
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
           ),
         ),
       ),
     );
   }
 
-  void _onBottomNavTap(int index) {
-    setState(() {
-      _selectedBottomIndex = index;
-    });
-
-    if (index == 0) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-      );
-    }
+  // --- THANH NAV ĐỒNG BỘ ---
+  Widget _buildPillBottomNav() {
+    return Positioned(
+      bottom: 20,
+      left: 20,
+      right: 20,
+      child: Container(
+        height: 60,
+        decoration: BoxDecoration(
+          color: _cardColor,
+          borderRadius: BorderRadius.circular(30),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 15,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _pillNavItem(Icons.home, _t("Trang chính", "Home"), 0),
+            _pillNavItem(Icons.search, "", 1),
+            _pillNavItem(Icons.chat_bubble_outline, "", 2),
+            _pillNavItem(Icons.settings, _t("Cài đặt", "Settings"), 3),
+          ],
+        ),
+      ),
+    );
   }
 
-  Widget _bottomNavItem(IconData icon, String label, int index) {
-    final bool isSelected = _selectedBottomIndex == index;
-    final bool hasLabel = label.isNotEmpty;
-    final bool isPillSelected = isSelected && hasLabel;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(30),
-        onTap: () => _onBottomNavTap(index),
-        child: AnimatedContainer(
-          duration: _navAnimationDuration,
-          curve: Curves.easeOutCubic,
-          width: isPillSelected ? 99 : 44,
-          height: 36,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF3F37C9) : Colors.transparent,
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: AnimatedSwitcher(
-            duration: _navAnimationDuration,
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
-            transitionBuilder: (child, animation) {
-              return FadeTransition(opacity: animation, child: child);
-            },
-            child: isPillSelected
-                ? Row(
-                    key: ValueKey('setting_selected_$index'),
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(icon, color: Colors.white, size: 19),
-                      const SizedBox(width: 6),
-                      Text(
-                        label,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10.5,
-                          height: 1,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  )
-                : Icon(
-                    icon,
-                    key: ValueKey('setting_icon_$index'),
-                    color: isSelected ? Colors.white : Colors.grey,
-                    size: 21,
-                  ),
-          ),
+  Widget _pillNavItem(IconData icon, String label, int index) {
+    bool isSelected = _selectedIndex == index;
+    return GestureDetector(
+      onTap: () {
+        if (index == 0)
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const HomeScreen()),
+          );
+        else if (index == 1)
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const SearchScreen()),
+          );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: isSelected
+            ? BoxDecoration(
+                color: _primaryBlue,
+                borderRadius: BorderRadius.circular(20),
+              )
+            : null,
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              color: isSelected ? Colors.white : _subTextColor,
+              size: 22,
+            ),
+            if (isSelected && label.isNotEmpty) ...[
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: GoogleFonts.poppins(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );

@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; 
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart'; 
+import 'package:intl/intl.dart';
+import '../l10n/app_text.dart';
 
 // --- FORMATTER GIỮ NGUYÊN ---
 class ThousandsSeparatorInputFormatter extends TextInputFormatter {
   @override
-  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
     if (newValue.text.isEmpty) return newValue;
     String stripped = newValue.text.replaceAll('.', '');
     double? num = double.tryParse(stripped);
@@ -29,6 +33,8 @@ class CurrencyConvertScreen extends StatefulWidget {
 class _CurrencyConvertScreenState extends State<CurrencyConvertScreen> {
   int _selectedIndex = 1;
 
+  String _t(String vi, String en) => AppText.tr(context, vi, en);
+
   final List<Map<String, String>> currencies = [
     {"code": "VND", "name": "Việt Nam đồng"},
     {"code": "USD", "name": "Đô la"},
@@ -40,7 +46,13 @@ class _CurrencyConvertScreenState extends State<CurrencyConvertScreen> {
   ];
 
   final Map<String, double> mockRates = {
-    "VND": 1, "USD": 25400, "GBP": 32200, "CNY": 3500, "EUR": 27500, "JPY": 170, "KRW": 19,
+    "VND": 1,
+    "USD": 25400,
+    "GBP": 32200,
+    "CNY": 3500,
+    "EUR": 27500,
+    "JPY": 170,
+    "KRW": 19,
   };
 
   String fromCurrency = "VND";
@@ -88,8 +100,17 @@ class _CurrencyConvertScreenState extends State<CurrencyConvertScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text("Chọn đơn vị tiền tệ", style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold)),
-                IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
+                Text(
+                  _t("Chọn đơn vị tiền tệ", "Select currency"),
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close),
+                ),
               ],
             ),
             Flexible(
@@ -98,19 +119,30 @@ class _CurrencyConvertScreenState extends State<CurrencyConvertScreen> {
                 itemCount: currencies.length,
                 itemBuilder: (context, index) {
                   final c = currencies[index];
-                  bool isSelected = isFrom ? fromCurrency == c['code'] : toCurrency == c['code'];
+                  bool isSelected = isFrom
+                      ? fromCurrency == c['code']
+                      : toCurrency == c['code'];
                   return ListTile(
-                    title: Text("${c['code']} (${c['name']})", 
+                    title: Text(
+                      "${c['code']} (${c['name']})",
                       style: GoogleFonts.poppins(
-                        color: isSelected ? const Color(0xFF000DC0) : Colors.black87,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                      )
+                        color: isSelected
+                            ? const Color(0xFF000DC0)
+                            : Colors.black87,
+                        fontWeight: isSelected
+                            ? FontWeight.bold
+                            : FontWeight.normal,
+                      ),
                     ),
-                    trailing: isSelected ? const Icon(Icons.check, color: Color(0xFF000DC0)) : null,
+                    trailing: isSelected
+                        ? const Icon(Icons.check, color: Color(0xFF000DC0))
+                        : null,
                     onTap: () {
                       setState(() {
-                        if (isFrom) fromCurrency = c['code']!;
-                        else toCurrency = c['code']!;
+                        if (isFrom)
+                          fromCurrency = c['code']!;
+                        else
+                          toCurrency = c['code']!;
                       });
                       Navigator.pop(context);
                       _handleConvert();
@@ -128,7 +160,8 @@ class _CurrencyConvertScreenState extends State<CurrencyConvertScreen> {
   @override
   Widget build(BuildContext context) {
     double rateValue = mockRates[fromCurrency]! / mockRates[toCurrency]!;
-    String rateLabel = "1 $fromCurrency = ${NumberFormat('#,###.##', 'vi_VN').format(rateValue).replaceAll(',', '.')} $toCurrency";
+    String rateLabel =
+        "1 $fromCurrency = ${NumberFormat('#,###.##', 'vi_VN').format(rateValue).replaceAll(',', '.')} $toCurrency";
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -145,43 +178,86 @@ class _CurrencyConvertScreenState extends State<CurrencyConvertScreen> {
                 Row(
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.arrow_back_ios, color: Colors.black87, size: 20),
+                      icon: const Icon(
+                        Icons.arrow_back_ios,
+                        color: Colors.black87,
+                        size: 20,
+                      ),
                       onPressed: () => Navigator.pop(context),
                     ),
                     Text(
-                      "Quy đổi tiền tệ",
-                      style: GoogleFonts.poppins(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 18),
+                      _t("Quy đổi tiền tệ", "Currency converter"),
+                      style: GoogleFonts.poppins(
+                        color: Colors.black87,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
                     ),
                   ],
                 ),
-                
+
                 // --- NỘI DUNG CHÍNH ---
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 10),
-                  child: Image.asset('assets/search/quydoitiente.png', height: 160, fit: BoxFit.contain),
+                  child: Image.asset(
+                    'assets/search/quydoitiente.png',
+                    height: 160,
+                    fit: BoxFit.contain,
+                  ),
                 ),
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(24),
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, 10))],
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 20,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
                   ),
                   child: Column(
                     children: [
-                      _buildInputBox("Từ", _fromController, fromCurrency, () => _showCurrencyPicker(true)),
+                      _buildInputBox(
+                        _t("Từ", "From"),
+                        _fromController,
+                        fromCurrency,
+                        () => _showCurrencyPicker(true),
+                      ),
                       Align(
                         alignment: Alignment.centerLeft,
                         child: Padding(
                           padding: const EdgeInsets.only(top: 8, left: 4),
-                          child: Text(rateLabel, style: GoogleFonts.poppins(fontSize: 11, color: const Color(0xFF000DC0), fontWeight: FontWeight.w500)),
+                          child: Text(
+                            rateLabel,
+                            style: GoogleFonts.poppins(
+                              fontSize: 11,
+                              color: const Color(0xFF000DC0),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
                         ),
                       ),
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 5),
-                        child: IconButton(onPressed: _handleSwap, icon: const Icon(Icons.swap_vert_rounded, color: Color(0xFF000DC0), size: 32)),
+                        child: IconButton(
+                          onPressed: _handleSwap,
+                          icon: const Icon(
+                            Icons.swap_vert_rounded,
+                            color: Color(0xFF000DC0),
+                            size: 32,
+                          ),
+                        ),
                       ),
-                      _buildInputBox("Thành", _toController, toCurrency, () => _showCurrencyPicker(false), isReadOnly: true),
+                      _buildInputBox(
+                        _t("Thành", "To"),
+                        _toController,
+                        toCurrency,
+                        () => _showCurrencyPicker(false),
+                        isReadOnly: true,
+                      ),
                       const SizedBox(height: 30),
                       SizedBox(
                         width: double.infinity,
@@ -192,9 +268,17 @@ class _CurrencyConvertScreenState extends State<CurrencyConvertScreen> {
                             backgroundColor: const Color(0xFFF2F4FB),
                             foregroundColor: const Color(0xFF000DC0),
                             elevation: 0,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
                           ),
-                          child: Text("Quy đổi", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 16)),
+                          child: Text(
+                            _t("Quy đổi", "Convert"),
+                            style: GoogleFonts.poppins(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
                         ),
                       ),
                     ],
@@ -202,15 +286,22 @@ class _CurrencyConvertScreenState extends State<CurrencyConvertScreen> {
                 ),
                 const SizedBox(height: 30),
                 Text(
-                  "*Tỷ giá có thể thay đổi theo từng thời điểm giao dịch thực tế.*",
+                  _t(
+                    "*Tỷ giá có thể thay đổi theo từng thời điểm giao dịch thực tế.*",
+                    "*Rates may change by real transaction time.*",
+                  ),
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.poppins(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.grey),
+                  style: GoogleFonts.poppins(
+                    fontSize: 11,
+                    fontStyle: FontStyle.italic,
+                    color: Colors.grey,
+                  ),
                 ),
                 const SizedBox(height: 120), // Khoảng trống cho Nav
               ],
             ),
           ),
-          
+
           // THANH NAV - BÂY GIỜ SẼ KHỚP 100% VÌ STACK PHỦ TOÀN MÀN HÌNH
           _buildPillBottomNav(),
         ],
@@ -218,14 +309,26 @@ class _CurrencyConvertScreenState extends State<CurrencyConvertScreen> {
     );
   }
 
-  Widget _buildInputBox(String label, TextEditingController controller, String code, VoidCallback onPick, {bool isReadOnly = false}) {
+  Widget _buildInputBox(
+    String label,
+    TextEditingController controller,
+    String code,
+    VoidCallback onPick, {
+    bool isReadOnly = false,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: GoogleFonts.poppins(color: Colors.grey, fontSize: 13)),
+        Text(
+          label,
+          style: GoogleFonts.poppins(color: Colors.grey, fontSize: 13),
+        ),
         const SizedBox(height: 8),
         Container(
-          decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade200), borderRadius: BorderRadius.circular(12)),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey.shade200),
+            borderRadius: BorderRadius.circular(12),
+          ),
           child: Row(
             children: [
               Expanded(
@@ -234,7 +337,11 @@ class _CurrencyConvertScreenState extends State<CurrencyConvertScreen> {
                   readOnly: isReadOnly,
                   keyboardType: TextInputType.number,
                   inputFormatters: [ThousandsSeparatorInputFormatter()],
-                  decoration: const InputDecoration(hintText: "Giá", contentPadding: EdgeInsets.symmetric(horizontal: 15), border: InputBorder.none),
+                  decoration: InputDecoration(
+                    hintText: _t("Giá", "Amount"),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 15),
+                    border: InputBorder.none,
+                  ),
                   onChanged: (val) => _handleConvert(),
                 ),
               ),
@@ -242,8 +349,23 @@ class _CurrencyConvertScreenState extends State<CurrencyConvertScreen> {
               InkWell(
                 onTap: onPick,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
-                  child: Row(children: [Text(code, style: GoogleFonts.poppins(fontWeight: FontWeight.bold)), const Icon(Icons.unfold_more, size: 18, color: Colors.grey)]),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 15,
+                    vertical: 12,
+                  ),
+                  child: Row(
+                    children: [
+                      Text(
+                        code,
+                        style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+                      ),
+                      const Icon(
+                        Icons.unfold_more,
+                        size: 18,
+                        color: Colors.grey,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -255,7 +377,7 @@ class _CurrencyConvertScreenState extends State<CurrencyConvertScreen> {
 
   Widget _buildPillBottomNav() {
     return Positioned(
-      bottom: 20, 
+      bottom: 20,
       left: 20,
       right: 20,
       child: Container(
@@ -264,14 +386,18 @@ class _CurrencyConvertScreenState extends State<CurrencyConvertScreen> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(30),
           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 15, offset: const Offset(0, 5)),
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 15,
+              offset: const Offset(0, 5),
+            ),
           ],
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            _pillNavItem(Icons.home, "Trang chính", 0),
-            _pillNavItem(Icons.search, "Tìm kiếm", 1),
+            _pillNavItem(Icons.home, _t("Trang chính", "Home"), 0),
+            _pillNavItem(Icons.search, _t("Tìm kiếm", "Search"), 1),
             _pillNavItem(Icons.chat_bubble_outline, "", 2),
             _pillNavItem(Icons.settings_outlined, "", 3),
           ],
@@ -284,18 +410,36 @@ class _CurrencyConvertScreenState extends State<CurrencyConvertScreen> {
     bool isSelected = _selectedIndex == index;
     return GestureDetector(
       onTap: () {
-        if (index == 0) Navigator.of(context).popUntil((route) => route.isFirst);
-        else if (index == 1) Navigator.pop(context);
+        if (index == 0)
+          Navigator.of(context).popUntil((route) => route.isFirst);
+        else if (index == 1)
+          Navigator.pop(context);
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: isSelected ? BoxDecoration(color: const Color(0xFF000DC0), borderRadius: BorderRadius.circular(20)) : null,
+        decoration: isSelected
+            ? BoxDecoration(
+                color: const Color(0xFF000DC0),
+                borderRadius: BorderRadius.circular(20),
+              )
+            : null,
         child: Row(
           children: [
-            Icon(icon, color: isSelected ? Colors.white : Colors.grey[600], size: 22),
+            Icon(
+              icon,
+              color: isSelected ? Colors.white : Colors.grey[600],
+              size: 22,
+            ),
             if (isSelected && label.isNotEmpty) ...[
               const SizedBox(width: 6),
-              Text(label, style: GoogleFonts.poppins(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
+              Text(
+                label,
+                style: GoogleFonts.poppins(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ],
           ],
         ),

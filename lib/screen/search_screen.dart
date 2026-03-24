@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../l10n/app_text.dart';
 import 'branch_screen.dart';
 import 'exchange_rate_screen.dart';
 import 'currency_convert_screen.dart';
+import 'home_screen.dart';
+import 'setting_screen.dart';
+import 'chat_placeholder_screen.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -15,17 +19,14 @@ class _SearchScreenState extends State<SearchScreen> {
   // ĐẶT MẶC ĐỊNH LÀ 1 để nút Tìm kiếm active
   int _selectedIndex = 1;
 
+  String _t(String vi, String en) => AppText.tr(context, vi, en);
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FE),
       // Sử dụng Stack để đè thanh Bottom Nav lên trên nội dung
-      body: Stack(
-        children: [
-          _buildBodyContent(),
-          _buildPillBottomNav(),
-        ],
-      ),
+      body: Stack(children: [_buildBodyContent(), _buildPillBottomNav()]),
     );
   }
 
@@ -35,15 +36,24 @@ class _SearchScreenState extends State<SearchScreen> {
       children: [
         Container(
           color: Colors.white,
-          padding: const EdgeInsets.only(top: 50, left: 10, right: 20, bottom: 10),
+          padding: const EdgeInsets.only(
+            top: 50,
+            left: 10,
+            right: 20,
+            bottom: 10,
+          ),
           child: Row(
             children: [
               IconButton(
-                icon: const Icon(Icons.arrow_back_ios, color: Colors.black87, size: 20),
+                icon: const Icon(
+                  Icons.arrow_back_ios,
+                  color: Colors.black87,
+                  size: 20,
+                ),
                 onPressed: () => Navigator.pop(context),
               ),
               Text(
-                "Tìm kiếm",
+                _t("Tìm kiếm", "Search"),
                 style: GoogleFonts.poppins(
                   color: Colors.black87,
                   fontWeight: FontWeight.bold,
@@ -60,21 +70,26 @@ class _SearchScreenState extends State<SearchScreen> {
               children: [
                 // 1. CHI NHÁNH
                 _buildSearchCard(
-                  title: "Chi nhánh",
-                  desc: "Tìm kiếm chi nhánh",
+                  title: _t("Chi nhánh", "Branch"),
+                  desc: _t("Tìm kiếm chi nhánh", "Find branch"),
                   imagePath: "assets/search/banklogo.png",
                   onTap: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (context) => const BranchScreen()),
+                      MaterialPageRoute(
+                        builder: (context) => const BranchScreen(),
+                      ),
                     );
                   },
                 ),
 
                 // 2. LÃI SUẤT
                 _buildSearchCard(
-                  title: "Lãi suất",
-                  desc: "Tra cứu lãi suất tiết kiệm\n& vay",
+                  title: _t("Lãi suất", "Interest rates"),
+                  desc: _t(
+                    "Tra cứu lãi suất tiết kiệm\n& vay",
+                    "Check savings and loan\nrates",
+                  ),
                   imagePath: "assets/search/laisuat.png",
                   onTap: () {
                     // Bro có thể thêm Navigator cho trang Lãi suất tại đây
@@ -83,26 +98,36 @@ class _SearchScreenState extends State<SearchScreen> {
 
                 // 3. TỶ GIÁ HỐI ĐOÁI - ĐÃ GẮN LINK
                 _buildSearchCard(
-                  title: "Tỷ giá hối đoái",
-                  desc: "Cập nhật tỷ giá ngoại tệ\nmới nhất",
+                  title: _t("Tỷ giá hối đoái", "Exchange rates"),
+                  desc: _t(
+                    "Cập nhật tỷ giá ngoại tệ\nmới nhất",
+                    "Latest foreign exchange\nupdates",
+                  ),
                   imagePath: "assets/search/tygiadoihoai.png",
                   onTap: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (context) => const ExchangeRateScreen()),
+                      MaterialPageRoute(
+                        builder: (context) => const ExchangeRateScreen(),
+                      ),
                     );
                   },
                 ),
 
                 // 4. QUY ĐỔI TIỀN TỆ
                 _buildSearchCard(
-                  title: "Quy đổi tiền tệ",
-                  desc: "Công cụ tính toán chuyển\nđổi tiền tệ",
+                  title: _t("Quy đổi tiền tệ", "Currency converter"),
+                  desc: _t(
+                    "Công cụ tính toán chuyển\nđổi tiền tệ",
+                    "Currency conversion\ncalculator",
+                  ),
                   imagePath: "assets/search/quydoitiente.png",
-                  onTap: () { 
+                  onTap: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (context) => const CurrencyConvertScreen()),
+                      MaterialPageRoute(
+                        builder: (context) => const CurrencyConvertScreen(),
+                      ),
                     );
                   },
                 ),
@@ -148,9 +173,23 @@ class _SearchScreenState extends State<SearchScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title, style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold, color: const Color(0xFF343434))),
+                      Text(
+                        title,
+                        style: GoogleFonts.poppins(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF343434),
+                        ),
+                      ),
                       const SizedBox(height: 6),
-                      Text(desc, style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey[500], height: 1.4)),
+                      Text(
+                        desc,
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          color: Colors.grey[500],
+                          height: 1.4,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -159,7 +198,11 @@ class _SearchScreenState extends State<SearchScreen> {
                   child: Image.asset(
                     imagePath,
                     fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) => Icon(Icons.account_balance_rounded, size: 60, color: const Color(0xFF000DC0).withOpacity(0.1)),
+                    errorBuilder: (context, error, stackTrace) => Icon(
+                      Icons.account_balance_rounded,
+                      size: 60,
+                      color: const Color(0xFF000DC0).withOpacity(0.1),
+                    ),
                   ),
                 ),
               ],
@@ -192,8 +235,8 @@ class _SearchScreenState extends State<SearchScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            _pillNavItem(Icons.home, "Trang chính", 0),
-            _pillNavItem(Icons.search, "Tìm kiếm", 1),
+            _pillNavItem(Icons.home, _t("Trang chính", "Home"), 0),
+            _pillNavItem(Icons.search, _t("Tìm kiếm", "Search"), 1),
             _pillNavItem(Icons.chat_bubble_outline, "", 2),
             _pillNavItem(Icons.settings_outlined, "", 3),
           ],
@@ -206,10 +249,29 @@ class _SearchScreenState extends State<SearchScreen> {
     bool isSelected = _selectedIndex == index;
     return GestureDetector(
       onTap: () {
-        if (index == 0) { // Bấm vào Trang chủ
-          Navigator.pop(context); // Quay lại trang HomeScreen
+        if (index == 0) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const HomeScreen()),
+          );
+        } else if (index == 1) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const SearchScreen()),
+          );
+        } else if (index == 2) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const ChatPlaceholderScreen(),
+            ),
+          );
+        } else if (index == 3) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const SettingScreen()),
+          );
         }
-        // Nếu là index 1 thì không làm gì vì đang ở chính nó
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

@@ -1,5 +1,7 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/services.dart';
+import '../l10n/app_text.dart';
 import 'enter_money.dart';
 
 void main() => runApp(const MyApp());
@@ -42,6 +44,8 @@ class _AddBeneficiaryScreenState extends State<AddBeneficiaryScreen> {
   String? selectedBank;
   final TextEditingController accountNumberController = TextEditingController();
 
+  String _t(String vi, String en) => AppText.tr(context, vi, en);
+
   @override
   void dispose() {
     accountNumberController.dispose();
@@ -69,13 +73,16 @@ class _AddBeneficiaryScreenState extends State<AddBeneficiaryScreen> {
                 ),
               ),
               const SizedBox(height: 10),
-              const Padding(
+              Padding(
                 padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    'Chọn ngân hàng',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    _t('Chọn ngân hàng', 'Select bank'),
+                    style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ),
@@ -134,9 +141,9 @@ class _AddBeneficiaryScreenState extends State<AddBeneficiaryScreen> {
               Navigator.pop(context);
               Navigator.pop(context);
             },
-            child: const Text(
-              'Hủy',
-              style: TextStyle(
+            child: Text(
+              _t('Hủy', 'Cancel'),
+              style: GoogleFonts.poppins(
                 color: Colors.blue,
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
@@ -171,8 +178,8 @@ class _AddBeneficiaryScreenState extends State<AddBeneficiaryScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          selectedBank ?? 'Chọn ngân hàng',
-                          style: TextStyle(
+                          selectedBank ?? _t('Chọn ngân hàng', 'Select bank'),
+                          style: GoogleFonts.poppins(
                             color: selectedBank == null
                                 ? Colors.grey.shade700
                                 : Colors.black87,
@@ -206,8 +213,8 @@ class _AddBeneficiaryScreenState extends State<AddBeneficiaryScreen> {
                     LengthLimitingTextInputFormatter(10),
                   ],
                   decoration: InputDecoration(
-                    hintText: 'Nhập số tài khoản',
-                    hintStyle: TextStyle(color: Colors.grey.shade400),
+                    hintText: _t('Nhập số tài khoản', 'Enter account number'),
+                    hintStyle: GoogleFonts.poppins(color: Colors.grey.shade400),
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 20,
                       vertical: 18,
@@ -241,8 +248,13 @@ class _AddBeneficiaryScreenState extends State<AddBeneficiaryScreen> {
                   onPressed: () {
                     if (selectedBank == null) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Vui lòng chọn ngân hàng.'),
+                        SnackBar(
+                          content: Text(
+                            _t(
+                              'Vui lòng chọn ngân hàng.',
+                              'Please select bank.',
+                            ),
+                          ),
                         ),
                       );
                       return;
@@ -250,8 +262,13 @@ class _AddBeneficiaryScreenState extends State<AddBeneficiaryScreen> {
 
                     if (accountNumberController.text.trim().isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Vui lòng nhập số tài khoản'),
+                        SnackBar(
+                          content: Text(
+                            _t(
+                              'Vui lòng nhập số tài khoản.',
+                              'Please enter account number.',
+                            ),
+                          ),
                         ),
                       );
                       return;
@@ -259,9 +276,7 @@ class _AddBeneficiaryScreenState extends State<AddBeneficiaryScreen> {
 
                     Navigator.push(
                       context,
-                      MaterialPageRoute(
-                        builder: (_) => const TransferScreen(),
-                      ),
+                      MaterialPageRoute(builder: (_) => const TransferScreen()),
                     );
                   },
                   style: ElevatedButton.styleFrom(
@@ -271,9 +286,9 @@ class _AddBeneficiaryScreenState extends State<AddBeneficiaryScreen> {
                     ),
                     elevation: 0,
                   ),
-                  child: const Text(
-                    'Tiếp theo',
-                    style: TextStyle(
+                  child: Text(
+                    _t('Tiếp theo', 'Next'),
+                    style: GoogleFonts.poppins(
                       color: Colors.white,
                       fontSize: 16,
                       fontWeight: FontWeight.bold,

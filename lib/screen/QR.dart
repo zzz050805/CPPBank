@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../l10n/app_text.dart';
 import 'QR_user.dart' as qr_user;
 
 void main() => runApp(const MyApp());
@@ -17,11 +18,24 @@ class MyApp extends StatelessWidget {
   }
 }
 
+class QrScreen extends StatelessWidget {
+  const QrScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const QRScannerScreen();
+  }
+}
+
 class QRScannerScreen extends StatelessWidget {
   const QRScannerScreen({super.key});
 
   // Màu xanh chủ đạo bạn yêu cầu
   static const Color primaryBlue = Color(0xFF000DC0);
+
+  String _t(BuildContext context, String vi, String en) {
+    return AppText.tr(context, vi, en);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,11 +50,10 @@ class QRScannerScreen extends StatelessWidget {
             color: Colors.black87,
             size: 20,
           ),
-          onPressed: () =>
-              Navigator.of(context).popUntil((route) => route.isFirst),
+          onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          "Quét mã",
+          _t(context, 'Quét mã', 'Scan code'),
           style: GoogleFonts.poppins(
             color: Colors.black87,
             fontWeight: FontWeight.bold,
@@ -98,7 +111,7 @@ class QRScannerScreen extends StatelessWidget {
             onPressed: () {},
             icon: const Icon(Icons.image_outlined, color: Colors.black87),
             label: Text(
-              "Chọn ảnh",
+              _t(context, 'Chọn ảnh', 'Choose image'),
               style: GoogleFonts.poppins(
                 color: Colors.black87,
                 fontWeight: FontWeight.w500,
@@ -138,7 +151,7 @@ class QRScannerScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    "Quét mã",
+                    _t(context, 'Quét mã', 'Scan code'),
                     style: GoogleFonts.poppins(
                       color: QRScannerScreen.primaryBlue,
                       fontSize: 12,
@@ -172,7 +185,7 @@ class QRScannerScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      "Mã QR nhận tiền",
+                      _t(context, 'Mã QR nhận tiền', 'Receive QR code'),
                       style: GoogleFonts.poppins(
                         color: Colors.black54,
                         fontSize: 12,

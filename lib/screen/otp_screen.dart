@@ -1,136 +1,102 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'nfc_screen.dart'; // Đảm bảo đã có file này
+import 'tranfer_bill.dart';
 
-class OtpScreen extends StatefulWidget {
-  final String phoneNumber; 
+void main() => runApp(const MyApp());
 
-  const OtpScreen({super.key, required this.phoneNumber});
-
-  @override
-  State<OtpScreen> createState() => _OtpScreenState();
-}
-
-class _OtpScreenState extends State<OtpScreen> {
-  final TextEditingController _otpController = TextEditingController();
-  bool _isOtpValid = false;
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
   @override
-  void initState() {
-    super.initState();
-    _otpController.addListener(_checkOtp);
-  }
-
-  @override
-  void dispose() {
-    _otpController.dispose();
-    super.dispose();
-  }
-
-  void _checkOtp() {
-    setState(() {
-      _isOtpValid = _otpController.text.length == 6;
-    });
-  }
-
-  // --- SỬA LẠI HÀM NÀY ĐỂ NHẢY QUA NFC ---
-  void _handleNext() {
-    if (_isOtpValid) {
-      _showSuccessPopupAndNavigate();
-    }
-  }
-
-  // --- HÀM POPUP THÀNH CÔNG VÀ CHUYỂN TRANG ---
-  void _showSuccessPopupAndNavigate() {
-    showDialog(
-      context: context,
-      barrierColor: Colors.black26, 
-      barrierDismissible: false, 
-      builder: (BuildContext dialogContext) { 
-        Future.delayed(const Duration(milliseconds: 1500), () {
-          if (Navigator.canPop(dialogContext)) {
-            Navigator.pop(dialogContext); // Đóng popup
-            // CHUYỂN QUA TRANG NFC
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const NfcScreen()),
-            );
-          }
-        });
-
-        return Center(
-          child: Container(
-            width: 220,
-            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min, 
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: const BoxDecoration(color: Color(0xFF52D5BA), shape: BoxShape.circle),
-                  child: const Icon(Icons.check, color: Colors.white, size: 36),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  "Xác nhận thành công!",
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.poppins(
-                    fontSize: 14, 
-                    fontWeight: FontWeight.w600, 
-                    color: const Color(0xFF343434), 
-                    decoration: TextDecoration.none
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        textTheme: GoogleFonts.poppinsTextTheme(),
+      ),
+      home: const OTPScreen(),
     );
   }
+}
 
-  void _showResendPopup(BuildContext context) {
-    showDialog(
+class OTPScreen extends StatelessWidget {
+  const OTPScreen({super.key});
+
+  // Màu xanh chủ đạo theo yêu cầu
+  static const Color primaryBlue = Color(0xFF000DC0);
+
+  void _showCancelDialog(BuildContext context) {
+    showDialog<void>(
       context: context,
-      barrierColor: Colors.black26, 
-      barrierDismissible: false, 
-      builder: (BuildContext dialogContext) { 
-        Future.delayed(const Duration(seconds: 2), () {
-          if (Navigator.canPop(dialogContext)) {
-            Navigator.pop(dialogContext); 
-          }
-        });
-
-        return Center(
-          child: Container(
-            width: 220,
-            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min, 
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: const BoxDecoration(color: Color(0xFF52D5BA), shape: BoxShape.circle),
-                  child: const Icon(Icons.check, color: Colors.white, size: 36),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  "Đã gửi lại mã mới!",
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: const Color(0xFF343434), decoration: TextDecoration.none),
-                ),
-              ],
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          contentPadding: const EdgeInsets.fromLTRB(24, 22, 24, 12),
+          content: Text(
+            'Bạn có chắc hủy giao dịch không ?',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.poppins(
+              color: Colors.black87,
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
             ),
           ),
+          actionsAlignment: MainAxisAlignment.spaceBetween,
+          actionsPadding: const EdgeInsets.fromLTRB(20, 6, 20, 16),
+          actions: [
+            SizedBox(
+              width: 110,
+              height: 48,
+              child: OutlinedButton(
+                onPressed: () {
+                  Navigator.of(dialogContext).pop();
+                },
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: Colors.grey.shade600),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                ),
+                child: Text(
+                  'Hủy',
+                  style: GoogleFonts.poppins(
+                    color: Colors.black87,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+            SizedBox(
+              width: 130,
+              height: 48,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.of(dialogContext).pop();
+                  Navigator.of(context).popUntil((route) => route.isFirst);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryBlue,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                ),
+                child: Text(
+                  'Xác nhận',
+                  style: GoogleFonts.poppins(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ],
         );
       },
     );
@@ -143,99 +109,133 @@ class _OtpScreenState extends State<OtpScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
+        // Nút quay lại
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Color(0xFF343434), size: 20),
-          onPressed: () => Navigator.pop(context),
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.black87, size: 20),
+          onPressed: () => _showCancelDialog(context),
         ),
-        title: Text(
-          "Nhập OTP",
-          style: GoogleFonts.poppins(color: const Color(0xFF343434), fontWeight: FontWeight.bold, fontSize: 18),
-        ),
-        centerTitle: false,
-        titleSpacing: 0,
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, 5))],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text("Nhập mã", style: GoogleFonts.poppins(color: Colors.grey[500], fontSize: 13, fontWeight: FontWeight.w500)),
-                const SizedBox(height: 8),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _otpController,
-                        keyboardType: TextInputType.number,
-                        maxLength: 6,
-                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                        style: GoogleFonts.poppins(fontSize: 14),
-                        decoration: InputDecoration(
-                          hintText: "Mã",
-                          hintStyle: GoogleFonts.poppins(color: Colors.grey[400], fontSize: 14),
-                          counterText: "",
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey[300]!)),
-                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF000DC0), width: 1.5)),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    SizedBox(
-                      height: 48,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF281C9D), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
-                        onPressed: () => _showResendPopup(context),
-                        child: Text("Gửi lại mã", style: GoogleFonts.poppins(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                RichText(
-                  text: TextSpan(
-                    style: GoogleFonts.poppins(color: Colors.grey[600], fontSize: 12, height: 1.6),
-                    children: [
-                      const TextSpan(text: "Chúng tôi đã gửi mã xác thực đến số điện thoại "),
-                      TextSpan(text: widget.phoneNumber, style: GoogleFonts.poppins(color: const Color(0xFF281C9D), fontWeight: FontWeight.bold)),
-                      const TextSpan(text: " của bạn\n\n"),
-                      const TextSpan(text: "Mã này sẽ hết hiệu lực sau 10 phút kể từ thời điểm gửi.\n\n"),
-                      const TextSpan(text: "Số điện thoại này gắn liền với tài khoản bạn sử dụng về sau."),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _isOtpValid ? const Color(0xFF000DC0) : const Color(0xFFF2F4FB),
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    onPressed: _isOtpValid ? _handleNext : null,
-                    child: Text(
-                      "Xác Nhận",
-                      style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
-                    ),
-                  ),
-                ),
-              ],
+        // Nút Hủy
+        actions: [
+          TextButton(
+            onPressed: () => _showCancelDialog(context),
+            child: Text(
+              "Hủy",
+              style: GoogleFonts.poppins(
+                color: primaryBlue,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
             ),
           ),
+          const SizedBox(width: 10),
+        ],
+      ),
+      body: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 30),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            const SizedBox(height: 20),
+            
+            // Ô nhập mã OTP với đổ bóng nhẹ
+            Container(
+              decoration: BoxDecoration(
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.withOpacity(0.1),
+                    blurRadius: 15,
+                    offset: const Offset(0, 5),
+                  )
+                ],
+              ),
+              child: TextField(
+                textAlign: TextAlign.center,
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(6),
+                ],
+                maxLength: 6,
+                onChanged: (value) {
+                  if (value.length == 6) {
+                    FocusScope.of(context).unfocus();
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const SuccessTransactionScreen(),
+                      ),
+                    );
+                  }
+                },
+                style: GoogleFonts.poppins(fontSize: 17, fontWeight: FontWeight.w600),
+                decoration: InputDecoration(
+                  hintText: "Nhập mã OTP",
+                  hintStyle: GoogleFonts.poppins(
+                    color: Colors.grey.shade400,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w400,
+                  ),
+                  counterText: '',
+                  filled: true,
+                  fillColor: Colors.white,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 20),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(25),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(25),
+                    borderSide: const BorderSide(color: primaryBlue, width: 1.5),
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 25),
+
+            // Đoạn văn bản hướng dẫn
+            Text(
+              "Chúng tôi đã gửi mã xác thực đến số điện thoại liên kết với tài khoản của bạn.\nMã này sẽ hết hiệu lực sau 10 phút kể từ thời điểm gửi.",
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(
+                color: Colors.grey.shade600,
+                fontSize: 13,
+                fontWeight: FontWeight.w400,
+                height: 1.45, // Khoảng cách giữa các dòng
+              ),
+            ),
+
+            const SizedBox(height: 35),
+
+            // Nút Gửi lại mã
+            SizedBox(
+              width: 200, // Độ rộng vừa phải như trong ảnh
+              height: 50,
+              child: ElevatedButton(
+                onPressed: () {
+                  // Xử lý gửi lại OTP
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryBlue,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(25),
+                  ),
+                  elevation: 0,
+                ),
+                child: Text(
+                  "Gửi lại mã",
+                  style: GoogleFonts.poppins(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
+

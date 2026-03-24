@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../data/user_firestore_service.dart';
 import 'OTP_screen.dart';
 
 void main() => runApp(const MyApp());
@@ -34,7 +35,11 @@ class ConfirmTransferScreen extends StatelessWidget {
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.black87, size: 20),
+          icon: const Icon(
+            Icons.arrow_back_ios,
+            color: Colors.black87,
+            size: 20,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
@@ -81,7 +86,10 @@ class ConfirmTransferScreen extends StatelessWidget {
                   ),
                   Text(
                     "Một triệu đồng",
-                    style: GoogleFonts.poppins(color: Colors.grey, fontSize: 14),
+                    style: GoogleFonts.poppins(
+                      color: Colors.grey,
+                      fontSize: 14,
+                    ),
                   ),
                   const SizedBox(height: 30),
 
@@ -97,7 +105,7 @@ class ConfirmTransferScreen extends StatelessWidget {
                           color: Colors.grey.withOpacity(0.1),
                           blurRadius: 15,
                           offset: const Offset(0, 10),
-                        )
+                        ),
                       ],
                     ),
                     child: Column(
@@ -105,10 +113,20 @@ class ConfirmTransferScreen extends StatelessWidget {
                       children: [
                         _buildSectionLabel("Từ tài khoản"),
                         const SizedBox(height: 10),
-                        _buildAccountCard(
-                          name: "PHUNG THANH D",
-                          id: "123 568 567 456",
-                          isSource: true,
+                        StreamBuilder<UserProfileData?>(
+                          stream: UserFirestoreService.instance
+                              .currentUserProfileStream(),
+                          builder: (context, snapshot) {
+                            final String senderName = snapshot.hasError
+                                ? 'Không tìm thấy user'
+                                : (snapshot.data?.fullname ?? '...');
+
+                            return _buildAccountCard(
+                              name: senderName.toUpperCase(),
+                              id: "123 568 567 456",
+                              isSource: true,
+                            );
+                          },
                         ),
                         const SizedBox(height: 25),
                         _buildSectionLabel("Đến tài khoản"),
@@ -137,9 +155,7 @@ class ConfirmTransferScreen extends StatelessWidget {
                 onPressed: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(
-                      builder: (_) => const OTPScreen(),
-                    ),
+                    MaterialPageRoute(builder: (_) => const OTPScreen()),
                   );
                 },
                 style: ElevatedButton.styleFrom(
@@ -207,10 +223,7 @@ class ConfirmTransferScreen extends StatelessWidget {
           if (bank != null)
             Text(
               bank,
-              style: GoogleFonts.poppins(
-                color: Colors.white70,
-                fontSize: 12,
-              ),
+              style: GoogleFonts.poppins(color: Colors.white70, fontSize: 12),
             ),
           const SizedBox(height: 8),
           Row(
