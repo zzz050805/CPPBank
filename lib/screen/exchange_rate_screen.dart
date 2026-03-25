@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../l10n/app_text.dart';
+import '../widget/ccp_app_bar.dart';
 
 class ExchangeRateScreen extends StatefulWidget {
   const ExchangeRateScreen({super.key});
@@ -169,29 +170,7 @@ class _ExchangeRateScreenState extends State<ExchangeRateScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white, // Cố định nền trắng
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor:
-            Colors.transparent, // KHÓA MÀU: Không cho đổi màu khi cuộn
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios,
-            color: Colors.black87,
-            size: 20,
-          ),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          _t("Tỷ giá hối đoái", "Exchange rates"),
-          style: GoogleFonts.poppins(
-            color: Colors.black87,
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
-          ),
-        ),
-        centerTitle: false,
-      ),
+      appBar: CCPAppBar(title: _t("Tỷ giá hối đoái", "Exchange rates")),
       body: Stack(
         children: [
           Column(

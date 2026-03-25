@@ -5,6 +5,7 @@ import '../data/user_firestore_service.dart';
 import '../l10n/app_text.dart';
 import 'search_screen.dart';
 import 'home_screen.dart';
+import 'chat_placeholder_screen.dart';
 
 class SettingScreen extends StatefulWidget {
   const SettingScreen({super.key});
@@ -408,6 +409,11 @@ class _SettingScreenState extends State<SettingScreen> {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (_) => const SearchScreen()),
+          );
+        else if (index == 2)
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const ChatPlaceholderScreen()),
           );
       },
       child: Container(

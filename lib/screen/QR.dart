@@ -1,22 +1,9 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+
 import '../l10n/app_text.dart';
+import '../widget/ccp_app_bar.dart';
 import 'QR_user.dart' as qr_user;
-
-void main() => runApp(const MyApp());
-
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(textTheme: GoogleFonts.poppinsTextTheme()),
-      home: const QRScannerScreen(),
-    );
-  }
-}
 
 class QrScreen extends StatelessWidget {
   const QrScreen({super.key});
@@ -30,7 +17,6 @@ class QrScreen extends StatelessWidget {
 class QRScannerScreen extends StatelessWidget {
   const QRScannerScreen({super.key});
 
-  // Màu xanh chủ đạo bạn yêu cầu
   static const Color primaryBlue = Color(0xFF000DC0);
 
   String _t(BuildContext context, String vi, String en) {
@@ -40,160 +26,269 @@ class QRScannerScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios,
-            color: Colors.black87,
-            size: 20,
-          ),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          _t(context, 'Quét mã', 'Scan code'),
-          style: GoogleFonts.poppins(
-            color: Colors.black87,
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
-          ),
-        ),
-        centerTitle: false,
-      ),
-      body: Column(
+      backgroundColor: const Color(0xFFF5F7FF),
+      appBar: CCPAppBar(title: _t(context, 'Quét mã', 'Scan code')),
+      body: Stack(
         children: [
-          const SizedBox(height: 50),
-          // --- KHU VỰC QUÉT QR ---
-          Center(
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                // Khung viền 4 góc
-                Container(
-                  width: 250,
-                  height: 250,
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey.shade300, width: 2),
-                    borderRadius: BorderRadius.circular(30),
-                  ),
-                ),
-                // Lớp phủ xám bên trong
-                Container(
-                  width: 180,
-                  height: 180,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade200,
-                    borderRadius: BorderRadius.circular(25),
-                  ),
-                ),
-                // Thanh quét màu hồng đỏ
-                Positioned(
-                  top: 120,
-                  child: Container(
-                    width: 220,
-                    height: 4,
+          Positioned(
+            top: -120,
+            right: -80,
+            child: Container(
+              width: 260,
+              height: 260,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: primaryBlue.withOpacity(0.08),
+              ),
+            ),
+          ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+              child: Column(
+                children: [
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.red.withOpacity(0.4),
-                      borderRadius: BorderRadius.circular(2),
+                      gradient: LinearGradient(
+                        colors: [
+                          primaryBlue.withOpacity(0.95),
+                          const Color(0xFF275BFF),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.qr_code_scanner_rounded,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _t(
+                              context,
+                              'Đưa mã QR vào khung để quét nhanh',
+                              'Place the QR code inside frame to scan',
+                            ),
+                            style: GoogleFonts.poppins(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 40),
-
-          // --- NÚT CHỌN ẢNH ---
-          OutlinedButton.icon(
-            onPressed: () {},
-            icon: const Icon(Icons.image_outlined, color: Colors.black87),
-            label: Text(
-              _t(context, 'Chọn ảnh', 'Choose image'),
-              style: GoogleFonts.poppins(
-                color: Colors.black87,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
-              side: BorderSide(color: Colors.grey.shade300),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(15),
-              ),
-            ),
-          ),
-        ],
-      ),
-
-      // --- THANH ĐIỀU HƯỚNG DƯỚI CÙNG (BOTTOM NAVIGATION BAR) ---
-      bottomNavigationBar: Container(
-        height: 90,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: Colors.grey.shade200)),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            // Mục Quét mã
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(
-                    Icons.qr_code_scanner,
-                    color: QRScannerScreen.primaryBlue,
-                    size: 28,
+                  const SizedBox(height: 26),
+                  Expanded(
+                    child: Center(
+                      child: Container(
+                        width: 290,
+                        height: 290,
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(28),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.08),
+                              blurRadius: 24,
+                              offset: const Offset(0, 10),
+                            ),
+                          ],
+                        ),
+                        child: Stack(
+                          children: [
+                            Container(
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF2F5FF),
+                                borderRadius: BorderRadius.circular(22),
+                              ),
+                            ),
+                            _buildCorner(top: 12, left: 12),
+                            _buildCorner(top: 12, right: 12, rotateQuarter: 1),
+                            _buildCorner(
+                              bottom: 12,
+                              left: 12,
+                              rotateQuarter: 3,
+                            ),
+                            _buildCorner(
+                              bottom: 12,
+                              right: 12,
+                              rotateQuarter: 2,
+                            ),
+                            Align(
+                              child: Container(
+                                width: 172,
+                                height: 172,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(18),
+                                  border: Border.all(
+                                    color: const Color(0xFFD8E1FF),
+                                    width: 1.2,
+                                  ),
+                                ),
+                                child: const Icon(
+                                  Icons.qr_code_2_rounded,
+                                  size: 104,
+                                  color: Color(0xFFCAD5FF),
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              left: 18,
+                              right: 18,
+                              top: 138,
+                              child: Container(
+                                height: 3,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Colors.transparent,
+                                      primaryBlue.withOpacity(0.72),
+                                      Colors.transparent,
+                                    ],
+                                  ),
+                                  borderRadius: BorderRadius.circular(99),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _t(context, 'Quét mã', 'Scan code'),
-                    style: GoogleFonts.poppins(
-                      color: QRScannerScreen.primaryBlue,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
+                  const SizedBox(height: 18),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () {},
+                      icon: const Icon(Icons.photo_library_outlined),
+                      label: Text(
+                        _t(context, 'Chọn ảnh QR', 'Choose QR image'),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF1D2E7A),
+                        side: const BorderSide(color: Color(0xFFC8D4FF)),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        textStyle: GoogleFonts.poppins(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-            // Mục Mã QR nhận tiền
-            InkWell(
-              borderRadius: BorderRadius.circular(12),
+          ),
+        ],
+      ),
+      bottomNavigationBar: Container(
+        height: 86,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          border: Border(top: BorderSide(color: Color(0xFFE8ECFB))),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _qrTab(
+              context,
+              icon: Icons.qr_code_scanner_rounded,
+              label: _t(context, 'Quét mã', 'Scan code'),
+              isActive: true,
+              onTap: () {},
+            ),
+            _qrTab(
+              context,
+              icon: Icons.qr_code_2_rounded,
+              label: _t(context, 'Mã QR nhận tiền', 'Receive QR code'),
+              isActive: false,
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => qr_user.QRCodeScreen()),
+                  MaterialPageRoute(
+                    builder: (_) => const qr_user.QRCodeScreen(),
+                  ),
                 );
               },
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 8,
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(
-                      Icons.qr_code_2,
-                      color: Colors.black54,
-                      size: 28,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _t(context, 'Mã QR nhận tiền', 'Receive QR code'),
-                      style: GoogleFonts.poppins(
-                        color: Colors.black54,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
-                  ],
-                ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCorner({
+    double? top,
+    double? left,
+    double? right,
+    double? bottom,
+    int rotateQuarter = 0,
+  }) {
+    Widget corner = Container(
+      width: 36,
+      height: 36,
+      decoration: BoxDecoration(
+        border: Border(
+          top: const BorderSide(color: primaryBlue, width: 4),
+          left: const BorderSide(color: primaryBlue, width: 4),
+        ),
+        borderRadius: BorderRadius.circular(8),
+      ),
+    );
+
+    if (rotateQuarter != 0) {
+      corner = RotatedBox(quarterTurns: rotateQuarter, child: corner);
+    }
+
+    return Positioned(
+      top: top,
+      left: left,
+      right: right,
+      bottom: bottom,
+      child: corner,
+    );
+  }
+
+  Widget _qrTab(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required bool isActive,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              color: isActive ? primaryBlue : Colors.black45,
+              size: 27,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: GoogleFonts.poppins(
+                color: isActive ? primaryBlue : Colors.black45,
+                fontSize: 11.5,
+                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
               ),
             ),
           ],

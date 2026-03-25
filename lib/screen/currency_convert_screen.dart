@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../l10n/app_text.dart';
+import '../widget/ccp_app_bar.dart';
 
 // --- FORMATTER GIỮ NGUYÊN ---
 class ThousandsSeparatorInputFormatter extends TextInputFormatter {
@@ -165,7 +166,7 @@ class _CurrencyConvertScreenState extends State<CurrencyConvertScreen> {
 
     return Scaffold(
       backgroundColor: Colors.white,
-      // KHÔNG DÙNG appBar: AppBar() để tránh bị lệch thanh Nav
+      appBar: CCPAppBar(title: _t("Quy đổi tiền tệ", "Currency converter")),
       body: Stack(
         fit: StackFit.expand,
         children: [
@@ -173,29 +174,6 @@ class _CurrencyConvertScreenState extends State<CurrencyConvertScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Column(
               children: [
-                // --- CUSTOM HEADER GIẢM CHIỀU CAO (THAY THẾ APPBAR) ---
-                const SizedBox(height: 50),
-                Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(
-                        Icons.arrow_back_ios,
-                        color: Colors.black87,
-                        size: 20,
-                      ),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                    Text(
-                      _t("Quy đổi tiền tệ", "Currency converter"),
-                      style: GoogleFonts.poppins(
-                        color: Colors.black87,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                      ),
-                    ),
-                  ],
-                ),
-
                 // --- NỘI DUNG CHÍNH ---
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 10),

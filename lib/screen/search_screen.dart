@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../l10n/app_text.dart';
+import '../widget/ccp_app_bar.dart';
 import 'branch_screen.dart';
 import 'exchange_rate_screen.dart';
 import 'currency_convert_screen.dart';
+import 'interest_rate_screen.dart';
 import 'home_screen.dart';
 import 'setting_screen.dart';
 import 'chat_placeholder_screen.dart';
@@ -25,6 +27,15 @@ class _SearchScreenState extends State<SearchScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FE),
+      appBar: CCPAppBar(
+        title: _t("Tìm kiếm", "Search"),
+        onBackPressed: () {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const HomeScreen()),
+          );
+        },
+      ),
       // Sử dụng Stack để đè thanh Bottom Nav lên trên nội dung
       body: Stack(children: [_buildBodyContent(), _buildPillBottomNav()]),
     );
@@ -34,35 +45,6 @@ class _SearchScreenState extends State<SearchScreen> {
   Widget _buildBodyContent() {
     return Column(
       children: [
-        Container(
-          color: Colors.white,
-          padding: const EdgeInsets.only(
-            top: 50,
-            left: 10,
-            right: 20,
-            bottom: 10,
-          ),
-          child: Row(
-            children: [
-              IconButton(
-                icon: const Icon(
-                  Icons.arrow_back_ios,
-                  color: Colors.black87,
-                  size: 20,
-                ),
-                onPressed: () => Navigator.pop(context),
-              ),
-              Text(
-                _t("Tìm kiếm", "Search"),
-                style: GoogleFonts.poppins(
-                  color: Colors.black87,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
-                ),
-              ),
-            ],
-          ),
-        ),
         Expanded(
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -92,7 +74,12 @@ class _SearchScreenState extends State<SearchScreen> {
                   ),
                   imagePath: "assets/search/laisuat.png",
                   onTap: () {
-                    // Bro có thể thêm Navigator cho trang Lãi suất tại đây
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const InterestRateScreen(),
+                      ),
+                    );
                   },
                 ),
 

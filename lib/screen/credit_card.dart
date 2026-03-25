@@ -2,6 +2,7 @@
 import 'package:google_fonts/google_fonts.dart';
 import '../data/user_firestore_service.dart';
 import '../l10n/app_text.dart';
+import '../widget/ccp_app_bar.dart';
 
 void main() => runApp(const MyApp());
 
@@ -118,21 +119,7 @@ class _CreditCardScreenState extends State<CreditCardScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.black87),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          _t('Thẻ tín dụng', 'Credit card'),
-          style: GoogleFonts.poppins(
-            color: Colors.black87,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
+      appBar: CCPAppBar(title: _t('Thẻ tín dụng', 'Credit card')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 20),
         child: Column(

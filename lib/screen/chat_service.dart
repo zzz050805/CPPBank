@@ -107,7 +107,7 @@ QUY TẮC:
 
         return botReply;
       } else {
-        return "Server CCPBank đang bảo trì, bro đợi tí nhé!";
+        return "Server CCPBank đang bảo trì, quý khách đợi tí nhé!";
       }
     } catch (e) {
       return "Lỗi kết nối: $e";

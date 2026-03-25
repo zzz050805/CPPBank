@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../l10n/app_text.dart';
+import '../widget/ccp_app_bar.dart';
 import 'choose_a_bank.dart';
 
 void main() => runApp(const MyApp());
@@ -78,14 +79,7 @@ class _ContactListScreenState extends State<ContactListScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.black54),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
+      appBar: const CCPAppBar(title: 'Chuyển tiền'),
       body: FadeTransition(
         opacity: _fadeAnimation,
         child: SlideTransition(

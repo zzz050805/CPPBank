@@ -1,7 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../data/user_firestore_service.dart';
-import 'OTP_screen.dart';
+import 'otp_screen.dart';
 
 void main() => runApp(const MyApp());
 
@@ -155,7 +155,10 @@ class ConfirmTransferScreen extends StatelessWidget {
                 onPressed: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => const OTPScreen()),
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          const OTPScreen(phoneNumber: '(+84) 0398829xxx'),
+                    ),
                   );
                 },
                 style: ElevatedButton.styleFrom(

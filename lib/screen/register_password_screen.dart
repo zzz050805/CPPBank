@@ -2,7 +2,8 @@
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'OTP_screen.dart';
+import '../data/user_firestore_service.dart';
+import 'otp_screen.dart';
 
 class RegisterPasswordScreen extends StatefulWidget {
   // --- THÊM: KHAI BÁO CÁC BIẾN ĐỂ NHẬN DỮ LIỆU TỪ TRANG TRƯỚC ---
@@ -36,6 +37,13 @@ class _RegisterPasswordScreenState extends State<RegisterPasswordScreen> {
   String _strengthText = "";
   Color _strengthColor = Colors.red;
   bool _isValid = false;
+
+  bool _isConfigurationNotFound(FirebaseAuthException e) {
+    final String message = (e.message ?? '').toLowerCase();
+    return e.code == 'configuration-not-found' ||
+        e.code == 'internal-error' ||
+        message.contains('configuration_not_found');
+  }
 
   @override
   void initState() {
@@ -111,16 +119,42 @@ class _RegisterPasswordScreenState extends State<RegisterPasswordScreen> {
         '',
       );
       final String authEmail = 'cppbank_$normalizedPhone@cppbank.local';
+      String? uid;
+      bool usedAuthFallback = false;
 
-      final UserCredential credential = await FirebaseAuth.instance
-          .createUserWithEmailAndPassword(
-            email: authEmail,
-            password: _passController.text,
-          );
+      try {
+        final UserCredential credential = await FirebaseAuth.instance
+            .createUserWithEmailAndPassword(
+              email: authEmail,
+              password: _passController.text,
+            );
+        uid = credential.user?.uid;
+      } on FirebaseAuthException catch (e) {
+        if (_isConfigurationNotFound(e)) {
+          usedAuthFallback = true;
 
-      final String uid = credential.user!.uid;
+          final QuerySnapshot<Map<String, dynamic>> existingDocQuery =
+              await FirebaseFirestore.instance
+                  .collection('users')
+                  .where('phoneNumber', isEqualTo: widget.phoneNumber)
+                  .limit(1)
+                  .get();
 
-      // Lưu dữ liệu user với document id = uid của Firebase Auth.
+          if (existingDocQuery.docs.isNotEmpty) {
+            uid = existingDocQuery.docs.first.id;
+          } else {
+            uid = FirebaseFirestore.instance.collection('users').doc().id;
+          }
+        } else {
+          rethrow;
+        }
+      }
+
+      if (uid == null || uid.isEmpty) {
+        throw Exception('Không tạo được định danh tài khoản.');
+      }
+
+      // Lưu dữ liệu user với document id = uid hoặc fallback doc id.
       await FirebaseFirestore.instance.collection('users').doc(uid).set({
         'fullname': widget.fullName,
         'fullName': widget.fullName,
@@ -130,15 +164,25 @@ class _RegisterPasswordScreenState extends State<RegisterPasswordScreen> {
         'cccd': widget.cccd,
         'issueDate': widget.issueDate,
         'address': widget.address,
+        // Giữ tương thích luồng đăng nhập legacy đang kiểm tra password từ Firestore.
+        'password': _passController.text,
+        'authUid': usedAuthFallback ? null : uid,
+        'lastLoginAt': FieldValue.serverTimestamp(),
         'createdAt': FieldValue.serverTimestamp(),
       });
+
+      if (usedAuthFallback) {
+        UserFirestoreService.instance.setFallbackDocId(uid);
+      }
 
       if (!mounted) return;
       Navigator.pop(context);
 
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (context) => const OTPScreen()),
+        MaterialPageRoute(
+          builder: (context) => OTPScreen(phoneNumber: widget.phoneNumber),
+        ),
       );
     } catch (e) {
       if (mounted) Navigator.pop(context);

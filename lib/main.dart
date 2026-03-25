@@ -2,7 +2,7 @@
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_core/firebase_core.dart'; // Thêm dòng này
-import 'firebase_options.dart'; // File này của bro đang đỏ, tí cài xong lib sẽ hết
+import 'firebase_options.dart';
 import 'app_preferences.dart';
 import 'screen/welcome.dart';
 
@@ -40,6 +40,20 @@ class MyApp extends StatelessWidget {
           theme: ThemeData(
             textTheme: GoogleFonts.poppinsTextTheme(
               Theme.of(context).textTheme,
+            ),
+            appBarTheme: AppBarTheme(
+              toolbarHeight: 60,
+              centerTitle: true,
+              backgroundColor: Colors.white,
+              surfaceTintColor: Colors.white,
+              elevation: 2,
+              shadowColor: Colors.black12,
+              iconTheme: const IconThemeData(color: Color(0xFF000DC0)),
+              titleTextStyle: GoogleFonts.poppins(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: Colors.black,
+              ),
             ),
           ),
           home: const WelcomeScreen(),
