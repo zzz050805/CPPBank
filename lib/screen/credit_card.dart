@@ -72,7 +72,9 @@ class CreditCardScreen extends StatelessWidget {
                     userSnapshot.data?.data() ?? <String, dynamic>{};
                 final bool hasVipCard = userData['hasVipCard'] == true;
                 final String holderName =
-                    (userData['fullname'] ?? userData['fullName'] ?? 'CCPBANK USER')
+                    (userData['fullname'] ??
+                            userData['fullName'] ??
+                            'CCPBANK USER')
                         .toString()
                         .toUpperCase();
 
@@ -83,7 +85,8 @@ class CreditCardScreen extends StatelessWidget {
                       .collection('cards')
                       .snapshots(),
                   builder: (context, cardsSnapshot) {
-                    if (cardsSnapshot.connectionState == ConnectionState.waiting) {
+                    if (cardsSnapshot.connectionState ==
+                        ConnectionState.waiting) {
                       return const Center(
                         child: CircularProgressIndicator(
                           color: Color(0xFF000DC0),
@@ -101,9 +104,10 @@ class CreditCardScreen extends StatelessWidget {
                       );
                     }
 
-                    final List<QueryDocumentSnapshot<Map<String, dynamic>>> docs =
+                    final List<QueryDocumentSnapshot<Map<String, dynamic>>>
+                    docs =
                         cardsSnapshot.data?.docs ??
-                            <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+                        <QueryDocumentSnapshot<Map<String, dynamic>>>[];
 
                     final _CardData regularCard = _resolveCard(
                       docs: docs,
@@ -121,7 +125,9 @@ class CreditCardScreen extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _SectionTitle(text: _t(context, 'Thẻ Thường', 'Regular Card')),
+                          _SectionTitle(
+                            text: _t(context, 'Thẻ Thường', 'Regular Card'),
+                          ),
                           const SizedBox(height: 10),
                           _RegularCardVisual(
                             holderName: holderName,
@@ -134,12 +140,17 @@ class CreditCardScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 10),
                           _TopUpAtBranchButton(
-                            title:
-                                _t(context, 'Nạp tiền tại quầy', 'Top up at branch'),
+                            title: _t(
+                              context,
+                              'Nạp tiền tại quầy',
+                              'Top up at branch',
+                            ),
                           ),
                           if (hasVipCard) ...[
                             const SizedBox(height: 26),
-                            _SectionTitle(text: _t(context, 'Thẻ VIP', 'VIP Card')),
+                            _SectionTitle(
+                              text: _t(context, 'Thẻ VIP', 'VIP Card'),
+                            ),
                             const SizedBox(height: 10),
                             _VipCardVisual(
                               holderName: holderName,
@@ -186,7 +197,10 @@ class CreditCardScreen extends StatelessWidget {
     selected ??= docs.isNotEmpty ? docs.first : null;
 
     if (selected == null) {
-      return _CardData(maskedNumber: '**** **** **** $fallbackEnding', balance: 0);
+      return _CardData(
+        maskedNumber: '**** **** **** $fallbackEnding',
+        balance: 0,
+      );
     }
 
     final Map<String, dynamic> data = selected.data();
@@ -202,8 +216,9 @@ class CreditCardScreen extends StatelessWidget {
 
     final String raw = (rawCardNumber ?? '').toString();
     final String digits = raw.replaceAll(RegExp(r'[^0-9]'), '');
-    final String suffix =
-        digits.length >= 4 ? digits.substring(digits.length - 4) : fallbackEnding;
+    final String suffix = digits.length >= 4
+        ? digits.substring(digits.length - 4)
+        : fallbackEnding;
 
     return _CardData(maskedNumber: '**** **** **** $suffix', balance: balance);
   }
@@ -235,7 +250,10 @@ class _SectionTitle extends StatelessWidget {
 }
 
 class _RegularCardVisual extends StatelessWidget {
-  const _RegularCardVisual({required this.holderName, required this.cardNumber});
+  const _RegularCardVisual({
+    required this.holderName,
+    required this.cardNumber,
+  });
 
   final String holderName;
   final String cardNumber;

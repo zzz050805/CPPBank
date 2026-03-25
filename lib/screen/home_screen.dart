@@ -471,14 +471,7 @@ class _HomeScreenState extends State<HomeScreen> {
         final String? resolvedUserId = profileSnapshot.data?.uid;
 
         if (resolvedUserId == null || resolvedUserId.isEmpty) {
-          return Text(
-            '*** *** VND',
-            style: GoogleFonts.poppins(
-              color: Colors.white,
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-            ),
-          );
+          return _buildHiddenBalanceText();
         }
 
         return StreamBuilder<double>(
@@ -525,17 +518,11 @@ class _HomeScreenState extends State<HomeScreen> {
             }
 
             final double totalBalance =
-                snapshot.data ?? (_hasLoadedBalance ? _lastKnownTotalBalance : 0);
+                snapshot.data ??
+                (_hasLoadedBalance ? _lastKnownTotalBalance : 0);
 
             if (!_isBalanceVisible) {
-              return Text(
-                '*** *** VND',
-                style: GoogleFonts.poppins(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
-              );
+              return _buildHiddenBalanceText();
             }
 
             return _buildBalanceText(totalBalance);
@@ -574,6 +561,31 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildHiddenBalanceText() {
+    return RichText(
+      text: TextSpan(
+        children: [
+          TextSpan(
+            text: '*** *** ',
+            style: GoogleFonts.poppins(
+              color: Colors.white,
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          TextSpan(
+            text: 'VND',
+            style: GoogleFonts.poppins(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
