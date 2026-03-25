@@ -1,239 +1,295 @@
-﻿import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
+
 import '../data/user_firestore_service.dart';
 import '../l10n/app_text.dart';
-import '../widget/ccp_app_bar.dart';
+import 'branch_screen.dart';
 
-void main() => runApp(const MyApp());
-
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: const CreditCardScreen(),
-    );
-  }
-}
-
-class CreditCardScreen extends StatefulWidget {
+class CreditCardScreen extends StatelessWidget {
   const CreditCardScreen({super.key});
 
-  @override
-  State<CreditCardScreen> createState() => _CreditCardScreenState();
-}
-
-class _CreditCardScreenState extends State<CreditCardScreen>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<double> _card1Fade;
-  late final Animation<Offset> _card1Slide;
-  late final Animation<double> _card2Fade;
-  late final Animation<Offset> _card2Slide;
-  late final Animation<double> _addButtonFade;
-  late final Animation<Offset> _addButtonSlide;
-  late final Animation<double> _statsFade;
-  late final Animation<Offset> _statsSlide;
-
-  String _t(String vi, String en) => AppText.tr(context, vi, en);
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 950),
-    );
-
-    _card1Fade = CurvedAnimation(
-      parent: _controller,
-      curve: const Interval(0.0, 0.35, curve: Curves.easeOut),
-    );
-    _card1Slide = Tween<Offset>(begin: const Offset(0, 0.12), end: Offset.zero)
-        .animate(
-          CurvedAnimation(
-            parent: _controller,
-            curve: const Interval(0.0, 0.35, curve: Curves.easeOutCubic),
-          ),
-        );
-
-    _card2Fade = CurvedAnimation(
-      parent: _controller,
-      curve: const Interval(0.2, 0.55, curve: Curves.easeOut),
-    );
-    _card2Slide = Tween<Offset>(begin: const Offset(0, 0.12), end: Offset.zero)
-        .animate(
-          CurvedAnimation(
-            parent: _controller,
-            curve: const Interval(0.2, 0.55, curve: Curves.easeOutCubic),
-          ),
-        );
-
-    _addButtonFade = CurvedAnimation(
-      parent: _controller,
-      curve: const Interval(0.45, 0.78, curve: Curves.easeOut),
-    );
-    _addButtonSlide =
-        Tween<Offset>(begin: const Offset(0, 0.12), end: Offset.zero).animate(
-          CurvedAnimation(
-            parent: _controller,
-            curve: const Interval(0.45, 0.78, curve: Curves.easeOutCubic),
-          ),
-        );
-
-    _statsFade = CurvedAnimation(
-      parent: _controller,
-      curve: const Interval(0.62, 1.0, curve: Curves.easeOut),
-    );
-    _statsSlide = Tween<Offset>(begin: const Offset(0, 0.12), end: Offset.zero)
-        .animate(
-          CurvedAnimation(
-            parent: _controller,
-            curve: const Interval(0.62, 1.0, curve: Curves.easeOutCubic),
-          ),
-        );
-
-    _controller.forward();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  Widget _buildAnimatedSection({
-    required Animation<double> fade,
-    required Animation<Offset> slide,
-    required Widget child,
-  }) {
-    return FadeTransition(
-      opacity: fade,
-      child: SlideTransition(position: slide, child: child),
-    );
+  String _t(BuildContext context, String vi, String en) {
+    return AppText.tr(context, vi, en);
   }
 
   @override
   Widget build(BuildContext context) {
+    final String? userId = UserFirestoreService.instance.currentUserDocId;
+
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: CCPAppBar(title: _t('Thẻ tín dụng', 'Credit card')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: Column(
-          children: [
-            const SizedBox(height: 10),
-            // Thẻ xanh
-            _buildAnimatedSection(
-              fade: _card1Fade,
-              slide: _card1Slide,
-              child: const CreditCardWidget(
-                cardColor: Color(0xFF1A1A75),
-                accentColor: Color(0xFF42A5F5),
-                textColor: Colors.white,
-                cardType: "CREDIT CARD",
-              ),
-            ),
-            const SizedBox(height: 15),
-            // Thẻ đen VIP
-            _buildAnimatedSection(
-              fade: _card2Fade,
-              slide: _card2Slide,
-              child: const CreditCardWidget(
-                cardColor: Color(0xFF333333),
-                accentColor: Color(0xFFE0E0E0),
-                textColor: Color(0xFFD4AF37), // Màu vàng gold
-                cardType: "CREDIT CARD VIP",
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // Nút Thêm thẻ mới với viền đứt đoạn
-            _buildAnimatedSection(
-              fade: _addButtonFade,
-              slide: _addButtonSlide,
-              child: AddNewCardButton(
-                title: _t('Thêm thẻ mới', 'Add new card'),
-              ),
-            ),
-
-            const SizedBox(height: 25),
-
-            // Phần Thống kê
-            _buildAnimatedSection(
-              fade: _statsFade,
-              slide: _statsSlide,
-              child: StatisticsWidget(
-                title: _t('Thống kê theo tuần', 'Weekly statistics'),
-                mainLegend: _t('Mua sắm-Tiêu dùng', 'Shopping-Spending'),
-                subLegend: _t('Giải trí', 'Entertainment'),
-              ),
-            ),
-            const SizedBox(height: 20),
-          ],
+      backgroundColor: const Color(0xFFF8F9FE),
+      appBar: AppBar(
+        centerTitle: true,
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new),
+          color: const Color(0xFF000DC0),
+          onPressed: () => Navigator.pop(context),
         ),
+        title: Text(
+          _t(context, 'Thẻ tín dụng', 'Credit card'),
+          style: GoogleFonts.poppins(
+            color: const Color(0xFF111111),
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+      body: userId == null || userId.isEmpty
+          ? _StatusBox(
+              message: _t(
+                context,
+                'Bạn chưa đăng nhập.',
+                'You are not signed in.',
+              ),
+            )
+          : StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(userId)
+                  .snapshots(),
+              builder: (context, userSnapshot) {
+                if (userSnapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(
+                    child: CircularProgressIndicator(color: Color(0xFF000DC0)),
+                  );
+                }
+
+                if (userSnapshot.hasError) {
+                  return _StatusBox(
+                    message: _t(
+                      context,
+                      'Không thể tải dữ liệu người dùng.',
+                      'Unable to load user data.',
+                    ),
+                  );
+                }
+
+                final Map<String, dynamic> userData =
+                    userSnapshot.data?.data() ?? <String, dynamic>{};
+                final bool hasVipCard = userData['hasVipCard'] == true;
+                final String holderName =
+                    (userData['fullname'] ?? userData['fullName'] ?? 'CCPBANK USER')
+                        .toString()
+                        .toUpperCase();
+
+                return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  stream: FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(userId)
+                      .collection('cards')
+                      .snapshots(),
+                  builder: (context, cardsSnapshot) {
+                    if (cardsSnapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(
+                        child: CircularProgressIndicator(
+                          color: Color(0xFF000DC0),
+                        ),
+                      );
+                    }
+
+                    if (cardsSnapshot.hasError) {
+                      return _StatusBox(
+                        message: _t(
+                          context,
+                          'Không thể tải dữ liệu thẻ.',
+                          'Unable to load card data.',
+                        ),
+                      );
+                    }
+
+                    final List<QueryDocumentSnapshot<Map<String, dynamic>>> docs =
+                        cardsSnapshot.data?.docs ??
+                            <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+
+                    final _CardData regularCard = _resolveCard(
+                      docs: docs,
+                      preferredId: 'standard',
+                      fallbackEnding: '1010',
+                    );
+                    final _CardData vipCard = _resolveCard(
+                      docs: docs,
+                      preferredId: 'vip',
+                      fallbackEnding: '2020',
+                    );
+
+                    return SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _SectionTitle(text: _t(context, 'Thẻ Thường', 'Regular Card')),
+                          const SizedBox(height: 10),
+                          _RegularCardVisual(
+                            holderName: holderName,
+                            cardNumber: regularCard.maskedNumber,
+                          ),
+                          const SizedBox(height: 12),
+                          _BalanceRow(
+                            label: _t(context, 'Số dư:', 'Balance:'),
+                            amount: regularCard.balance,
+                          ),
+                          const SizedBox(height: 10),
+                          _TopUpAtBranchButton(
+                            title:
+                                _t(context, 'Nạp tiền tại quầy', 'Top up at branch'),
+                          ),
+                          if (hasVipCard) ...[
+                            const SizedBox(height: 26),
+                            _SectionTitle(text: _t(context, 'Thẻ VIP', 'VIP Card')),
+                            const SizedBox(height: 10),
+                            _VipCardVisual(
+                              holderName: holderName,
+                              cardNumber: vipCard.maskedNumber,
+                            ),
+                            const SizedBox(height: 12),
+                            _BalanceRow(
+                              label: _t(context, 'Số dư:', 'Balance:'),
+                              amount: vipCard.balance,
+                            ),
+                            const SizedBox(height: 10),
+                            _TopUpAtBranchButton(
+                              title: _t(
+                                context,
+                                'Nạp tiền tại quầy',
+                                'Top up at branch',
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+    );
+  }
+
+  _CardData _resolveCard({
+    required List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+    required String preferredId,
+    required String fallbackEnding,
+  }) {
+    QueryDocumentSnapshot<Map<String, dynamic>>? selected;
+
+    for (final QueryDocumentSnapshot<Map<String, dynamic>> doc in docs) {
+      if (doc.id.toLowerCase() == preferredId.toLowerCase()) {
+        selected = doc;
+        break;
+      }
+    }
+
+    selected ??= docs.isNotEmpty ? docs.first : null;
+
+    if (selected == null) {
+      return _CardData(maskedNumber: '**** **** **** $fallbackEnding', balance: 0);
+    }
+
+    final Map<String, dynamic> data = selected.data();
+    final dynamic rawBalance = data['balance'];
+    final dynamic rawCardNumber = data['cardNumber'];
+
+    double balance = 0;
+    if (rawBalance is num) {
+      balance = rawBalance.toDouble();
+    } else if (rawBalance is String) {
+      balance = double.tryParse(rawBalance) ?? 0;
+    }
+
+    final String raw = (rawCardNumber ?? '').toString();
+    final String digits = raw.replaceAll(RegExp(r'[^0-9]'), '');
+    final String suffix =
+        digits.length >= 4 ? digits.substring(digits.length - 4) : fallbackEnding;
+
+    return _CardData(maskedNumber: '**** **** **** $suffix', balance: balance);
+  }
+}
+
+class _CardData {
+  const _CardData({required this.maskedNumber, required this.balance});
+
+  final String maskedNumber;
+  final double balance;
+}
+
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: GoogleFonts.poppins(
+        color: const Color(0xFF161616),
+        fontSize: 18,
+        fontWeight: FontWeight.w700,
       ),
     );
   }
 }
 
-// --- WIDGET THẺ TÍN DỤNG ---
-class CreditCardWidget extends StatelessWidget {
-  final Color cardColor;
-  final Color accentColor;
-  final Color textColor;
-  final String cardType;
+class _RegularCardVisual extends StatelessWidget {
+  const _RegularCardVisual({required this.holderName, required this.cardNumber});
 
-  const CreditCardWidget({
-    super.key,
-    required this.cardColor,
-    required this.accentColor,
-    required this.textColor,
-    required this.cardType,
-  });
+  final String holderName;
+  final String cardNumber;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 200,
       width: double.infinity,
+      height: 210,
       decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF1C248B), Color(0xFF0A0F58)],
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
+            color: const Color(0xFF000A6A).withOpacity(0.35),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
         child: Stack(
           children: [
-            // Hiệu ứng vòng tròn trang trí
             Positioned(
-              right: -50,
-              top: -50,
-              child: CircleAvatar(
-                radius: 100,
-                backgroundColor: accentColor.withOpacity(0.4),
+              right: -34,
+              top: -58,
+              child: Container(
+                width: 150,
+                height: 150,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withOpacity(0.08),
+                ),
               ),
             ),
             Positioned(
-              right: 20,
-              top: -20,
-              child: CircleAvatar(
-                radius: 40,
-                backgroundColor: accentColor.withOpacity(0.6),
+              left: -56,
+              bottom: -84,
+              child: Container(
+                width: 190,
+                height: 190,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.cyanAccent.withOpacity(0.06),
+                ),
               ),
             ),
-            // Nội dung trên thẻ
             Padding(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -241,92 +297,57 @@ class CreditCardWidget extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        cardType,
+                        'THẺ THƯỜNG',
                         style: GoogleFonts.poppins(
-                          color: textColor,
-                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                          letterSpacing: 0.4,
                         ),
                       ),
                       Text(
-                        "CCP BANK",
+                        'CCPBANK',
                         style: GoogleFonts.poppins(
                           color: Colors.white,
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w700,
                           fontSize: 12,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 25),
-                  // Chip thẻ
+                  const SizedBox(height: 18),
                   Container(
-                    width: 45,
-                    height: 35,
+                    width: 48,
+                    height: 34,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFFB74D),
-                      borderRadius: BorderRadius.circular(5),
+                      borderRadius: BorderRadius.circular(6),
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFF9D886), Color(0xFFE1B95A)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
                     ),
                   ),
                   const Spacer(),
-                  StreamBuilder<UserProfileData?>(
-                    stream: UserFirestoreService.instance
-                        .currentUserProfileStream(),
-                    builder: (context, snapshot) {
-                      final String fullname = snapshot.hasError
-                          ? AppText.tr(
-                              context,
-                              'Không tìm thấy user',
-                              'User not found',
-                            )
-                          : (snapshot.data?.fullname ?? '...');
-
-                      return Text(
-                        fullname.toUpperCase(),
-                        style: GoogleFonts.poppins(
-                          color: textColor,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      );
-                    },
+                  Text(
+                    cardNumber,
+                    style: GoogleFonts.poppins(
+                      color: Colors.white,
+                      fontSize: 21,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.4,
+                    ),
                   ),
-                  const SizedBox(height: 5),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        "123 568 576 456",
-                        style: GoogleFonts.poppins(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1,
-                        ),
-                      ),
-                      // Logo Mastercard (giả lập bằng 2 hình tròn)
-                      Stack(
-                        children: [
-                          Container(
-                            width: 30,
-                            height: 30,
-                            decoration: const BoxDecoration(
-                              color: Colors.red,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          Positioned(
-                            left: 15,
-                            child: Container(
-                              width: 30,
-                              height: 30,
-                              decoration: BoxDecoration(
-                                color: Colors.orange.withOpacity(0.8),
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+                  const SizedBox(height: 8),
+                  Text(
+                    holderName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.poppins(
+                      color: Colors.white70,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ],
               ),
@@ -338,32 +359,195 @@ class CreditCardWidget extends StatelessWidget {
   }
 }
 
-// --- WIDGET NÚT THÊM THẺ MỚI ---
-class AddNewCardButton extends StatelessWidget {
-  const AddNewCardButton({super.key, required this.title});
+class _VipCardVisual extends StatelessWidget {
+  const _VipCardVisual({required this.holderName, required this.cardNumber});
 
-  final String title;
+  final String holderName;
+  final String cardNumber;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      height: 210,
       decoration: BoxDecoration(
-        // Giả lập viền đứt đoạn bằng Border thông thường (Flutter thuần không có dashed border mặc định)
-        border: Border.all(
-          color: Colors.blue.shade900,
-          width: 1,
-          style: BorderStyle.solid,
+        borderRadius: BorderRadius.circular(22),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF3E3520), Color(0xFFB68A2A), Color(0xFF2C2414)],
+          stops: [0.0, 0.48, 1.0],
         ),
-        borderRadius: BorderRadius.circular(10),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF7D5A15).withOpacity(0.35),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
-      child: Center(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(22),
+        child: Stack(
+          children: [
+            Positioned(
+              top: -32,
+              right: -20,
+              child: Container(
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withOpacity(0.15),
+                ),
+              ),
+            ),
+            Positioned(
+              left: -24,
+              bottom: -40,
+              child: Container(
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.black.withOpacity(0.16),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'THẺ VIP',
+                        style: GoogleFonts.poppins(
+                          color: const Color(0xFFFFF6D8),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      Text(
+                        'CCPBANK PREMIUM',
+                        style: GoogleFonts.poppins(
+                          color: const Color(0xFFFFF6D8),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  Container(
+                    width: 48,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(6),
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFF9ECB9), Color(0xFFD4B469)],
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    cardNumber,
+                    style: GoogleFonts.poppins(
+                      color: const Color(0xFFFFF6D8),
+                      fontSize: 21,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    holderName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.poppins(
+                      color: const Color(0xFFFFF6D8).withOpacity(0.92),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BalanceRow extends StatelessWidget {
+  const _BalanceRow({required this.label, required this.amount});
+
+  final String label;
+  final double amount;
+
+  @override
+  Widget build(BuildContext context) {
+    final NumberFormat formatter = NumberFormat('#,##0', 'en_US');
+    final String formatted = formatter.format(amount);
+
+    return Row(
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.poppins(
+            color: const Color(0xFF5B647F),
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          '$formatted VND',
+          style: GoogleFonts.poppins(
+            color: const Color(0xFF000DC0),
+            fontWeight: FontWeight.w700,
+            fontSize: 18,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TopUpAtBranchButton extends StatelessWidget {
+  const _TopUpAtBranchButton({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: 48,
+      child: OutlinedButton(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const BranchScreen()),
+          );
+        },
+        style: OutlinedButton.styleFrom(
+          side: const BorderSide(color: Color(0xFF000DC0), width: 1.4),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          backgroundColor: Colors.white,
+        ),
         child: Text(
           title,
           style: GoogleFonts.poppins(
-            color: Colors.blue.shade900,
-            fontWeight: FontWeight.w500,
+            color: const Color(0xFF000DC0),
+            fontWeight: FontWeight.w700,
+            fontSize: 15,
           ),
         ),
       ),
@@ -371,157 +555,34 @@ class AddNewCardButton extends StatelessWidget {
   }
 }
 
-// --- WIDGET THỐNG KÊ ---
-class StatisticsWidget extends StatelessWidget {
-  const StatisticsWidget({
-    super.key,
-    required this.title,
-    required this.mainLegend,
-    required this.subLegend,
-  });
+class _StatusBox extends StatelessWidget {
+  const _StatusBox({required this.message});
 
-  final String title;
-  final String mainLegend;
-  final String subLegend;
-
-  String _t(BuildContext context, String vi, String en) {
-    return AppText.tr(context, vi, en);
-  }
+  final String message;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(25),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 22),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFD8DEEE)),
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(
-                title,
-                style: GoogleFonts.poppins(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
-              ),
-              Icon(Icons.keyboard_arrow_up, size: 20),
-            ],
-          ),
-          const SizedBox(height: 5),
-          Text(
-            "8.600.343 VND",
+          child: Text(
+            message,
+            textAlign: TextAlign.center,
             style: GoogleFonts.poppins(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF1A1A75),
+              color: const Color(0xFF5A647E),
+              fontWeight: FontWeight.w500,
             ),
           ),
-          const SizedBox(height: 15),
-          // Legend
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              _buildLegend(const Color(0xFF1A1A75), mainLegend),
-              const SizedBox(width: 15),
-              _buildLegend(const Color(0xFF42A5F5), subLegend),
-            ],
-          ),
-          const SizedBox(height: 20),
-          // Biểu đồ
-          SizedBox(
-            height: 150,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                _buildBar(_t(context, 'T2', 'Mon'), 0.4, 0.2),
-                _buildBar(_t(context, 'T3', 'Tue'), 0.6, 0.3),
-                _buildBar(_t(context, 'T4', 'Wed'), 0.8, 0.4),
-                _buildBar(_t(context, 'T5', 'Thu'), 0.5, 0.3, isSelected: true),
-                _buildBar(_t(context, 'T6', 'Fri'), 0.4, 0.2),
-                _buildBar(_t(context, 'T7', 'Sat'), 0.7, 0.3),
-                _buildBar(_t(context, 'CN', 'Sun'), 0.5, 0.2),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
-    );
-  }
-
-  Widget _buildLegend(Color color, String label) {
-    return Row(
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 5),
-        Text(
-          label,
-          style: GoogleFonts.poppins(
-            fontSize: 11,
-            fontStyle: FontStyle.italic,
-            color: Colors.black54,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildBar(
-    String day,
-    double height1,
-    double height2, {
-    bool isSelected = false,
-  }) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.end,
-      children: [
-        Stack(
-          alignment: Alignment.bottomCenter,
-          children: [
-            Container(
-              width: 8,
-              height: 100 * height1,
-              decoration: BoxDecoration(
-                color: const Color(0xFF1A1A75),
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            Container(
-              width: 8,
-              height: 100 * height2,
-              decoration: BoxDecoration(
-                color: const Color(0xFF42A5F5),
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Text(
-          day,
-          style: GoogleFonts.poppins(
-            fontSize: 12,
-            color: isSelected ? const Color(0xFF1A1A75) : Colors.grey,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-          ),
-        ),
-      ],
     );
   }
 }

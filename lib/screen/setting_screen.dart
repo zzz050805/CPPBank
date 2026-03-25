@@ -1,4 +1,5 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../app_preferences.dart';
 import '../data/user_firestore_service.dart';
@@ -6,6 +7,7 @@ import '../l10n/app_text.dart';
 import 'search_screen.dart';
 import 'home_screen.dart';
 import 'chat_placeholder_screen.dart';
+import 'login.dart';
 
 class SettingScreen extends StatefulWidget {
   const SettingScreen({super.key});
@@ -348,13 +350,13 @@ class _SettingScreenState extends State<SettingScreen> {
     return SizedBox(
       width: double.infinity,
       child: TextButton(
-        onPressed: () {},
+        onPressed: _handleLogoutTap,
         style: TextButton.styleFrom(
           padding: const EdgeInsets.symmetric(vertical: 15),
         ),
         child: Text(
           _t("Đăng xuất", "Log out"),
-          style: const TextStyle(
+          style: TextStyle(
             color: Colors.redAccent,
             fontWeight: FontWeight.bold,
             fontSize: 16,
@@ -362,6 +364,155 @@ class _SettingScreenState extends State<SettingScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _handleLogoutTap() async {
+    final bool confirmed = await _showLogoutConfirmDialog();
+    if (!confirmed || !mounted) return;
+
+    try {
+      await FirebaseAuth.instance.signOut();
+      UserFirestoreService.instance.setFallbackDocId(null);
+
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red,
+          content: Text(
+            _t(
+              'Đăng xuất thất bại, vui lòng thử lại.',
+              'Logout failed, please try again.',
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<bool> _showLogoutConfirmDialog() async {
+    final bool? result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+            decoration: BoxDecoration(
+              color: _cardColor,
+              borderRadius: BorderRadius.circular(22),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 28,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 54,
+                  height: 54,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      colors: [_primaryBlue, const Color(0xFF000766)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.logout_rounded,
+                    color: Colors.white,
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  _t('Xác nhận đăng xuất', 'Confirm logout'),
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: _textColor,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _t(
+                    'Bạn có chắc chắn muốn đăng xuất khỏi tài khoản này?',
+                    'Are you sure you want to log out of this account?',
+                  ),
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    color: _subTextColor,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(dialogContext, false),
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(
+                            color: _subTextColor.withOpacity(0.5),
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        child: Text(
+                          _t('Hủy', 'Cancel'),
+                          style: GoogleFonts.poppins(
+                            color: _textColor,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(dialogContext, true),
+                        style: ElevatedButton.styleFrom(
+                          elevation: 0,
+                          backgroundColor: Colors.redAccent,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        child: Text(
+                          _t('Đăng xuất', 'Log out'),
+                          style: GoogleFonts.poppins(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    return result ?? false;
   }
 
   // --- THANH NAV ĐỒNG BỘ ---

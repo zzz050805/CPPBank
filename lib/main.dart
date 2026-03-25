@@ -1,18 +1,15 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:firebase_core/firebase_core.dart'; // Thêm dòng này
-import 'firebase_options.dart';
 import 'app_preferences.dart';
+import 'data/firebase_helper.dart';
 import 'screen/welcome.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
+    await FirebaseHelper.initializeFirebase();
   } catch (e) {
     debugPrint('Firebase init failed: $e');
   }

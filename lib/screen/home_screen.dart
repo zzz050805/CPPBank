@@ -1,6 +1,8 @@
-﻿import 'package:flutter/material.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:carousel_slider/carousel_slider.dart';
+import 'package:intl/intl.dart';
 import '../data/user_firestore_service.dart';
 import '../l10n/app_text.dart';
 import 'search_screen.dart';
@@ -21,8 +23,64 @@ class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
   bool _isBalanceVisible = false;
   int _currentBannerIndex = 0;
+  late final Stream<UserProfileData?> _profileStream;
+  String? _cardsBalanceUserId;
+  Stream<double>? _cardsBalanceStream;
+  double _lastKnownTotalBalance = 0;
+  bool _hasLoadedBalance = false;
 
   String _t(String vi, String en) => AppText.tr(context, vi, en);
+
+  String _formatCurrency(double value) {
+    final NumberFormat formatter = NumberFormat('#,###', 'vi_VN');
+    return formatter.format(value).replaceAll(',', '.');
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _profileStream = UserFirestoreService.instance.currentUserProfileStream();
+  }
+
+  Stream<double> _cardsTotalBalanceStream(String userId) {
+    if (_cardsBalanceStream != null && _cardsBalanceUserId == userId) {
+      return _cardsBalanceStream!;
+    }
+
+    _cardsBalanceUserId = userId;
+    _cardsBalanceStream = FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .collection('cards')
+        .snapshots()
+        .map((snapshot) {
+          double standardBalance = 0;
+          double vipBalance = 0;
+
+          for (final doc in snapshot.docs) {
+            final Map<String, dynamic> data = doc.data();
+            final dynamic rawBalance = data['balance'];
+
+            double balance = 0;
+            if (rawBalance is num) {
+              balance = rawBalance.toDouble();
+            } else if (rawBalance is String) {
+              balance = double.tryParse(rawBalance) ?? 0;
+            }
+
+            final String docId = doc.id.toLowerCase();
+            if (docId == 'standard') {
+              standardBalance = balance;
+            } else if (docId == 'vip') {
+              vipBalance = balance;
+            }
+          }
+
+          return standardBalance + vipBalance;
+        });
+
+    return _cardsBalanceStream!;
+  }
 
   // --- DỮ LIỆU BANNER (Kiểm tra kỹ đuôi file máy bro nhé) ---
   final List<String> bannerImages = [
@@ -320,7 +378,10 @@ class _HomeScreenState extends State<HomeScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            "Số dư tài khoản VND",
+                            _t(
+                              'Tổng số dư khả dụng',
+                              'Total available balance',
+                            ),
                             style: GoogleFonts.poppins(
                               color: Colors.white70,
                               fontSize: 12,
@@ -341,31 +402,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ],
                       ),
                       const SizedBox(height: 8),
-                      // Chỉnh lại font size cho số dư nổi bật
-                      RichText(
-                        text: TextSpan(
-                          children: [
-                            TextSpan(
-                              text: _isBalanceVisible
-                                  ? "1.000.000.000 "
-                                  : "*** *** ",
-                              style: GoogleFonts.poppins(
-                                color: Colors.white,
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            TextSpan(
-                              text: "VND",
-                              style: GoogleFonts.poppins(
-                                color: Colors.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                      _buildRealtimeTotalBalance(),
                       const SizedBox(height: 14),
                       Row(
                         children: [
@@ -424,6 +461,119 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildRealtimeTotalBalance() {
+    return StreamBuilder<UserProfileData?>(
+      stream: _profileStream,
+      builder: (context, profileSnapshot) {
+        final String? resolvedUserId = profileSnapshot.data?.uid;
+
+        if (resolvedUserId == null || resolvedUserId.isEmpty) {
+          return Text(
+            '*** *** VND',
+            style: GoogleFonts.poppins(
+              color: Colors.white,
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+            ),
+          );
+        }
+
+        return StreamBuilder<double>(
+          stream: _cardsTotalBalanceStream(resolvedUserId),
+          builder: (context, snapshot) {
+            if (snapshot.hasData) {
+              _lastKnownTotalBalance = snapshot.data!;
+              _hasLoadedBalance = true;
+            }
+
+            if (snapshot.connectionState == ConnectionState.waiting &&
+                !_hasLoadedBalance) {
+              return const SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.4,
+                  color: Colors.white,
+                ),
+              );
+            }
+
+            if (snapshot.hasError) {
+              if (_hasLoadedBalance) {
+                return _buildBalanceText(_lastKnownTotalBalance);
+              }
+
+              final String error = snapshot.error.toString().toLowerCase();
+              final bool networkError =
+                  error.contains('unavailable') ||
+                  error.contains('network') ||
+                  error.contains('failed-host-lookup');
+
+              return Text(
+                networkError
+                    ? _t('Mất kết nối mạng', 'No network connection')
+                    : _t('Không tải được số dư', 'Unable to load balance'),
+                style: GoogleFonts.poppins(
+                  color: Colors.white70,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              );
+            }
+
+            final double totalBalance =
+                snapshot.data ?? (_hasLoadedBalance ? _lastKnownTotalBalance : 0);
+
+            if (!_isBalanceVisible) {
+              return Text(
+                '*** *** VND',
+                style: GoogleFonts.poppins(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              );
+            }
+
+            return _buildBalanceText(totalBalance);
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildBalanceText(double totalBalance) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(end: totalBalance),
+      duration: const Duration(milliseconds: 450),
+      curve: Curves.easeOutCubic,
+      builder: (context, animatedValue, _) {
+        return RichText(
+          text: TextSpan(
+            children: [
+              TextSpan(
+                text: '${_formatCurrency(animatedValue)} ',
+                style: GoogleFonts.poppins(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              TextSpan(
+                text: 'VND',
+                style: GoogleFonts.poppins(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 

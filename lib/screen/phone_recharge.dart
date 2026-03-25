@@ -36,6 +36,8 @@ class TopUpScreen extends StatefulWidget {
 
 class _TopUpScreenState extends State<TopUpScreen>
     with SingleTickerProviderStateMixin {
+  static const Color _primaryBlue = Color(0xFF000DC0);
+
   late final AnimationController _controller;
   late final Animation<double> _providerFade;
   late final Animation<Offset> _providerSlide;
@@ -187,21 +189,162 @@ class _TopUpScreenState extends State<TopUpScreen>
     );
   }
 
+  IconData _providerIcon(String provider) {
+    switch (provider) {
+      case 'Viettel':
+        return Icons.wifi_tethering_rounded;
+      case 'Mobifone':
+        return Icons.phone_iphone_rounded;
+      case 'Vinaphone':
+        return Icons.network_cell_rounded;
+      case 'Vietnamobile':
+        return Icons.signal_cellular_alt_rounded;
+      default:
+        return Icons.settings_input_antenna_rounded;
+    }
+  }
+
+  Future<void> _showProviderPicker() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 42,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFD8DEEE),
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    _t('Chọn nhà cung cấp', 'Select provider'),
+                    style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF19213D),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: providers.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (context, index) {
+                      final String provider = providers[index];
+                      final bool isSelected = selectedProvider == provider;
+
+                      return InkWell(
+                        borderRadius: BorderRadius.circular(14),
+                        onTap: () {
+                          setState(() {
+                            selectedProvider = provider;
+                            _providerError = null;
+                            if (_phoneError ==
+                                _t(
+                                  'Vui lòng chọn nhà cung cấp trước khi nhập số điện thoại.',
+                                  'Please select a provider before entering phone number.',
+                                )) {
+                              _phoneError = null;
+                            }
+                          });
+                          Navigator.pop(sheetContext);
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? const Color(0xFFEAF0FF)
+                                : const Color(0xFFF9FAFF),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: isSelected
+                                  ? _primaryBlue
+                                  : const Color(0xFFD7DDEE),
+                              width: isSelected ? 1.4 : 1,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 34,
+                                height: 34,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: _primaryBlue.withOpacity(0.1),
+                                ),
+                                child: Icon(
+                                  _providerIcon(provider),
+                                  color: _primaryBlue,
+                                  size: 18,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  provider,
+                                  style: GoogleFonts.poppins(
+                                    color: const Color(0xFF1A1A1A),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              if (isSelected)
+                                const Icon(
+                                  Icons.check_circle_rounded,
+                                  color: _primaryBlue,
+                                  size: 20,
+                                ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF8F9FE),
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.black54),
+          icon: const Icon(Icons.arrow_back_ios, color: _primaryBlue),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
           _t('Nạp tiền điện thoại', 'Phone Top-Up'),
           style: GoogleFonts.poppins(
-            color: Colors.black87,
+            color: const Color(0xFF1A1A1A),
             fontWeight: FontWeight.bold,
           ),
         ),
@@ -215,44 +358,127 @@ class _TopUpScreenState extends State<TopUpScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 14),
+
+                  _buildAnimatedSection(
+                    fade: _providerFade,
+                    slide: _providerSlide,
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFDDE5FF)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: _primaryBlue.withOpacity(0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.phone_iphone_rounded,
+                              color: _primaryBlue,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              _t(
+                                'Nạp tiền nhanh trong vài giây, an toàn và tiện lợi.',
+                                'Top up in seconds with a safe and seamless flow.',
+                              ),
+                              style: GoogleFonts.poppins(
+                                fontSize: 12.5,
+                                color: const Color(0xFF2C3A75),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 18),
+
+                  _buildAnimatedSection(
+                    fade: _providerFade,
+                    slide: _providerSlide,
+                    child: Text(
+                      _t('Nhà cung cấp', 'Provider'),
+                      style: GoogleFonts.poppins(
+                        color: _primaryBlue,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
 
                   // --- Dropdown chọn nhà cung cấp ---
                   _buildAnimatedSection(
                     fade: _providerFade,
                     slide: _providerSlide,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 15),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey.shade300),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          isExpanded: true,
-                          hint: Text(
-                            _t('Chọn nhà cung cấp', 'Select provider'),
-                          ),
-                          value: selectedProvider,
-                          items: providers.map((String value) {
-                            return DropdownMenuItem<String>(
-                              value: value,
-                              child: Text(value),
-                            );
-                          }).toList(),
-                          onChanged: (newValue) {
-                            setState(() {
-                              selectedProvider = newValue;
-                              _providerError = null;
-                              if (_phoneError ==
-                                  _t(
-                                    'Vui lòng chọn nhà cung cấp trước khi nhập số điện thoại.',
-                                    'Please select a provider before entering phone number.',
-                                  )) {
-                                _phoneError = null;
-                              }
-                            });
-                          },
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(14),
+                      onTap: _showProviderPicker,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 11,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          border: Border.all(color: const Color(0xFFD8DEEE)),
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.03),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 34,
+                              height: 34,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: _primaryBlue.withOpacity(0.1),
+                              ),
+                              child: Icon(
+                                _providerIcon(selectedProvider ?? providers[0]),
+                                color: _primaryBlue,
+                                size: 18,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                selectedProvider ??
+                                    _t('Chọn nhà cung cấp', 'Select provider'),
+                                style: GoogleFonts.poppins(
+                                  color: selectedProvider == null
+                                      ? const Color(0xFF78819E)
+                                      : const Color(0xFF1A1A1A),
+                                  fontWeight: selectedProvider == null
+                                      ? FontWeight.w500
+                                      : FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            const Icon(
+                              Icons.keyboard_arrow_down_rounded,
+                              color: Color(0xFF5F6B99),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -276,9 +502,9 @@ class _TopUpScreenState extends State<TopUpScreen>
                     child: Text(
                       _t('Số điện thoại', 'Phone number'),
                       style: GoogleFonts.poppins(
-                        color: Color(0xFF000DC0),
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+                        color: _primaryBlue,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
                       ),
                     ),
                   ),
@@ -290,13 +516,16 @@ class _TopUpScreenState extends State<TopUpScreen>
                     slide: _phoneSlide,
                     child: Container(
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(30),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFFD8DEEE)),
+                        color: selectedProvider == null
+                            ? const Color(0xFFF3F5FA)
+                            : Colors.white,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.grey.withOpacity(0.3),
-                            spreadRadius: 1,
+                            color: Colors.black.withOpacity(0.03),
                             blurRadius: 10,
-                            offset: const Offset(0, 3),
+                            offset: const Offset(0, 4),
                           ),
                         ],
                       ),
@@ -349,11 +578,11 @@ class _TopUpScreenState extends State<TopUpScreen>
                           hintStyle: GoogleFonts.poppins(
                             color: Colors.grey.shade400,
                           ),
-                          fillColor: Colors.white,
+                          fillColor: Colors.transparent,
                           filled: true,
                           counterText: '',
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(30),
+                            borderRadius: BorderRadius.circular(14),
                             borderSide: BorderSide.none,
                           ),
                           contentPadding: const EdgeInsets.symmetric(
@@ -383,9 +612,9 @@ class _TopUpScreenState extends State<TopUpScreen>
                     child: Text(
                       _t('Chọn mệnh giá', 'Select amount'),
                       style: GoogleFonts.poppins(
-                        color: Color(0xFF000DC0),
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+                        color: _primaryBlue,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
                       ),
                     ),
                   ),
@@ -396,13 +625,14 @@ class _TopUpScreenState extends State<TopUpScreen>
                       slide: _amountSlide,
                       child: Container(
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(30),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0xFFD8DEEE)),
+                          color: Colors.white,
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.grey.withOpacity(0.25),
-                              spreadRadius: 1,
+                              color: Colors.black.withOpacity(0.03),
                               blurRadius: 10,
-                              offset: const Offset(0, 3),
+                              offset: const Offset(0, 4),
                             ),
                           ],
                         ),
@@ -424,10 +654,10 @@ class _TopUpScreenState extends State<TopUpScreen>
                             hintStyle: GoogleFonts.poppins(
                               color: Colors.grey.shade400,
                             ),
-                            fillColor: Colors.white,
+                            fillColor: Colors.transparent,
                             filled: true,
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(30),
+                              borderRadius: BorderRadius.circular(14),
                               borderSide: BorderSide.none,
                             ),
                             contentPadding: const EdgeInsets.symmetric(
@@ -487,15 +717,24 @@ class _TopUpScreenState extends State<TopUpScreen>
                           child: Container(
                             decoration: BoxDecoration(
                               color: selectedAmount == amount
-                                  ? const Color(0xFFE8EBFF)
-                                  : Colors.white,
+                                  ? const Color(0xFFEAF0FF)
+                                  : const Color(0xFFFDFEFF),
                               border: Border.all(
                                 color: selectedAmount == amount
-                                    ? const Color(0xFF000DC0)
-                                    : Colors.grey.shade300,
-                                width: selectedAmount == amount ? 1.5 : 1,
+                                    ? _primaryBlue
+                                    : const Color(0xFFD7DDEE),
+                                width: selectedAmount == amount ? 1.6 : 1.0,
                               ),
-                              borderRadius: BorderRadius.circular(15),
+                              borderRadius: BorderRadius.circular(14),
+                              boxShadow: selectedAmount == amount
+                                  ? [
+                                      BoxShadow(
+                                        color: _primaryBlue.withOpacity(0.12),
+                                        blurRadius: 10,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ]
+                                  : null,
                             ),
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
@@ -503,7 +742,10 @@ class _TopUpScreenState extends State<TopUpScreen>
                                 Text(
                                   displayAmount,
                                   style: GoogleFonts.poppins(
-                                    fontWeight: FontWeight.bold,
+                                    color: selectedAmount == amount
+                                        ? _primaryBlue
+                                        : const Color(0xFF1F2A44),
+                                    fontWeight: FontWeight.w700,
                                     fontSize: 14,
                                   ),
                                 ),
@@ -511,8 +753,11 @@ class _TopUpScreenState extends State<TopUpScreen>
                                   Text(
                                     "VND",
                                     style: GoogleFonts.poppins(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14,
+                                      color: selectedAmount == amount
+                                          ? _primaryBlue
+                                          : const Color(0xFF1F2A44),
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 13,
                                     ),
                                   ),
                               ],
@@ -622,17 +867,18 @@ class _TopUpScreenState extends State<TopUpScreen>
                     );
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF000DC0),
+                    backgroundColor: _primaryBlue,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30),
+                      borderRadius: BorderRadius.circular(16),
                     ),
                     elevation: 0,
+                    shadowColor: Colors.transparent,
                   ),
                   child: Text(
                     _t('Tiếp theo', 'Next'),
                     style: GoogleFonts.poppins(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
                       color: Colors.white,
                     ),
                   ),

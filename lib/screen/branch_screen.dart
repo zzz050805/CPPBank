@@ -446,7 +446,7 @@ class _BranchMapScreenState extends State<BranchMapScreen>
                           ? Center(
                               child: Text(
                                 _t(
-                                  'Khong tim thay chi nhanh phu hop.',
+                                  'Không tìm thấy chi nhánh phù hợp.',
                                   'No branch found.',
                                 ),
                                 style: GoogleFonts.poppins(
@@ -534,9 +534,9 @@ class _BranchMapScreenState extends State<BranchMapScreen>
                                               ),
                                               child: Text(
                                                 branch.isOpen
-                                                    ? _t('Dang mo cua', 'Open')
+                                                    ? _t('Đang mở cửa', 'Open')
                                                     : _t(
-                                                        'Da dong cua',
+                                                        'Đã đóng cửa',
                                                         'Closed',
                                                       ),
                                                 style: GoogleFonts.poppins(
@@ -577,7 +577,7 @@ class _BranchMapScreenState extends State<BranchMapScreen>
                                                     size: 16,
                                                   ),
                                                   label: Text(
-                                                    _t('Goi dien', 'Call'),
+                                                    _t('Gọi điện', 'Call'),
                                                   ),
                                                   style: ElevatedButton.styleFrom(
                                                     backgroundColor:
@@ -605,7 +605,7 @@ class _BranchMapScreenState extends State<BranchMapScreen>
                                                   ),
                                                   label: Text(
                                                     _t(
-                                                      'Chi duong',
+                                                      'Chỉ đường',
                                                       'Directions',
                                                     ),
                                                   ),
