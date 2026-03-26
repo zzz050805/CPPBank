@@ -52,7 +52,7 @@ class _SettingScreenState extends State<SettingScreen> {
       return const _MembershipRankData(
         name: 'HẠNG ROYAL',
         color: Color(0xFFC7193E),
-        gradient: [Color(0xFF880D2F), Color.fromARGB(255, 223, 223, 100)],
+        gradient: [Color(0xFF880D2F), Color.fromARGB(255, 206, 206, 83)],
         icon: Icons.local_fire_department_outlined,
       );
     }
