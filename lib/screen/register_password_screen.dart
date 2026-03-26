@@ -154,22 +154,25 @@ class _RegisterPasswordScreenState extends State<RegisterPasswordScreen> {
         throw Exception('Không tạo được định danh tài khoản.');
       }
 
-      // Lưu dữ liệu user với document id = uid hoặc fallback doc id.
-      await FirebaseFirestore.instance.collection('users').doc(uid).set({
-        'fullname': widget.fullName,
-        'fullName': widget.fullName,
-        'authEmail': authEmail,
-        'email': authEmail,
-        'phoneNumber': widget.phoneNumber,
-        'cccd': widget.cccd,
-        'issueDate': widget.issueDate,
-        'address': widget.address,
-        // Giữ tương thích luồng đăng nhập legacy đang kiểm tra password từ Firestore.
-        'password': _passController.text,
-        'authUid': usedAuthFallback ? null : uid,
-        'lastLoginAt': FieldValue.serverTimestamp(),
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+      // Lưu dữ liệu user và khởi tạo cấu trúc Firestore chuẩn cho tài khoản mới.
+      await UserFirestoreService.instance.initUserData(
+        userId: uid,
+        userData: {
+          'fullname': widget.fullName,
+          'fullName': widget.fullName,
+          'authEmail': authEmail,
+          'email': authEmail,
+          'phoneNumber': widget.phoneNumber,
+          'cccd': widget.cccd,
+          'issueDate': widget.issueDate,
+          'address': widget.address,
+          // Giữ tương thích luồng đăng nhập legacy đang kiểm tra password từ Firestore.
+          'password': _passController.text,
+          'authUid': usedAuthFallback ? null : uid,
+          'lastLoginAt': FieldValue.serverTimestamp(),
+          'createdAt': FieldValue.serverTimestamp(),
+        },
+      );
 
       if (usedAuthFallback) {
         UserFirestoreService.instance.setFallbackDocId(uid);

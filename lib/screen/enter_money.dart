@@ -151,10 +151,17 @@ class _TransferScreenState extends State<TransferScreen> {
                           StreamBuilder<UserProfileData?>(
                             stream: UserFirestoreService.instance
                                 .currentUserProfileStream(),
+                            initialData:
+                                UserFirestoreService.instance.latestProfile,
                             builder: (context, snapshot) {
+                              final UserProfileData? profile =
+                                  snapshot.data ??
+                                  UserFirestoreService.instance.latestProfile;
                               final String senderName = snapshot.hasError
                                   ? _t('Không tìm thấy user', 'User not found')
-                                  : (snapshot.data?.fullname ?? '...');
+                                  : ((profile?.fullname.isNotEmpty == true)
+                                        ? profile!.fullname
+                                        : _t('Khách hàng', 'Customer'));
 
                               return _buildAccountInfoCard(
                                 name: senderName.toUpperCase(),

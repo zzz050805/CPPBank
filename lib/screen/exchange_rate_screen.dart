@@ -11,8 +11,6 @@ class ExchangeRateScreen extends StatefulWidget {
 }
 
 class _ExchangeRateScreenState extends State<ExchangeRateScreen> {
-  int _selectedIndex = 1;
-
   String _t(String vi, String en) => AppText.tr(context, vi, en);
   String _country(Map<String, dynamic> item) {
     final bool isEn = Localizations.localeOf(context).languageCode == 'en';
@@ -171,234 +169,148 @@ class _ExchangeRateScreenState extends State<ExchangeRateScreen> {
     return Scaffold(
       backgroundColor: Colors.white, // Cố định nền trắng
       appBar: CCPAppBar(title: _t("Tỷ giá hối đoái", "Exchange rates")),
-      body: Stack(
+      body: Column(
         children: [
-          Column(
-            children: [
-              // --- HEADER ĐƯỢC KHÓA (STAY FIXED) ---
-              Container(
-                color: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 25,
-                  vertical: 10,
-                ),
-                child: Column(
+          // --- HEADER ĐƯỢC KHÓA (STAY FIXED) ---
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 10),
+            child: Column(
+              children: [
+                Row(
                   children: [
-                    Row(
-                      children: [
-                        // Tăng flex lên 5 để không bị mất chữ đơn vị tiền tệ
-                        Expanded(
-                          flex: 5,
-                          child: Text(
-                            _t("Quốc gia", "Country"),
-                            style: GoogleFonts.poppins(
-                              color: Colors.grey,
-                              fontSize: 13,
-                            ),
-                          ),
+                    // Tăng flex lên 5 để không bị mất chữ đơn vị tiền tệ
+                    Expanded(
+                      flex: 5,
+                      child: Text(
+                        _t("Quốc gia", "Country"),
+                        style: GoogleFonts.poppins(
+                          color: Colors.grey,
+                          fontSize: 13,
                         ),
-                        Expanded(
-                          flex: 3,
-                          child: Text(
-                            _t("Mua vào", "Buy"),
-                            textAlign: TextAlign.right,
-                            style: GoogleFonts.poppins(
-                              color: Colors.grey,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          flex: 3,
-                          child: Text(
-                            _t("Bán ra", "Sell"),
-                            textAlign: TextAlign.right,
-                            style: GoogleFonts.poppins(
-                              color: Colors.grey,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                    const SizedBox(height: 10),
-                    const Divider(height: 1),
+                    Expanded(
+                      flex: 3,
+                      child: Text(
+                        _t("Mua vào", "Buy"),
+                        textAlign: TextAlign.right,
+                        style: GoogleFonts.poppins(
+                          color: Colors.grey,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      flex: 3,
+                      child: Text(
+                        _t("Bán ra", "Sell"),
+                        textAlign: TextAlign.right,
+                        style: GoogleFonts.poppins(
+                          color: Colors.grey,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
-              ),
-
-              // --- DANH SÁCH CUỘN ---
-              Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.only(
-                    left: 20,
-                    right: 20,
-                    bottom: 85,
-                  ),
-                  itemCount: exchangeRates.length + 1,
-                  itemBuilder: (context, index) {
-                    if (index == exchangeRates.length) {
-                      return Padding(
-                        padding: const EdgeInsets.only(top: 20, bottom: 20),
-                        child: Text(
-                          _t(
-                            "*Tỷ giá có thể thay đổi theo từng thời điểm giao dịch thực tế.*",
-                            "*Rates may change by real transaction time.*",
-                          ),
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.poppins(
-                            fontSize: 11,
-                            fontStyle: FontStyle.italic,
-                            color: Colors.grey,
-                          ),
-                        ),
-                      );
-                    }
-
-                    final item = exchangeRates[index];
-                    return Column(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          child: Row(
-                            children: [
-                              // CỘT QUỐC GIA: Tăng không gian và bỏ Ellipsis
-                              Expanded(
-                                flex: 5,
-                                child: Row(
-                                  children: [
-                                    Text(
-                                      item['flag'],
-                                      style: const TextStyle(fontSize: 24),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Text(
-                                        "${_country(item)}(${item['code']})",
-                                        style: GoogleFonts.poppins(
-                                          fontSize:
-                                              13.5, // Giảm nhẹ size để chắc chắn hiện đủ
-                                          fontWeight: FontWeight.w500,
-                                          color: const Color(0xFF343434),
-                                        ),
-                                        softWrap: false, // Không cho xuống dòng
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              // CỘT MUA VÀO
-                              Expanded(
-                                flex: 3,
-                                child: Text(
-                                  item['buy'],
-                                  textAlign: TextAlign.right,
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                              // CỘT BÁN RA
-                              Expanded(
-                                flex: 3,
-                                child: Text(
-                                  item['sell'],
-                                  textAlign: TextAlign.right,
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: const Color(0xFF000DC0),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Divider(color: Colors.grey.withOpacity(0.1), height: 1),
-                      ],
-                    );
-                  },
-                ),
-              ),
-            ],
+                const SizedBox(height: 10),
+                const Divider(height: 1),
+              ],
+            ),
           ),
 
-          // THANH BOTTOM NAV
-          _buildPillBottomNav(),
+          // --- DANH SÁCH CUỘN ---
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.only(left: 20, right: 20, bottom: 20),
+              itemCount: exchangeRates.length + 1,
+              itemBuilder: (context, index) {
+                if (index == exchangeRates.length) {
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 20, bottom: 20),
+                    child: Text(
+                      _t(
+                        "*Tỷ giá có thể thay đổi theo từng thời điểm giao dịch thực tế.*",
+                        "*Rates may change by real transaction time.*",
+                      ),
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        fontStyle: FontStyle.italic,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  );
+                }
+
+                final item = exchangeRates[index];
+                return Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      child: Row(
+                        children: [
+                          // CỘT QUỐC GIA: Tăng không gian và bỏ Ellipsis
+                          Expanded(
+                            flex: 5,
+                            child: Row(
+                              children: [
+                                Text(
+                                  item['flag'],
+                                  style: const TextStyle(fontSize: 24),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    "${_country(item)}(${item['code']})",
+                                    style: GoogleFonts.poppins(
+                                      fontSize:
+                                          13.5, // Giảm nhẹ size để chắc chắn hiện đủ
+                                      fontWeight: FontWeight.w500,
+                                      color: const Color(0xFF343434),
+                                    ),
+                                    softWrap: false, // Không cho xuống dòng
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          // CỘT MUA VÀO
+                          Expanded(
+                            flex: 3,
+                            child: Text(
+                              item['buy'],
+                              textAlign: TextAlign.right,
+                              style: GoogleFonts.poppins(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          // CỘT BÁN RA
+                          Expanded(
+                            flex: 3,
+                            child: Text(
+                              item['sell'],
+                              textAlign: TextAlign.right,
+                              style: GoogleFonts.poppins(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFF000DC0),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Divider(color: Colors.grey.withOpacity(0.1), height: 1),
+                  ],
+                );
+              },
+            ),
+          ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildPillBottomNav() {
-    return Positioned(
-      bottom: 20,
-      left: 20,
-      right: 20,
-      child: Container(
-        height: 60,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(30),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 15,
-              offset: const Offset(0, 5),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _pillNavItem(Icons.home, _t("Trang chính", "Home"), 0),
-            _pillNavItem(Icons.search, _t("Tìm kiếm", "Search"), 1),
-            _pillNavItem(Icons.chat_bubble_outline, "", 2),
-            _pillNavItem(Icons.settings_outlined, "", 3),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _pillNavItem(IconData icon, String label, int index) {
-    bool isSelected = _selectedIndex == index;
-    return GestureDetector(
-      onTap: () {
-        if (index == 0)
-          Navigator.of(context).popUntil((route) => route.isFirst);
-        else if (index == 1)
-          Navigator.pop(context);
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: isSelected
-            ? BoxDecoration(
-                color: const Color(0xFF000DC0),
-                borderRadius: BorderRadius.circular(20),
-              )
-            : null,
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              color: isSelected ? Colors.white : Colors.grey[600],
-              size: 22,
-            ),
-            if (isSelected && label.isNotEmpty) ...[
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: GoogleFonts.poppins(
-                  color: Colors.white,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ],
-        ),
       ),
     );
   }

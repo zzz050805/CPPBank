@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 
 import '../data/user_firestore_service.dart';
 import '../l10n/app_text.dart';
+import '../widget/pressable_scale.dart';
+import '../widget/shimmer_box.dart';
 import 'branch_screen.dart';
 
 class CreditCardScreen extends StatelessWidget {
@@ -53,9 +55,7 @@ class CreditCardScreen extends StatelessWidget {
                   .snapshots(),
               builder: (context, userSnapshot) {
                 if (userSnapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                    child: CircularProgressIndicator(color: Color(0xFF000DC0)),
-                  );
+                  return const _CreditCardSkeleton();
                 }
 
                 if (userSnapshot.hasError) {
@@ -87,11 +87,7 @@ class CreditCardScreen extends StatelessWidget {
                   builder: (context, cardsSnapshot) {
                     if (cardsSnapshot.connectionState ==
                         ConnectionState.waiting) {
-                      return const Center(
-                        child: CircularProgressIndicator(
-                          color: Color(0xFF000DC0),
-                        ),
-                      );
+                      return const _CreditCardSkeleton();
                     }
 
                     if (cardsSnapshot.hasError) {
@@ -125,48 +121,72 @@ class CreditCardScreen extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _SectionTitle(
-                            text: _t(context, 'Thẻ Thường', 'Regular Card'),
+                          _StaggeredEntry(
+                            index: 0,
+                            child: _SectionTitle(
+                              text: _t(context, 'Thẻ Thường', 'Regular Card'),
+                            ),
                           ),
                           const SizedBox(height: 10),
-                          _RegularCardVisual(
-                            holderName: holderName,
-                            cardNumber: regularCard.maskedNumber,
+                          _StaggeredEntry(
+                            index: 1,
+                            child: _RegularCardVisual(
+                              holderName: holderName,
+                              cardNumber: regularCard.maskedNumber,
+                            ),
                           ),
                           const SizedBox(height: 12),
-                          _BalanceRow(
-                            label: _t(context, 'Số dư:', 'Balance:'),
-                            amount: regularCard.balance,
+                          _StaggeredEntry(
+                            index: 2,
+                            child: _BalanceRow(
+                              label: _t(context, 'Số dư:', 'Balance:'),
+                              amount: regularCard.balance,
+                            ),
                           ),
                           const SizedBox(height: 10),
-                          _TopUpAtBranchButton(
-                            title: _t(
-                              context,
-                              'Nạp tiền tại quầy',
-                              'Top up at branch',
-                            ),
-                          ),
-                          if (hasVipCard) ...[
-                            const SizedBox(height: 26),
-                            _SectionTitle(
-                              text: _t(context, 'Thẻ VIP', 'VIP Card'),
-                            ),
-                            const SizedBox(height: 10),
-                            _VipCardVisual(
-                              holderName: holderName,
-                              cardNumber: vipCard.maskedNumber,
-                            ),
-                            const SizedBox(height: 12),
-                            _BalanceRow(
-                              label: _t(context, 'Số dư:', 'Balance:'),
-                              amount: vipCard.balance,
-                            ),
-                            const SizedBox(height: 10),
-                            _TopUpAtBranchButton(
+                          _StaggeredEntry(
+                            index: 3,
+                            child: _TopUpAtBranchButton(
                               title: _t(
                                 context,
                                 'Nạp tiền tại quầy',
                                 'Top up at branch',
+                              ),
+                            ),
+                          ),
+                          if (hasVipCard) ...[
+                            const SizedBox(height: 26),
+                            _StaggeredEntry(
+                              index: 4,
+                              child: _SectionTitle(
+                                text: _t(context, 'Thẻ VIP', 'VIP Card'),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            _StaggeredEntry(
+                              index: 5,
+                              child: _VipCardVisual(
+                                holderName: holderName,
+                                cardNumber: vipCard.maskedNumber,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            _StaggeredEntry(
+                              index: 6,
+                              child: _BalanceRow(
+                                label: _t(context, 'Số dư:', 'Balance:'),
+                                amount: vipCard.balance,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            _StaggeredEntry(
+                              index: 7,
+                              child: _TopUpAtBranchButton(
+                                title: _t(
+                                  context,
+                                  'Nạp tiền tại quầy',
+                                  'Top up at branch',
+                                ),
                               ),
                             ),
                           ],
@@ -546,29 +566,75 @@ class _TopUpAtBranchButton extends StatelessWidget {
     return SizedBox(
       width: double.infinity,
       height: 48,
-      child: OutlinedButton(
-        onPressed: () {
+      child: PressableScale(
+        borderRadius: BorderRadius.circular(14),
+        splashColor: const Color(0xFF000DC0).withOpacity(0.12),
+        onTap: () {
           Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => const BranchScreen()),
           );
         },
-        style: OutlinedButton.styleFrom(
-          side: const BorderSide(color: Color(0xFF000DC0), width: 1.4),
-          shape: RoundedRectangleBorder(
+        child: Container(
+          decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFF000DC0), width: 1.4),
+            color: Colors.white,
           ),
-          backgroundColor: Colors.white,
-        ),
-        child: Text(
-          title,
-          style: GoogleFonts.poppins(
-            color: const Color(0xFF000DC0),
-            fontWeight: FontWeight.w700,
-            fontSize: 15,
+          alignment: Alignment.center,
+          child: Text(
+            title,
+            style: GoogleFonts.poppins(
+              color: const Color(0xFF000DC0),
+              fontWeight: FontWeight.w700,
+              fontSize: 15,
+            ),
           ),
         ),
       ),
+    );
+  }
+}
+
+class _StaggeredEntry extends StatelessWidget {
+  const _StaggeredEntry({required this.index, required this.child});
+
+  final int index;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final int delayMs = 70 * index;
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: 1),
+      duration: Duration(milliseconds: 360 + delayMs),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, _) {
+        return Transform.translate(
+          offset: Offset(0, (1 - value) * 16),
+          child: Opacity(opacity: value, child: child),
+        );
+      },
+    );
+  }
+}
+
+class _CreditCardSkeleton extends StatelessWidget {
+  const _CreditCardSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+      children: const [
+        ShimmerBox(width: 140, height: 24, radius: 8),
+        SizedBox(height: 12),
+        ShimmerBox(width: double.infinity, height: 210, radius: 22),
+        SizedBox(height: 14),
+        ShimmerBox(width: 180, height: 24, radius: 8),
+        SizedBox(height: 12),
+        ShimmerBox(width: double.infinity, height: 48, radius: 14),
+      ],
     );
   }
 }

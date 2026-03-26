@@ -32,8 +32,6 @@ class CurrencyConvertScreen extends StatefulWidget {
 }
 
 class _CurrencyConvertScreenState extends State<CurrencyConvertScreen> {
-  int _selectedIndex = 1;
-
   String _t(String vi, String en) => AppText.tr(context, vi, en);
 
   final List<Map<String, String>> currencies = [
@@ -167,122 +165,114 @@ class _CurrencyConvertScreenState extends State<CurrencyConvertScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: CCPAppBar(title: _t("Quy đổi tiền tệ", "Currency converter")),
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Column(
-              children: [
-                // --- NỘI DUNG CHÍNH ---
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  child: Image.asset(
-                    'assets/search/quydoitiente.png',
-                    height: 160,
-                    fit: BoxFit.contain,
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 20,
-                        offset: const Offset(0, 10),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    children: [
-                      _buildInputBox(
-                        _t("Từ", "From"),
-                        _fromController,
-                        fromCurrency,
-                        () => _showCurrencyPicker(true),
-                      ),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 8, left: 4),
-                          child: Text(
-                            rateLabel,
-                            style: GoogleFonts.poppins(
-                              fontSize: 11,
-                              color: const Color(0xFF000DC0),
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 5),
-                        child: IconButton(
-                          onPressed: _handleSwap,
-                          icon: const Icon(
-                            Icons.swap_vert_rounded,
-                            color: Color(0xFF000DC0),
-                            size: 32,
-                          ),
-                        ),
-                      ),
-                      _buildInputBox(
-                        _t("Thành", "To"),
-                        _toController,
-                        toCurrency,
-                        () => _showCurrencyPicker(false),
-                        isReadOnly: true,
-                      ),
-                      const SizedBox(height: 30),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 55,
-                        child: ElevatedButton(
-                          onPressed: _handleConvert,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFF2F4FB),
-                            foregroundColor: const Color(0xFF000DC0),
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                          ),
-                          child: Text(
-                            _t("Quy đổi", "Convert"),
-                            style: GoogleFonts.poppins(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 30),
-                Text(
-                  _t(
-                    "*Tỷ giá có thể thay đổi theo từng thời điểm giao dịch thực tế.*",
-                    "*Rates may change by real transaction time.*",
-                  ),
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.poppins(
-                    fontSize: 11,
-                    fontStyle: FontStyle.italic,
-                    color: Colors.grey,
-                  ),
-                ),
-                const SizedBox(height: 120), // Khoảng trống cho Nav
-              ],
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          children: [
+            // --- NỘI DUNG CHÍNH ---
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Image.asset(
+                'assets/search/quydoitiente.png',
+                height: 160,
+                fit: BoxFit.contain,
+              ),
             ),
-          ),
-
-          // THANH NAV - BÂY GIỜ SẼ KHỚP 100% VÌ STACK PHỦ TOÀN MÀN HÌNH
-          _buildPillBottomNav(),
-        ],
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 20,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  _buildInputBox(
+                    _t("Từ", "From"),
+                    _fromController,
+                    fromCurrency,
+                    () => _showCurrencyPicker(true),
+                  ),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 8, left: 4),
+                      child: Text(
+                        rateLabel,
+                        style: GoogleFonts.poppins(
+                          fontSize: 11,
+                          color: const Color(0xFF000DC0),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 5),
+                    child: IconButton(
+                      onPressed: _handleSwap,
+                      icon: const Icon(
+                        Icons.swap_vert_rounded,
+                        color: Color(0xFF000DC0),
+                        size: 32,
+                      ),
+                    ),
+                  ),
+                  _buildInputBox(
+                    _t("Thành", "To"),
+                    _toController,
+                    toCurrency,
+                    () => _showCurrencyPicker(false),
+                    isReadOnly: true,
+                  ),
+                  const SizedBox(height: 30),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 55,
+                    child: ElevatedButton(
+                      onPressed: _handleConvert,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFF2F4FB),
+                        foregroundColor: const Color(0xFF000DC0),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      child: Text(
+                        _t("Quy đổi", "Convert"),
+                        style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 30),
+            Text(
+              _t(
+                "*Tỷ giá có thể thay đổi theo từng thời điểm giao dịch thực tế.*",
+                "*Rates may change by real transaction time.*",
+              ),
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(
+                fontSize: 11,
+                fontStyle: FontStyle.italic,
+                color: Colors.grey,
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
+        ),
       ),
     );
   }
@@ -350,78 +340,6 @@ class _CurrencyConvertScreenState extends State<CurrencyConvertScreen> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildPillBottomNav() {
-    return Positioned(
-      bottom: 20,
-      left: 20,
-      right: 20,
-      child: Container(
-        height: 60,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(30),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 15,
-              offset: const Offset(0, 5),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _pillNavItem(Icons.home, _t("Trang chính", "Home"), 0),
-            _pillNavItem(Icons.search, _t("Tìm kiếm", "Search"), 1),
-            _pillNavItem(Icons.chat_bubble_outline, "", 2),
-            _pillNavItem(Icons.settings_outlined, "", 3),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _pillNavItem(IconData icon, String label, int index) {
-    bool isSelected = _selectedIndex == index;
-    return GestureDetector(
-      onTap: () {
-        if (index == 0)
-          Navigator.of(context).popUntil((route) => route.isFirst);
-        else if (index == 1)
-          Navigator.pop(context);
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: isSelected
-            ? BoxDecoration(
-                color: const Color(0xFF000DC0),
-                borderRadius: BorderRadius.circular(20),
-              )
-            : null,
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              color: isSelected ? Colors.white : Colors.grey[600],
-              size: 22,
-            ),
-            if (isSelected && label.isNotEmpty) ...[
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: GoogleFonts.poppins(
-                  color: Colors.white,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
     );
   }
 }

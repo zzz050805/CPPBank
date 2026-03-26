@@ -1,4 +1,5 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../app_preferences.dart';
@@ -10,7 +11,9 @@ import 'chat_placeholder_screen.dart';
 import 'login.dart';
 
 class SettingScreen extends StatefulWidget {
-  const SettingScreen({super.key});
+  const SettingScreen({super.key, this.showBottomNav = true});
+
+  final bool showBottomNav;
 
   @override
   State<SettingScreen> createState() => _SettingScreenState();
@@ -35,6 +38,143 @@ class _SettingScreenState extends State<SettingScreen> {
   Color get _cardColor => _isDarkMode ? const Color(0xFF1A1A23) : Colors.white;
   Color get _textColor => _isDarkMode ? Colors.white : const Color(0xFF1A1A1A);
   Color get _subTextColor => _isDarkMode ? Colors.white60 : Colors.grey;
+
+  _MembershipRankData getMembershipRank(double totalBalance) {
+    if (totalBalance > 10000000000) {
+      return const _MembershipRankData(
+        name: 'HẠNG KING',
+        color: Color(0xFF1B0E2D),
+        gradient: [Color(0xFF0C0818), Color.fromARGB(255, 214, 222, 46)],
+        icon: Icons.all_inclusive,
+      );
+    }
+    if (totalBalance > 2000000000) {
+      return const _MembershipRankData(
+        name: 'HẠNG ROYAL',
+        color: Color(0xFFC7193E),
+        gradient: [Color(0xFF880D2F), Color.fromARGB(255, 223, 223, 100)],
+        icon: Icons.local_fire_department_outlined,
+      );
+    }
+    if (totalBalance > 500000000) {
+      return const _MembershipRankData(
+        name: 'HẠNG KIM CƯƠNG',
+        color: Color.fromARGB(255, 243, 248, 255),
+        gradient: [
+          Color.fromARGB(255, 103, 156, 255),
+          Color.fromARGB(255, 83, 198, 255),
+        ],
+        icon: Icons.workspace_premium_outlined,
+      );
+    }
+    if (totalBalance > 100000000) {
+      return const _MembershipRankData(
+        name: 'HẠNG BẠCH KIM',
+        color: Color.fromARGB(255, 20, 161, 60),
+        gradient: [Color.fromARGB(255, 88, 239, 134), Color(0xFF45C8FF)],
+        icon: Icons.diamond_outlined,
+      );
+    }
+    if (totalBalance > 50000000) {
+      return const _MembershipRankData(
+        name: 'HẠNG VÀNG',
+        color: Color(0xFFE5B93C),
+        gradient: [Color(0xFFB38719), Color(0xFFF6D365)],
+        icon: Icons.emoji_events_outlined,
+      );
+    }
+    if (totalBalance > 5000000) {
+      return const _MembershipRankData(
+        name: 'HẠNG BẠC',
+        color: Color(0xFFA8B1C2),
+        gradient: [Color(0xFF8D97AA), Color(0xFFC9D0DE)],
+        icon: Icons.military_tech_outlined,
+      );
+    }
+
+    return const _MembershipRankData(
+      name: 'THÀNH VIÊN',
+      color: Color(0xFF8D8D95),
+      gradient: [Color(0xFF7A7A82), Color(0xFFACACB6)],
+      icon: Icons.person_outline,
+    );
+  }
+
+  Color formatRankColor(String colorCode) {
+    String hex = colorCode.trim().replaceAll('#', '');
+    if (hex.length == 3) {
+      hex = hex.split('').map((e) => '$e$e').join();
+    }
+    if (hex.length == 6) {
+      hex = 'FF$hex';
+    }
+    final int? value = int.tryParse(hex, radix: 16);
+    if (value == null) return const Color(0xFF8D8D95);
+    return Color(value);
+  }
+
+  _MembershipRankData _resolveRankFromFirestore({
+    required Map<String, dynamic> userData,
+    required double totalBalance,
+  }) {
+    final _MembershipRankData autoRank = getMembershipRank(totalBalance);
+    final String manualRank = (userData['manualRank'] ?? '').toString().trim();
+    final String manualRankColor = (userData['manualRankColor'] ?? '')
+        .toString()
+        .trim();
+
+    if (manualRank.isEmpty) {
+      return autoRank;
+    }
+
+    final Color baseColor = manualRankColor.isEmpty
+        ? autoRank.color
+        : formatRankColor(manualRankColor);
+    final HSLColor hsl = HSLColor.fromColor(baseColor);
+
+    return _MembershipRankData(
+      name: manualRank.toUpperCase(),
+      color: baseColor,
+      gradient: [
+        hsl
+            .withLightness((hsl.lightness - 0.12).clamp(0, 1).toDouble())
+            .toColor(),
+        hsl
+            .withLightness((hsl.lightness + 0.12).clamp(0, 1).toDouble())
+            .toColor(),
+      ],
+      icon: _resolveRankIcon(manualRank),
+    );
+  }
+
+  IconData _resolveRankIcon(String rankName) {
+    final String normalized = rankName.toLowerCase();
+    if (normalized.contains('vô cực') || normalized.contains('infinity')) {
+      return Icons.all_inclusive;
+    }
+    if (normalized.contains('tinh hoa') || normalized.contains('elite')) {
+      return Icons.local_fire_department_outlined;
+    }
+    if (normalized.contains('bạch kim') || normalized.contains('platinum')) {
+      return Icons.workspace_premium_outlined;
+    }
+    if (normalized.contains('kim cương') || normalized.contains('diamond')) {
+      return Icons.diamond_outlined;
+    }
+    if (normalized.contains('vàng') || normalized.contains('gold')) {
+      return Icons.emoji_events_outlined;
+    }
+    if (normalized.contains('bạc') || normalized.contains('silver')) {
+      return Icons.military_tech_outlined;
+    }
+    return Icons.person_outline;
+  }
+
+  double _readBalance(dynamic rawBalance) {
+    if (rawBalance is num) return rawBalance.toDouble();
+    if (rawBalance is String) return double.tryParse(rawBalance) ?? 0;
+    return 0;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -141,7 +281,7 @@ class _SettingScreenState extends State<SettingScreen> {
           ),
 
           // 3. BOTTOM NAV (KHỚP 100% VỚI CÁC TRANG TRƯỚC)
-          _buildPillBottomNav(),
+          if (widget.showBottomNav) _buildPillBottomNav(),
         ],
       ),
     );
@@ -166,52 +306,135 @@ class _SettingScreenState extends State<SettingScreen> {
   }
 
   Widget _buildUserInfo() {
-    return StreamBuilder<UserProfileData?>(
-      stream: UserFirestoreService.instance.currentUserProfileStream(),
-      builder: (context, snapshot) {
-        final String fullname = snapshot.hasError
-            ? _t('Không tìm thấy user', 'User not found')
-            : (snapshot.data?.fullname ?? '...');
-        final String email = snapshot.hasError
-            ? _t('Không tìm thấy user', 'User not found')
-            : (snapshot.data?.email ?? '...');
+    final String? userId = UserFirestoreService.instance.currentUserDocId;
 
-        return Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              fullname.toUpperCase(),
-              style: GoogleFonts.poppins(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-              ),
+    if (userId == null || userId.isEmpty) {
+      return Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _t('KHÁCH HÀNG', 'CUSTOMER'),
+            style: GoogleFonts.poppins(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
             ),
-            const SizedBox(height: 4),
-            Text(
-              email,
-              style: GoogleFonts.poppins(color: Colors.white70, fontSize: 12),
+          ),
+          const SizedBox(height: 6),
+          _buildRankBadge(
+            const _MembershipRankData(
+              name: 'THÀNH VIÊN',
+              color: Color(0xFF8D8D95),
+              gradient: [Color(0xFF7A7A82), Color(0xFFACACB6)],
+              icon: Icons.person_outline,
             ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              margin: const EdgeInsets.only(top: 5),
-              decoration: BoxDecoration(
-                color: Colors.amber,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                _t("HẠNG VÀNG", "GOLD"),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
+          ),
+        ],
+      );
+    }
+
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .snapshots(),
+      builder: (context, userSnapshot) {
+        final Map<String, dynamic> userData =
+            userSnapshot.data?.data() ?? <String, dynamic>{};
+        final String fullname =
+            (userData['fullname'] ?? userData['fullName'] ?? '')
+                .toString()
+                .trim();
+        final bool hasVipCard = userData['hasVipCard'] == true;
+
+        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: FirebaseFirestore.instance
+              .collection('users')
+              .doc(userId)
+              .collection('cards')
+              .snapshots(),
+          builder: (context, cardsSnapshot) {
+            double standardBalance = 0;
+            double vipBalance = 0;
+
+            for (final doc
+                in cardsSnapshot.data?.docs ??
+                    <QueryDocumentSnapshot<Map<String, dynamic>>>[]) {
+              final String id = doc.id.toLowerCase();
+              final double balance = _readBalance(doc.data()['balance']);
+              if (id == 'standard') {
+                standardBalance = balance;
+              } else if (id == 'vip') {
+                vipBalance = balance;
+              }
+            }
+
+            final double totalBalance = hasVipCard
+                ? standardBalance + vipBalance
+                : standardBalance;
+            final _MembershipRankData rank = _resolveRankFromFirestore(
+              userData: userData,
+              totalBalance: totalBalance,
+            );
+
+            return Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  (fullname.isEmpty ? _t('Khách hàng', 'Customer') : fullname)
+                      .toUpperCase(),
+                  style: GoogleFonts.poppins(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                  ),
                 ),
-              ),
-            ),
-          ],
+                const SizedBox(height: 6),
+                _buildRankBadge(rank),
+              ],
+            );
+          },
         );
       },
+    );
+  }
+
+  Widget _buildRankBadge(_MembershipRankData rank) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: rank.gradient,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(30),
+        boxShadow: [
+          BoxShadow(
+            color: rank.color.withOpacity(0.38),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(rank.icon, size: 13, color: Colors.white),
+          const SizedBox(width: 6),
+          Text(
+            rank.name.toUpperCase(),
+            style: GoogleFonts.poppins(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.3,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -598,4 +821,18 @@ class _SettingScreenState extends State<SettingScreen> {
       ),
     );
   }
+}
+
+class _MembershipRankData {
+  const _MembershipRankData({
+    required this.name,
+    required this.color,
+    required this.gradient,
+    required this.icon,
+  });
+
+  final String name;
+  final Color color;
+  final List<Color> gradient;
+  final IconData icon;
 }

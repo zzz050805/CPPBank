@@ -5,6 +5,8 @@ import 'package:carousel_slider/carousel_slider.dart';
 import 'package:intl/intl.dart';
 import '../data/user_firestore_service.dart';
 import '../l10n/app_text.dart';
+import '../widget/pressable_scale.dart';
+import '../widget/shimmer_box.dart';
 import 'search_screen.dart';
 import 'setting_screen.dart';
 import 'transfer_money.dart';
@@ -14,7 +16,10 @@ import 'credit_card.dart';
 import 'chat_placeholder_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({super.key, this.showBottomNav = true});
+
+  final bool showBottomNav;
+
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
@@ -24,8 +29,6 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isBalanceVisible = false;
   int _currentBannerIndex = 0;
   late final Stream<UserProfileData?> _profileStream;
-  String? _cardsBalanceUserId;
-  Stream<double>? _cardsBalanceStream;
   double _lastKnownTotalBalance = 0;
   bool _hasLoadedBalance = false;
 
@@ -42,44 +45,25 @@ class _HomeScreenState extends State<HomeScreen> {
     _profileStream = UserFirestoreService.instance.currentUserProfileStream();
   }
 
-  Stream<double> _cardsTotalBalanceStream(String userId) {
-    if (_cardsBalanceStream != null && _cardsBalanceUserId == userId) {
-      return _cardsBalanceStream!;
+  void _pushPremium(Widget page) {
+    Navigator.push(context, MaterialPageRoute(builder: (context) => page));
+  }
+
+  void _replacePremium(Widget page) {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => page),
+    );
+  }
+
+  bool _parseHasVipCard(dynamic value) {
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    if (value is String) {
+      final String normalized = value.trim().toLowerCase();
+      return normalized == 'true' || normalized == '1' || normalized == 'yes';
     }
-
-    _cardsBalanceUserId = userId;
-    _cardsBalanceStream = FirebaseFirestore.instance
-        .collection('users')
-        .doc(userId)
-        .collection('cards')
-        .snapshots()
-        .map((snapshot) {
-          double standardBalance = 0;
-          double vipBalance = 0;
-
-          for (final doc in snapshot.docs) {
-            final Map<String, dynamic> data = doc.data();
-            final dynamic rawBalance = data['balance'];
-
-            double balance = 0;
-            if (rawBalance is num) {
-              balance = rawBalance.toDouble();
-            } else if (rawBalance is String) {
-              balance = double.tryParse(rawBalance) ?? 0;
-            }
-
-            final String docId = doc.id.toLowerCase();
-            if (docId == 'standard') {
-              standardBalance = balance;
-            } else if (docId == 'vip') {
-              vipBalance = balance;
-            }
-          }
-
-          return standardBalance + vipBalance;
-        });
-
-    return _cardsBalanceStream!;
+    return false;
   }
 
   // --- DỮ LIỆU BANNER (Kiểm tra kỹ đuôi file máy bro nhé) ---
@@ -96,7 +80,9 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: const Color(
         0xFF000DC0,
       ), // Nền xanh để mép header không hở trắng
-      body: Stack(children: [_buildSlivers(), _buildPillBottomNav()]),
+      body: widget.showBottomNav
+          ? Stack(children: [_buildSlivers(), _buildPillBottomNav()])
+          : _buildSlivers(),
     );
   }
 
@@ -144,12 +130,33 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                         StreamBuilder<UserProfileData?>(
-                          stream: UserFirestoreService.instance
-                              .currentUserProfileStream(),
+                          stream: _profileStream,
+                          initialData:
+                              UserFirestoreService.instance.latestProfile,
                           builder: (context, snapshot) {
+                            final UserProfileData? profile =
+                                snapshot.data ??
+                                UserFirestoreService.instance.latestProfile;
+
+                            if (!snapshot.hasError &&
+                                snapshot.connectionState ==
+                                    ConnectionState.waiting &&
+                                profile == null) {
+                              return const Padding(
+                                padding: EdgeInsets.only(top: 4),
+                                child: ShimmerBox(
+                                  width: 140,
+                                  height: 22,
+                                  radius: 8,
+                                ),
+                              );
+                            }
+
                             final String name = snapshot.hasError
                                 ? _t('Không tìm thấy user', 'User not found')
-                                : (snapshot.data?.fullname ?? '...');
+                                : ((profile?.fullname.isNotEmpty == true)
+                                      ? profile!.fullname
+                                      : _t('Khách hàng', 'Customer'));
 
                             return Text(
                               name.toUpperCase(),
@@ -467,65 +474,100 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildRealtimeTotalBalance() {
     return StreamBuilder<UserProfileData?>(
       stream: _profileStream,
+      initialData: UserFirestoreService.instance.latestProfile,
       builder: (context, profileSnapshot) {
-        final String? resolvedUserId = profileSnapshot.data?.uid;
+        final UserProfileData? profile =
+            profileSnapshot.data ?? UserFirestoreService.instance.latestProfile;
+        final String? resolvedUserId = profile?.uid;
 
         if (resolvedUserId == null || resolvedUserId.isEmpty) {
           return _buildHiddenBalanceText();
         }
 
-        return StreamBuilder<double>(
-          stream: _cardsTotalBalanceStream(resolvedUserId),
-          builder: (context, snapshot) {
-            if (snapshot.hasData) {
-              _lastKnownTotalBalance = snapshot.data!;
-              _hasLoadedBalance = true;
-            }
+        return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+          stream: FirebaseFirestore.instance
+              .collection('users')
+              .doc(resolvedUserId)
+              .snapshots(),
+          builder: (context, userSnapshot) {
+            final bool hasVipCard = _parseHasVipCard(
+              userSnapshot.data?.data()?['hasVipCard'],
+            );
 
-            if (snapshot.connectionState == ConnectionState.waiting &&
-                !_hasLoadedBalance) {
-              return const SizedBox(
-                width: 28,
-                height: 28,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.4,
-                  color: Colors.white,
-                ),
-              );
-            }
+            return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(resolvedUserId)
+                  .collection('cards')
+                  .snapshots(),
+              builder: (context, cardsSnapshot) {
+                if (cardsSnapshot.hasData) {
+                  double standardBalance = 0;
+                  double vipBalance = 0;
 
-            if (snapshot.hasError) {
-              if (_hasLoadedBalance) {
+                  for (final doc in cardsSnapshot.data!.docs) {
+                    final Map<String, dynamic> data = doc.data();
+                    final dynamic rawBalance = data['balance'];
+
+                    double balance = 0;
+                    if (rawBalance is num) {
+                      balance = rawBalance.toDouble();
+                    } else if (rawBalance is String) {
+                      balance = double.tryParse(rawBalance) ?? 0;
+                    }
+
+                    final String docId = doc.id.toLowerCase();
+                    if (docId == 'standard') {
+                      standardBalance = balance;
+                    } else if (docId == 'vip') {
+                      vipBalance = balance;
+                    }
+                  }
+
+                  _lastKnownTotalBalance = hasVipCard
+                      ? standardBalance + vipBalance
+                      : standardBalance;
+                  _hasLoadedBalance = true;
+                }
+
+                if (cardsSnapshot.connectionState == ConnectionState.waiting &&
+                    !_hasLoadedBalance) {
+                  return _buildBalanceSkeleton();
+                }
+
+                if (cardsSnapshot.hasError || userSnapshot.hasError) {
+                  if (_hasLoadedBalance) {
+                    return _buildBalanceText(_lastKnownTotalBalance);
+                  }
+
+                  final String error =
+                      (cardsSnapshot.error ?? userSnapshot.error)
+                          .toString()
+                          .toLowerCase();
+                  final bool networkError =
+                      error.contains('unavailable') ||
+                      error.contains('network') ||
+                      error.contains('failed-host-lookup');
+
+                  return Text(
+                    networkError
+                        ? _t('Mất kết nối mạng', 'No network connection')
+                        : _t('Không tải được số dư', 'Unable to load balance'),
+                    style: GoogleFonts.poppins(
+                      color: Colors.white70,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  );
+                }
+
+                if (!_isBalanceVisible) {
+                  return _buildHiddenBalanceText();
+                }
+
                 return _buildBalanceText(_lastKnownTotalBalance);
-              }
-
-              final String error = snapshot.error.toString().toLowerCase();
-              final bool networkError =
-                  error.contains('unavailable') ||
-                  error.contains('network') ||
-                  error.contains('failed-host-lookup');
-
-              return Text(
-                networkError
-                    ? _t('Mất kết nối mạng', 'No network connection')
-                    : _t('Không tải được số dư', 'Unable to load balance'),
-                style: GoogleFonts.poppins(
-                  color: Colors.white70,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
-              );
-            }
-
-            final double totalBalance =
-                snapshot.data ??
-                (_hasLoadedBalance ? _lastKnownTotalBalance : 0);
-
-            if (!_isBalanceVisible) {
-              return _buildHiddenBalanceText();
-            }
-
-            return _buildBalanceText(totalBalance);
+              },
+            );
           },
         );
       },
@@ -589,75 +631,82 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildBalanceSkeleton() {
+    return const Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ShimmerBox(width: 150, height: 28, radius: 8),
+        SizedBox(width: 8),
+        ShimmerBox(width: 34, height: 16, radius: 6),
+      ],
+    );
+  }
+
   // --- CÁC PHẦN DƯỚI GIỮ NGUYÊN ---
   Widget _buildActionGrid() {
+    final List<_ActionItemData> items = <_ActionItemData>[
+      _ActionItemData(
+        icon: Icons.account_balance_wallet,
+        color: Colors.purple,
+        title: _t('Chuyển tiền', 'Transfer'),
+        onTap: () => _pushPremium(const TransferMoneyScreen()),
+      ),
+      _ActionItemData(
+        icon: Icons.receipt_long,
+        color: Colors.green,
+        title: _t('Thanh toán\nhóa đơn', 'Bill\npayment'),
+      ),
+      _ActionItemData(
+        icon: Icons.atm,
+        color: Colors.blue,
+        title: _t('Rút tiền', 'Withdraw'),
+      ),
+      _ActionItemData(
+        icon: Icons.qr_code_scanner,
+        color: Colors.pink,
+        title: _t('Quét QR', 'Scan QR'),
+        onTap: () => _pushPremium(const QrScreen()),
+      ),
+      _ActionItemData(
+        icon: Icons.phone_android,
+        color: Colors.orange,
+        title: _t('Nạp tiền\nđiện thoại', 'Phone\nTop up'),
+        onTap: () => _pushPremium(const PhoneRechargeScreen()),
+      ),
+      _ActionItemData(
+        icon: Icons.credit_card,
+        color: Colors.deepOrange,
+        title: _t('Thẻ tín dụng', 'Credit card'),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const CreditCardScreen()),
+          );
+        },
+      ),
+    ];
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-      child: GridView.count(
-        crossAxisCount: 3,
+      child: GridView.builder(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
-        childAspectRatio: 1.25,
-        mainAxisSpacing: 15,
-        crossAxisSpacing: 15,
-        children: [
-          _actionItem(
-            Icons.account_balance_wallet,
-            Colors.purple,
-            _t("Chuyển tiền", "Transfer"),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const TransferMoneyScreen(),
-                ),
-              );
-            },
-          ),
-          _actionItem(
-            Icons.receipt_long,
-            Colors.green,
-            _t("Thanh toán\nhóa đơn", "Bill\npayment"),
-          ),
-          _actionItem(Icons.atm, Colors.blue, _t("Rút tiền", "Withdraw")),
-          _actionItem(
-            Icons.qr_code_scanner,
-            Colors.pink,
-            _t("Quét QR", "Scan QR"),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const QrScreen()),
-              );
-            },
-          ),
-          _actionItem(
-            Icons.phone_android,
-            Colors.orange,
-            _t("Nạp tiền\nđiện thoại", "Phone\nTop up"),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const PhoneRechargeScreen(),
-                ),
-              );
-            },
-          ),
-          _actionItem(
-            Icons.credit_card,
-            Colors.deepOrange,
-            _t("Thẻ tín dụng", "Credit card"),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const CreditCardScreen(),
-                ),
-              );
-            },
-          ),
-        ],
+        itemCount: items.length,
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          childAspectRatio: 1.25,
+          mainAxisSpacing: 15,
+          crossAxisSpacing: 15,
+        ),
+        itemBuilder: (context, index) {
+          final _ActionItemData item = items[index];
+          return _actionItem(
+            item.icon,
+            item.color,
+            item.title,
+            onTap: item.onTap,
+          );
+        },
       ),
     );
   }
@@ -668,8 +717,10 @@ class _HomeScreenState extends State<HomeScreen> {
     String title, {
     VoidCallback? onTap,
   }) {
-    return GestureDetector(
+    return PressableScale(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      splashColor: const Color(0xFF000DC0).withOpacity(0.12),
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
@@ -685,7 +736,15 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: color, size: 28),
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: color, size: 24),
+            ),
             const SizedBox(height: 8),
             Text(
               title,
@@ -1299,32 +1358,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _pillNavItem(IconData icon, String label, int index) {
     bool isSelected = _selectedIndex == index;
-    return GestureDetector(
+    return PressableScale(
       onTap: () {
         if (index == 0) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const HomeScreen()),
-          );
+          _replacePremium(const HomeScreen());
         } else if (index == 1) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const SearchScreen()),
-          );
+          _replacePremium(const SearchScreen());
         } else if (index == 2) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const ChatPlaceholderScreen(),
-            ),
-          );
+          _replacePremium(const ChatPlaceholderScreen());
         } else if (index == 3) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const SettingScreen()),
-          );
+          _replacePremium(const SettingScreen());
         }
       },
+      borderRadius: BorderRadius.circular(20),
+      splashColor: const Color(0xFF000DC0).withOpacity(0.12),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: isSelected
@@ -1356,4 +1403,18 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
+}
+
+class _ActionItemData {
+  const _ActionItemData({
+    required this.icon,
+    required this.color,
+    required this.title,
+    this.onTap,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String title;
+  final VoidCallback? onTap;
 }

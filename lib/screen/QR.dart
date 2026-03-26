@@ -201,28 +201,31 @@ class QRScannerScreen extends StatelessWidget {
           border: Border(top: BorderSide(color: Color(0xFFE8ECFB))),
         ),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            _qrTab(
-              context,
-              icon: Icons.qr_code_scanner_rounded,
-              label: _t(context, 'Quét mã', 'Scan code'),
-              isActive: true,
-              onTap: () {},
+            Expanded(
+              child: _qrTab(
+                context,
+                icon: Icons.qr_code_scanner_rounded,
+                label: _t(context, 'Quét mã', 'Scan code'),
+                isActive: true,
+                onTap: () {},
+              ),
             ),
-            _qrTab(
-              context,
-              icon: Icons.qr_code_2_rounded,
-              label: _t(context, 'Mã QR nhận tiền', 'Receive QR code'),
-              isActive: false,
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const qr_user.QRCodeScreen(),
-                  ),
-                );
-              },
+            Expanded(
+              child: _qrTab(
+                context,
+                icon: Icons.qr_code_2_rounded,
+                label: _t(context, 'Mã QR nhận tiền', 'Receive QR code'),
+                isActive: false,
+                onTap: () {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const qr_user.QRCodeScreen(),
+                    ),
+                  );
+                },
+              ),
             ),
           ],
         ),
@@ -271,20 +274,22 @@ class QRScannerScreen extends StatelessWidget {
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      child: SizedBox(
+        height: double.infinity,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
               icon,
               color: isActive ? primaryBlue : Colors.black45,
-              size: 27,
+              size: 24,
             ),
             const SizedBox(height: 4),
             Text(
               label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
               style: GoogleFonts.poppins(
                 color: isActive ? primaryBlue : Colors.black45,
                 fontSize: 11.5,

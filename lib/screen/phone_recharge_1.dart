@@ -231,14 +231,21 @@ class ConfirmTopUpScreen extends StatelessWidget {
                         StreamBuilder<UserProfileData?>(
                           stream: UserFirestoreService.instance
                               .currentUserProfileStream(),
+                          initialData:
+                              UserFirestoreService.instance.latestProfile,
                           builder: (context, snapshot) {
+                            final UserProfileData? profile =
+                                snapshot.data ??
+                                UserFirestoreService.instance.latestProfile;
                             final String senderName = snapshot.hasError
                                 ? _t(
                                     context,
                                     'Không tìm thấy user',
                                     'User not found',
                                   )
-                                : (snapshot.data?.fullname ?? '...');
+                                : ((profile?.fullname.isNotEmpty == true)
+                                      ? profile!.fullname
+                                      : _t(context, 'Khách hàng', 'Customer'));
 
                             return Text(
                               senderName.toUpperCase(),

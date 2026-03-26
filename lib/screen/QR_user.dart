@@ -5,6 +5,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../data/user_firestore_service.dart';
 import '../l10n/app_text.dart';
 import '../widget/ccp_app_bar.dart';
+import 'QR.dart' as qr_scan;
 
 class QRCodeScreen extends StatelessWidget {
   const QRCodeScreen({super.key});
@@ -101,14 +102,21 @@ class QRCodeScreen extends StatelessWidget {
                         StreamBuilder<UserProfileData?>(
                           stream: UserFirestoreService.instance
                               .currentUserProfileStream(),
+                          initialData:
+                              UserFirestoreService.instance.latestProfile,
                           builder: (context, snapshot) {
+                            final UserProfileData? profile =
+                                snapshot.data ??
+                                UserFirestoreService.instance.latestProfile;
                             final String fullname = snapshot.hasError
                                 ? _t(
                                     context,
                                     'Không tìm thấy user',
                                     'User not found',
                                   )
-                                : (snapshot.data?.fullname ?? '...');
+                                : ((profile?.fullname.isNotEmpty == true)
+                                      ? profile!.fullname
+                                      : _t(context, 'Khách hàng', 'Customer'));
 
                             return Text(
                               fullname.toUpperCase(),
@@ -244,30 +252,78 @@ class QRCodeScreen extends StatelessWidget {
           ),
         ],
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: 1,
-        selectedItemColor: primaryBlue,
-        unselectedItemColor: Colors.grey,
-        selectedLabelStyle: GoogleFonts.poppins(
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
+      bottomNavigationBar: Container(
+        height: 86,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          border: Border(top: BorderSide(color: Color(0xFFE8ECFB))),
         ),
-        unselectedLabelStyle: GoogleFonts.poppins(fontSize: 11),
-        onTap: (index) {
-          if (index == 0) {
-            Navigator.of(context).maybePop();
-          }
-        },
-        items: [
-          BottomNavigationBarItem(
-            icon: const Icon(Icons.qr_code_scanner_rounded),
-            label: _t(context, 'Quét mã', 'Scan code'),
-          ),
-          BottomNavigationBarItem(
-            icon: const Icon(Icons.qr_code_2_rounded),
-            label: _t(context, 'Mã QR nhận tiền', 'Receive QR code'),
-          ),
-        ],
+        child: Row(
+          children: [
+            Expanded(
+              child: _qrTab(
+                context,
+                icon: Icons.qr_code_scanner_rounded,
+                label: _t(context, 'Quét mã', 'Scan code'),
+                isActive: false,
+                onTap: () {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const qr_scan.QRScannerScreen(),
+                    ),
+                  );
+                },
+              ),
+            ),
+            Expanded(
+              child: _qrTab(
+                context,
+                icon: Icons.qr_code_2_rounded,
+                label: _t(context, 'Mã QR nhận tiền', 'Receive QR code'),
+                isActive: true,
+                onTap: () {},
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _qrTab(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required bool isActive,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: SizedBox(
+        height: double.infinity,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              color: isActive ? primaryBlue : Colors.black45,
+              size: 24,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(
+                color: isActive ? primaryBlue : Colors.black45,
+                fontSize: 11.5,
+                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

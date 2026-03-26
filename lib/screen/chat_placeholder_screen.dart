@@ -3,11 +3,19 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'chat_service.dart';
-import 'home_screen.dart';
+import 'search_screen.dart';
 import '../data/user_firestore_service.dart';
 
 class ChatPlaceholderScreen extends StatefulWidget {
-  const ChatPlaceholderScreen({super.key});
+  const ChatPlaceholderScreen({
+    super.key,
+    this.showBackButton = true,
+    this.onBackPressed,
+  });
+
+  // Kept for compatibility with existing call sites.
+  final bool showBackButton;
+  final VoidCallback? onBackPressed;
 
   @override
   State<ChatPlaceholderScreen> createState() => _ChatPlaceholderScreenState();
@@ -72,13 +80,15 @@ class _ChatPlaceholderScreenState extends State<ChatPlaceholderScreen> {
             fontSize: 18,
           ),
         ),
+        automaticallyImplyLeading: false,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
-          onPressed: () => Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (_) => const HomeScreen()),
-            (route) => false,
-          ),
+          onPressed:
+              widget.onBackPressed ??
+              () => Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => const SearchScreen()),
+              ),
         ),
         actions: [
           // Nút xóa lịch sử (Tùy chọn thêm cho Pro)

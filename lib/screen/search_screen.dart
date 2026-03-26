@@ -11,7 +11,9 @@ import 'setting_screen.dart';
 import 'chat_placeholder_screen.dart';
 
 class SearchScreen extends StatefulWidget {
-  const SearchScreen({super.key});
+  const SearchScreen({super.key, this.showBottomNav = true});
+
+  final bool showBottomNav;
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -29,15 +31,20 @@ class _SearchScreenState extends State<SearchScreen> {
       backgroundColor: const Color(0xFFF8F9FE),
       appBar: CCPAppBar(
         title: _t("Tìm kiếm", "Search"),
-        onBackPressed: () {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const HomeScreen()),
-          );
-        },
+        showBackButton: widget.showBottomNav,
+        onBackPressed: widget.showBottomNav
+            ? () {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => const HomeScreen()),
+                );
+              }
+            : null,
       ),
       // Sử dụng Stack để đè thanh Bottom Nav lên trên nội dung
-      body: Stack(children: [_buildBodyContent(), _buildPillBottomNav()]),
+      body: widget.showBottomNav
+          ? Stack(children: [_buildBodyContent(), _buildPillBottomNav()])
+          : _buildBodyContent(),
     );
   }
 
@@ -234,59 +241,63 @@ class _SearchScreenState extends State<SearchScreen> {
 
   Widget _pillNavItem(IconData icon, String label, int index) {
     bool isSelected = _selectedIndex == index;
-    return GestureDetector(
-      onTap: () {
-        if (index == 0) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const HomeScreen()),
-          );
-        } else if (index == 1) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const SearchScreen()),
-          );
-        } else if (index == 2) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const ChatPlaceholderScreen(),
-            ),
-          );
-        } else if (index == 3) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const SettingScreen()),
-          );
-        }
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: isSelected
-            ? BoxDecoration(
-                color: const Color(0xFF000DC0),
-                borderRadius: BorderRadius.circular(20),
-              )
-            : null,
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              color: isSelected ? Colors.white : Colors.grey[600],
-              size: 22,
-            ),
-            if (isSelected && label.isNotEmpty) ...[
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: GoogleFonts.poppins(
-                  color: Colors.white,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        splashColor: const Color(0xFF000DC0).withOpacity(0.12),
+        onTap: () {
+          if (isSelected) return;
+
+          if (index == 0) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const HomeScreen()),
+            );
+          } else if (index == 1) {
+            return;
+          } else if (index == 2) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const ChatPlaceholderScreen(),
               ),
+            );
+          } else if (index == 3) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const SettingScreen()),
+            );
+          }
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: isSelected
+              ? BoxDecoration(
+                  color: const Color(0xFF000DC0),
+                  borderRadius: BorderRadius.circular(20),
+                )
+              : null,
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                color: isSelected ? Colors.white : Colors.grey[600],
+                size: 22,
+              ),
+              if (isSelected && label.isNotEmpty) ...[
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: GoogleFonts.poppins(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );

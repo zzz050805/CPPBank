@@ -2,7 +2,9 @@
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'app_preferences.dart';
+import 'data/user_firestore_service.dart';
 import 'data/firebase_helper.dart';
+import 'effect/app_transitions.dart';
 import 'screen/welcome.dart';
 
 void main() async {
@@ -12,6 +14,12 @@ void main() async {
     await FirebaseHelper.initializeFirebase();
   } catch (e) {
     debugPrint('Firebase init failed: $e');
+  }
+
+  try {
+    await UserFirestoreService.instance.syncCurrentUserData();
+  } catch (e) {
+    debugPrint('Initial user sync failed: $e');
   }
 
   runApp(const MyApp());
@@ -37,6 +45,12 @@ class MyApp extends StatelessWidget {
           theme: ThemeData(
             textTheme: GoogleFonts.poppinsTextTheme(
               Theme.of(context).textTheme,
+            ),
+            pageTransitionsTheme: const PageTransitionsTheme(
+              builders: <TargetPlatform, PageTransitionsBuilder>{
+                TargetPlatform.android: GentlePageTransitionsBuilder(),
+                TargetPlatform.iOS: GentlePageTransitionsBuilder(),
+              },
             ),
             appBarTheme: AppBarTheme(
               toolbarHeight: 60,

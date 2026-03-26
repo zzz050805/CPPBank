@@ -5,7 +5,7 @@ import 'dart:ui';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../data/user_firestore_service.dart';
-import 'home_screen.dart';
+import 'main_tab_shell.dart';
 import 'register.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -160,11 +160,14 @@ class _LoginScreenState extends State<LoginScreen> {
             await legacyDoc.reference.set({
               'lastLoginAt': FieldValue.serverTimestamp(),
             }, SetOptions(merge: true));
+            await UserFirestoreService.instance.syncCurrentUserData(
+              docIdOverride: legacyDoc.id,
+            );
             if (!mounted) return;
             closeLoadingDialog();
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(builder: (context) => const HomeScreen()),
+              MaterialPageRoute(builder: (context) => const MainTabShell()),
             );
             return;
           }
@@ -194,6 +197,9 @@ class _LoginScreenState extends State<LoginScreen> {
           'authEmail': generatedEmail,
           'authUid': uid,
         }, SetOptions(merge: true));
+        await UserFirestoreService.instance.syncCurrentUserData(
+          docIdOverride: uid,
+        );
       } else {
         try {
           credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
@@ -206,11 +212,14 @@ class _LoginScreenState extends State<LoginScreen> {
             await legacyDoc.reference.set({
               'lastLoginAt': FieldValue.serverTimestamp(),
             }, SetOptions(merge: true));
+            await UserFirestoreService.instance.syncCurrentUserData(
+              docIdOverride: legacyDoc.id,
+            );
             if (!mounted) return;
             closeLoadingDialog();
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(builder: (context) => const HomeScreen()),
+              MaterialPageRoute(builder: (context) => const MainTabShell()),
             );
             return;
           }
@@ -226,13 +235,16 @@ class _LoginScreenState extends State<LoginScreen> {
           'authUid': uid,
           'lastLoginAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
+        await UserFirestoreService.instance.syncCurrentUserData(
+          docIdOverride: uid,
+        );
       }
 
       if (!mounted) return;
       closeLoadingDialog();
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
+        MaterialPageRoute(builder: (context) => const MainTabShell()),
       );
     } on FirebaseAuthException catch (e) {
       if (isConfigurationNotFound(e) && foundLegacyDoc != null) {
@@ -240,12 +252,15 @@ class _LoginScreenState extends State<LoginScreen> {
         await foundLegacyDoc.reference.set({
           'lastLoginAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
+        await UserFirestoreService.instance.syncCurrentUserData(
+          docIdOverride: foundLegacyDoc.id,
+        );
 
         if (!mounted) return;
         closeLoadingDialog();
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const HomeScreen()),
+          MaterialPageRoute(builder: (context) => const MainTabShell()),
         );
         return;
       }
@@ -353,26 +368,8 @@ class _LoginScreenState extends State<LoginScreen> {
             const SizedBox(height: 20),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20.0),
-              child: Row(
-                children: [
-                  Text(
-                    "9:09",
-                    style: GoogleFonts.poppins(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                    ),
-                  ),
-                  const Spacer(),
-                  const Icon(
-                    Icons.signal_cellular_4_bar,
-                    color: Colors.white,
-                    size: 16,
-                  ),
-                  const SizedBox(width: 4),
-                  const Icon(Icons.wifi, color: Colors.white, size: 16),
-                  const SizedBox(width: 4),
-                  const Icon(Icons.battery_full, color: Colors.white, size: 16),
+              child: Row(children: [
+                  
                 ],
               ),
             ),

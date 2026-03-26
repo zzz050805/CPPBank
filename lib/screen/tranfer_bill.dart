@@ -104,10 +104,16 @@ class SuccessTransactionScreen extends StatelessWidget {
                     StreamBuilder<UserProfileData?>(
                       stream: UserFirestoreService.instance
                           .currentUserProfileStream(),
+                      initialData: UserFirestoreService.instance.latestProfile,
                       builder: (context, snapshot) {
+                        final UserProfileData? profile =
+                            snapshot.data ??
+                            UserFirestoreService.instance.latestProfile;
                         final String senderName = snapshot.hasError
                             ? 'Không tìm thấy user'
-                            : (snapshot.data?.fullname ?? '...');
+                            : ((profile?.fullname.isNotEmpty == true)
+                                  ? profile!.fullname
+                                  : 'Khach hang');
 
                         return Column(
                           children: [
@@ -140,10 +146,16 @@ class SuccessTransactionScreen extends StatelessWidget {
                     StreamBuilder<UserProfileData?>(
                       stream: UserFirestoreService.instance
                           .currentUserProfileStream(),
+                      initialData: UserFirestoreService.instance.latestProfile,
                       builder: (context, snapshot) {
+                        final UserProfileData? profile =
+                            snapshot.data ??
+                            UserFirestoreService.instance.latestProfile;
                         final String senderName = snapshot.hasError
                             ? 'Không tìm thấy user'
-                            : (snapshot.data?.fullname ?? '...');
+                            : ((profile?.fullname.isNotEmpty == true)
+                                  ? profile!.fullname
+                                  : 'Khach hang');
 
                         return Container(
                           width: double.infinity,
