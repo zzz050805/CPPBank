@@ -2,6 +2,8 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../l10n/app_text.dart';
+
 class InterestChart extends StatelessWidget {
   const InterestChart({
     super.key,
@@ -12,6 +14,10 @@ class InterestChart extends StatelessWidget {
   final List<String> monthLabels;
   final List<double> rates;
 
+  String _t(BuildContext context, String vi, String en) {
+    return AppText.tr(context, vi, en);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -21,7 +27,7 @@ class InterestChart extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 14,
             offset: const Offset(0, 6),
           ),
@@ -31,7 +37,7 @@ class InterestChart extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Xu hướng lãi suất 6 tháng',
+            _t(context, 'Xu hướng lãi suất 6 tháng', '6-month interest trend'),
             style: GoogleFonts.poppins(
               fontSize: 15,
               fontWeight: FontWeight.w700,
@@ -155,8 +161,8 @@ class InterestChart extends StatelessWidget {
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                         colors: [
-                          const Color(0xFF000DC0).withOpacity(0.18),
-                          const Color(0xFF000DC0).withOpacity(0.0),
+                          const Color(0xFF000DC0).withValues(alpha: 0.18),
+                          const Color(0xFF000DC0).withValues(alpha: 0.0),
                         ],
                       ),
                     ),

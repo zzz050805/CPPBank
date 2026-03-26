@@ -9,12 +9,14 @@ class CCPAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.showBackButton = true,
     this.actions,
     this.onBackPressed,
+    this.backgroundColor,
   });
 
   final String title;
   final bool showBackButton;
   final List<Widget>? actions;
   final VoidCallback? onBackPressed;
+  final Color? backgroundColor;
 
   static const Color _primaryBlue = Color(0xFF000DC0);
 
@@ -23,14 +25,22 @@ class CCPAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
+    final Color effectiveBackgroundColor =
+        backgroundColor ?? Theme.of(context).scaffoldBackgroundColor;
+
     return AppBar(
       toolbarHeight: 60,
-      backgroundColor: Colors.white,
-      surfaceTintColor: Colors.white,
-      elevation: 2,
-      shadowColor: Colors.black12,
+      backgroundColor: effectiveBackgroundColor,
+      surfaceTintColor: effectiveBackgroundColor,
+      elevation: 3,
+      shadowColor: Colors.black.withValues(alpha: 0.1),
       centerTitle: true,
       automaticallyImplyLeading: false,
+      clipBehavior: Clip.antiAlias,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
+      ),
+
       leading: showBackButton
           ? IconButton(
               icon: const Icon(Icons.arrow_back_ios_new, size: 20),

@@ -79,7 +79,10 @@ class _ContactListScreenState extends State<ContactListScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: const CCPAppBar(title: 'Chuyển tiền'),
+      appBar: const CCPAppBar(
+        title: 'Chuyển tiền',
+        backgroundColor: Colors.white,
+      ),
       body: FadeTransition(
         opacity: _fadeAnimation,
         child: SlideTransition(

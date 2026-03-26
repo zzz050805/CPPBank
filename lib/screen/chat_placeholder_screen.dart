@@ -1,7 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'chat_service.dart';
 import 'search_screen.dart';
 import '../data/user_firestore_service.dart';
@@ -24,7 +23,6 @@ class ChatPlaceholderScreen extends StatefulWidget {
 class _ChatPlaceholderScreenState extends State<ChatPlaceholderScreen> {
   final TextEditingController _controller = TextEditingController();
   final ChatApiService _apiService = ChatApiService();
-  final FirebaseAuth _auth = FirebaseAuth.instance;
   final List<Map<String, dynamic>> _localMessages = [];
   bool _isLoading = false;
 

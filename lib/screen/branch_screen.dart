@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'dart:io' show Platform;
 
 import '../l10n/app_text.dart';
 import '../widget/ccp_app_bar.dart';
@@ -56,12 +58,27 @@ class _BranchMapScreenState extends State<BranchMapScreen>
   static const double minSheetSize = 0.32;
   static const double initialSheetSize = 0.36;
   static const double maxSheetSize = 0.9;
+  static const String goongMapKey = 'KnK9rcYbA0EYyPeiAeVO9yObVAAkL1kXi9COsYVl';
+  static const String goongApiKey = '0RQvJ5gdieHdda1OBrXVX0Jz2FVPCcphXix2GRx3';
+  static const bool useGoongTiles = true;
+  static const String goongMapTemplate =
+      'https://tiles.goong.io/assets/tiles/{z}/{x}/{y}.png?key=$goongMapKey&style=$goongMapKey';
+  static const String goongMapTemplateApiKey =
+      'https://tiles.goong.io/assets/tiles/{z}/{x}/{y}.png?api_key=$goongApiKey&style=$goongMapKey';
+  static const String goongMapTemplateRoadmap =
+      'https://tiles.goong.io/assets/v1/roadmap/{z}/{x}/{y}.png?api_key=$goongApiKey';
+  static const String osmMapTemplate =
+      'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
   final MapController _mapController = MapController();
   final DraggableScrollableController _sheetController =
       DraggableScrollableController();
   final TextEditingController _searchController = TextEditingController();
   ScrollController? _sheetListController;
+  bool _isBranchDetailSheetVisible = false;
+  bool _isUsingGoongTiles = useGoongTiles;
+  bool _isMapLoading = true;
+  String _activeGoongTemplate = goongMapTemplate;
 
   final List<BranchInfo> _allBranches = const [
     BranchInfo(
@@ -125,6 +142,68 @@ class _BranchMapScreenState extends State<BranchMapScreen>
     if (_displayBranches.isNotEmpty) {
       _selectedBranchId = _displayBranches.first.id;
     }
+    _resolveMapTileSource();
+  }
+
+  Future<void> _resolveMapTileSource() async {
+    if (!useGoongTiles) {
+      if (!mounted) return;
+      setState(() {
+        _isUsingGoongTiles = false;
+        _isMapLoading = false;
+      });
+      return;
+    }
+
+    final List<Map<String, String>> templateCandidates = <Map<String, String>>[
+      {
+        'template': goongMapTemplate,
+        'probe':
+            'https://tiles.goong.io/assets/tiles/12/3456/1582.png?key=$goongMapKey&style=$goongMapKey',
+      },
+      {
+        'template': goongMapTemplateApiKey,
+        'probe':
+            'https://tiles.goong.io/assets/tiles/12/3456/1582.png?api_key=$goongApiKey&style=$goongMapKey',
+      },
+      {
+        'template': goongMapTemplateRoadmap,
+        'probe':
+            'https://tiles.goong.io/assets/v1/roadmap/12/3456/1582.png?api_key=$goongApiKey',
+      },
+    ];
+
+    bool hasAuthError = false;
+    bool foundWorkingTemplate = false;
+    String chosenTemplate = goongMapTemplate;
+
+    for (final Map<String, String> candidate in templateCandidates) {
+      try {
+        final Uri probeUri = Uri.parse(candidate['probe']!);
+        final http.Response response = await http
+            .get(probeUri)
+            .timeout(const Duration(seconds: 6));
+
+        if (response.statusCode == 200) {
+          foundWorkingTemplate = true;
+          chosenTemplate = candidate['template']!;
+          break;
+        }
+
+        if (response.statusCode == 401 || response.statusCode == 403) {
+          hasAuthError = true;
+        }
+      } catch (_) {
+        // Try the next variant.
+      }
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _activeGoongTemplate = chosenTemplate;
+      _isUsingGoongTiles = foundWorkingTemplate || !hasAuthError;
+      _isMapLoading = false;
+    });
   }
 
   @override
@@ -149,6 +228,8 @@ class _BranchMapScreenState extends State<BranchMapScreen>
   }
 
   void _animatedMove(LatLng destination, double destinationZoom) {
+    final LatLng beginCenter = _currentCenter;
+    final double beginZoom = _currentZoom;
     final AnimationController animationController = AnimationController(
       duration: const Duration(milliseconds: 500),
       vsync: this,
@@ -159,15 +240,15 @@ class _BranchMapScreenState extends State<BranchMapScreen>
     );
 
     final Tween<double> latTween = Tween<double>(
-      begin: _currentCenter.latitude,
+      begin: beginCenter.latitude,
       end: destination.latitude,
     );
     final Tween<double> lngTween = Tween<double>(
-      begin: _currentCenter.longitude,
+      begin: beginCenter.longitude,
       end: destination.longitude,
     );
     final Tween<double> zoomTween = Tween<double>(
-      begin: _currentZoom,
+      begin: beginZoom,
       end: destinationZoom,
     );
 
@@ -196,6 +277,7 @@ class _BranchMapScreenState extends State<BranchMapScreen>
   Future<void> _focusBranch(
     BranchInfo branch, {
     bool collapseSheet = true,
+    bool showDetailsSheet = true,
   }) async {
     setState(() {
       _selectedBranchId = branch.id;
@@ -230,6 +312,10 @@ class _BranchMapScreenState extends State<BranchMapScreen>
         curve: Curves.easeOutCubic,
       );
     }
+
+    if (showDetailsSheet && mounted) {
+      await _showBranchDetailSheet(branch);
+    }
   }
 
   Future<void> _openDialer(BranchInfo branch) async {
@@ -249,16 +335,223 @@ class _BranchMapScreenState extends State<BranchMapScreen>
   Future<void> _openDirections(BranchInfo branch) async {
     final String destination =
         '${branch.position.latitude},${branch.position.longitude}';
-    final Uri googleMapsUri = Uri.parse(
-      'https://www.google.com/maps/dir/?api=1&destination=$destination',
-    );
+    final Uri mapsUri = Platform.isIOS
+        ? Uri.parse('http://maps.apple.com/?daddr=$destination&dirflg=d')
+        : Uri.parse(
+            'https://www.google.com/maps/dir/?api=1&destination=$destination',
+          );
 
-    if (!await launchUrl(googleMapsUri, mode: LaunchMode.externalApplication) &&
+    if (!await launchUrl(mapsUri, mode: LaunchMode.externalApplication) &&
         mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Khong mo duoc ung dung ban do.')),
       );
     }
+  }
+
+  Widget _buildCustomMarker(bool isSelected) {
+    final double markerSize = isSelected ? 46 : 40;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      width: markerSize,
+      height: markerSize,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: primaryBlue,
+        border: Border.all(color: Colors.white, width: 2.2),
+        boxShadow: [
+          BoxShadow(
+            color: primaryBlue.withOpacity(isSelected ? 0.45 : 0.28),
+            blurRadius: isSelected ? 14 : 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Icon(
+        Icons.account_balance_rounded,
+        color: Colors.white,
+        size: isSelected ? 23 : 20,
+      ),
+    );
+  }
+
+  Future<void> _showBranchDetailSheet(BranchInfo branch) async {
+    if (_isBranchDetailSheetVisible &&
+        mounted &&
+        Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+    if (!mounted) return;
+
+    _isBranchDetailSheetVisible = true;
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.fromLTRB(18, 10, 18, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFD8DBE5),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: primaryBlue,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.account_balance_rounded,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          branch.name,
+                          style: GoogleFonts.poppins(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF151824),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          branch.address,
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            color: const Color(0xFF5E6270),
+                            height: 1.35,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF5F7FD),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.schedule_rounded,
+                      size: 18,
+                      color: Colors.grey[700],
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '${_t('Giờ mở cửa', 'Opening hours')}: ${branch.hours}',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: const Color(0xFF454B5A),
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: branch.isOpen
+                            ? Colors.green.withOpacity(0.12)
+                            : Colors.red.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        branch.isOpen
+                            ? _t('Đang mở', 'Open')
+                            : _t('Đóng cửa', 'Closed'),
+                        style: GoogleFonts.poppins(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: branch.isOpen ? Colors.green : Colors.red,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () => _openDialer(branch),
+                      icon: const Icon(Icons.phone_rounded, size: 18),
+                      label: Text(_t('Gọi điện', 'Call')),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryBlue,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _openDirections(branch),
+                      icon: const Icon(Icons.near_me_rounded, size: 18),
+                      label: Text(_t('Chỉ đường', 'Directions')),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: primaryBlue,
+                        side: const BorderSide(color: primaryBlue),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    _isBranchDetailSheetVisible = false;
   }
 
   void _handleSearchChanged(String value) {
@@ -292,7 +585,11 @@ class _BranchMapScreenState extends State<BranchMapScreen>
     if (_displayBranches.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        _focusBranch(_displayBranches.first, collapseSheet: false);
+        _focusBranch(
+          _displayBranches.first,
+          collapseSheet: false,
+          showDetailsSheet: false,
+        );
       });
     }
   }
@@ -303,7 +600,10 @@ class _BranchMapScreenState extends State<BranchMapScreen>
 
     return Scaffold(
       backgroundColor: mapBackground,
-      appBar: CCPAppBar(title: _t('Chi nhánh', 'Branch')),
+      appBar: CCPAppBar(
+        title: _t('Chi nhánh', 'Branch'),
+        backgroundColor: mapBackground,
+      ),
       body: Stack(
         children: [
           FlutterMap(
@@ -311,10 +611,16 @@ class _BranchMapScreenState extends State<BranchMapScreen>
             options: MapOptions(
               initialCenter: _currentCenter,
               initialZoom: _currentZoom,
+              onPositionChanged: (camera, _) {
+                _currentCenter = camera.center;
+                _currentZoom = camera.zoom;
+              },
             ),
             children: [
               TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                urlTemplate: _isUsingGoongTiles
+                    ? _activeGoongTemplate
+                    : osmMapTemplate,
                 userAgentPackageName: 'com.ccpbank.app',
               ),
               MarkerLayer(
@@ -325,23 +631,40 @@ class _BranchMapScreenState extends State<BranchMapScreen>
                     height: isSelected ? 46 : 40,
                     point: branch.position,
                     child: GestureDetector(
-                      onTap: () => _focusBranch(branch, collapseSheet: true),
-                      child: Icon(
-                        Icons.location_on,
-                        color: primaryBlue,
-                        size: isSelected ? 42 : 35,
+                      onTap: () => _focusBranch(
+                        branch,
+                        collapseSheet: true,
+                        showDetailsSheet: true,
                       ),
+                      child: _buildCustomMarker(isSelected),
                     ),
                   );
                 }).toList(),
               ),
               RichAttributionWidget(
-                attributions: const [
-                  TextSourceAttribution('OpenStreetMap contributors'),
+                attributions: [
+                  TextSourceAttribution(
+                    _isUsingGoongTiles
+                        ? 'Goong Maps'
+                        : 'OpenStreetMap contributors',
+                  ),
                 ],
               ),
             ],
           ),
+          if (_isMapLoading)
+            Positioned.fill(
+              child: ColoredBox(
+                color: Colors.white.withOpacity(0.35),
+                child: const Center(
+                  child: SizedBox(
+                    width: 30,
+                    height: 30,
+                    child: CircularProgressIndicator(strokeWidth: 2.8),
+                  ),
+                ),
+              ),
+            ),
           Positioned(
             top: 10,
             left: 14,
@@ -465,8 +788,11 @@ class _BranchMapScreenState extends State<BranchMapScreen>
                                     branch.id == _selectedBranchId;
 
                                 return GestureDetector(
-                                  onTap: () =>
-                                      _focusBranch(branch, collapseSheet: true),
+                                  onTap: () => _focusBranch(
+                                    branch,
+                                    collapseSheet: true,
+                                    showDetailsSheet: true,
+                                  ),
                                   child: AnimatedContainer(
                                     duration: const Duration(milliseconds: 220),
                                     margin: const EdgeInsets.only(bottom: 10),

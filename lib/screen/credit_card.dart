@@ -133,6 +133,11 @@ class CreditCardScreen extends StatelessWidget {
                             child: _RegularCardVisual(
                               holderName: holderName,
                               cardNumber: regularCard.maskedNumber,
+                              cardTypeLabel: _t(
+                                context,
+                                'THẺ THƯỜNG',
+                                'REGULAR CARD',
+                              ),
                             ),
                           ),
                           const SizedBox(height: 12),
@@ -168,6 +173,11 @@ class CreditCardScreen extends StatelessWidget {
                               child: _VipCardVisual(
                                 holderName: holderName,
                                 cardNumber: vipCard.maskedNumber,
+                                cardTypeLabel: _t(
+                                  context,
+                                  'THẺ VIP',
+                                  'VIP CARD',
+                                ),
                               ),
                             ),
                             const SizedBox(height: 12),
@@ -273,10 +283,12 @@ class _RegularCardVisual extends StatelessWidget {
   const _RegularCardVisual({
     required this.holderName,
     required this.cardNumber,
+    required this.cardTypeLabel,
   });
 
   final String holderName;
   final String cardNumber;
+  final String cardTypeLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -292,7 +304,7 @@ class _RegularCardVisual extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF000A6A).withOpacity(0.35),
+            color: const Color(0xFF000A6A).withValues(alpha: 0.35),
             blurRadius: 18,
             offset: const Offset(0, 10),
           ),
@@ -310,7 +322,7 @@ class _RegularCardVisual extends StatelessWidget {
                 height: 150,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Colors.white.withOpacity(0.08),
+                  color: Colors.white.withValues(alpha: 0.08),
                 ),
               ),
             ),
@@ -322,7 +334,7 @@ class _RegularCardVisual extends StatelessWidget {
                 height: 190,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Colors.cyanAccent.withOpacity(0.06),
+                  color: Colors.cyanAccent.withValues(alpha: 0.06),
                 ),
               ),
             ),
@@ -335,7 +347,7 @@ class _RegularCardVisual extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'THẺ THƯỜNG',
+                        cardTypeLabel,
                         style: GoogleFonts.poppins(
                           color: Colors.white,
                           fontWeight: FontWeight.w700,
@@ -398,10 +410,15 @@ class _RegularCardVisual extends StatelessWidget {
 }
 
 class _VipCardVisual extends StatelessWidget {
-  const _VipCardVisual({required this.holderName, required this.cardNumber});
+  const _VipCardVisual({
+    required this.holderName,
+    required this.cardNumber,
+    required this.cardTypeLabel,
+  });
 
   final String holderName;
   final String cardNumber;
+  final String cardTypeLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -418,7 +435,7 @@ class _VipCardVisual extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF7D5A15).withOpacity(0.35),
+            color: const Color(0xFF7D5A15).withValues(alpha: 0.35),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -436,7 +453,7 @@ class _VipCardVisual extends StatelessWidget {
                 height: 120,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Colors.white.withOpacity(0.15),
+                  color: Colors.white.withValues(alpha: 0.15),
                 ),
               ),
             ),
@@ -448,7 +465,7 @@ class _VipCardVisual extends StatelessWidget {
                 height: 120,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Colors.black.withOpacity(0.16),
+                  color: Colors.black.withValues(alpha: 0.16),
                 ),
               ),
             ),
@@ -461,7 +478,7 @@ class _VipCardVisual extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'THẺ VIP',
+                        cardTypeLabel,
                         style: GoogleFonts.poppins(
                           color: const Color(0xFFFFF6D8),
                           fontWeight: FontWeight.w700,
@@ -506,7 +523,7 @@ class _VipCardVisual extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.poppins(
-                      color: const Color(0xFFFFF6D8).withOpacity(0.92),
+                      color: const Color(0xFFFFF6D8).withValues(alpha: 0.92),
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                     ),
@@ -568,7 +585,7 @@ class _TopUpAtBranchButton extends StatelessWidget {
       height: 48,
       child: PressableScale(
         borderRadius: BorderRadius.circular(14),
-        splashColor: const Color(0xFF000DC0).withOpacity(0.12),
+        splashColor: const Color(0xFF000DC0).withValues(alpha: 0.12),
         onTap: () {
           Navigator.push(
             context,

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../l10n/app_text.dart';
+
 class InterestTable extends StatelessWidget {
   const InterestTable({
     super.key,
@@ -12,6 +14,10 @@ class InterestTable extends StatelessWidget {
   final Map<int, double> rateByTerm;
   final int selectedTerm;
   final ValueChanged<int> onTermTap;
+
+  String _t(BuildContext context, String vi, String en) {
+    return AppText.tr(context, vi, en);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +31,7 @@ class InterestTable extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 14,
             offset: const Offset(0, 6),
           ),
@@ -35,7 +41,7 @@ class InterestTable extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Bảng lãi suất tiết kiệm',
+            _t(context, 'Bảng lãi suất tiết kiệm', 'Savings interest table'),
             style: GoogleFonts.poppins(
               fontSize: 15,
               fontWeight: FontWeight.w700,
@@ -56,19 +62,19 @@ class InterestTable extends StatelessWidget {
                 ),
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? const Color(0xFF000DC0).withOpacity(0.08)
+                      ? const Color(0xFF000DC0).withValues(alpha: 0.08)
                       : const Color(0xFFF8F9FE),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: isSelected
-                        ? const Color(0xFF000DC0).withOpacity(0.35)
+                        ? const Color(0xFF000DC0).withValues(alpha: 0.35)
                         : const Color(0xFFE4E7F1),
                   ),
                 ),
                 child: Row(
                   children: [
                     Text(
-                      '${entry.key} tháng',
+                      '${entry.key} ${_t(context, 'tháng', 'months')}',
                       style: GoogleFonts.poppins(
                         fontSize: 13,
                         fontWeight: isSelected
@@ -79,7 +85,7 @@ class InterestTable extends StatelessWidget {
                     ),
                     const Spacer(),
                     Text(
-                      '${entry.value.toStringAsFixed(2)}%/năm',
+                      '${entry.value.toStringAsFixed(2)}%/${_t(context, 'năm', 'year')}',
                       style: GoogleFonts.poppins(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,

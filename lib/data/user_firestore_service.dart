@@ -148,6 +148,15 @@ class UserFirestoreService {
     unawaited(_resolveSource());
   }
 
+  Future<void> dispose() async {
+    _fallbackDocId.removeListener(_onFallbackDocIdChanged);
+    await _authSub?.cancel();
+    await _docSub?.cancel();
+    if (!_profileController.isClosed) {
+      await _profileController.close();
+    }
+  }
+
   Future<bool> ensureUserDataExists({
     required String userId,
     Map<String, dynamic> userData = const <String, dynamic>{},

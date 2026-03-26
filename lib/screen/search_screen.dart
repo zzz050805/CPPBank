@@ -31,6 +31,7 @@ class _SearchScreenState extends State<SearchScreen> {
       backgroundColor: const Color(0xFFF8F9FE),
       appBar: CCPAppBar(
         title: _t("Tìm kiếm", "Search"),
+        backgroundColor: const Color(0xFFF8F9FE),
         showBackButton: widget.showBottomNav,
         onBackPressed: widget.showBottomNav
             ? () {

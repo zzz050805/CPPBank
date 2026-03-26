@@ -461,7 +461,10 @@ class _CurrencyConvertScreenState extends State<CurrencyConvertScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: CCPAppBar(title: _t('Quy đổi tiền tệ', 'Currency converter')),
+      appBar: CCPAppBar(
+        title: _t('Quy đổi tiền tệ', 'Currency converter'),
+        backgroundColor: Colors.white,
+      ),
       body: FadeTransition(
         opacity: _fade,
         child: SlideTransition(

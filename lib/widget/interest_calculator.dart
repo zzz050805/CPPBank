@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
+import '../l10n/app_text.dart';
+
 class InterestCalculator extends StatelessWidget {
   const InterestCalculator({
     super.key,
@@ -23,6 +25,10 @@ class InterestCalculator extends StatelessWidget {
   final ValueChanged<String> onAmountChanged;
   final ValueChanged<int> onTermChanged;
 
+  String _t(BuildContext context, String vi, String en) {
+    return AppText.tr(context, vi, en);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -32,7 +38,7 @@ class InterestCalculator extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 14,
             offset: const Offset(0, 6),
           ),
@@ -42,7 +48,7 @@ class InterestCalculator extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Bộ tính toán lãi suất',
+            _t(context, 'Bộ tính toán lãi suất', 'Interest calculator'),
             style: GoogleFonts.poppins(
               fontSize: 15,
               fontWeight: FontWeight.w700,
@@ -57,7 +63,11 @@ class InterestCalculator extends StatelessWidget {
             onChanged: onAmountChanged,
             style: GoogleFonts.poppins(fontSize: 14),
             decoration: InputDecoration(
-              labelText: 'Số tiền gửi (VND)',
+              labelText: _t(
+                context,
+                'Số tiền gửi (VND)',
+                'Deposit amount (VND)',
+              ),
               labelStyle: GoogleFonts.poppins(
                 color: const Color(0xFF6E7485),
                 fontSize: 13,
@@ -74,7 +84,7 @@ class InterestCalculator extends StatelessWidget {
           Row(
             children: [
               Text(
-                'Kỳ hạn: $term tháng',
+                '${_t(context, 'Kỳ hạn', 'Term')}: $term ${_t(context, 'tháng', 'months')}',
                 style: GoogleFonts.poppins(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
@@ -83,7 +93,7 @@ class InterestCalculator extends StatelessWidget {
               ),
               const Spacer(),
               Text(
-                '${currentRate.toStringAsFixed(2)}%/năm',
+                '${currentRate.toStringAsFixed(2)}%/${_t(context, 'năm', 'year')}',
                 style: GoogleFonts.poppins(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
@@ -113,7 +123,7 @@ class InterestCalculator extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Tiền lãi dự kiến',
+                  _t(context, 'Tiền lãi dự kiến', 'Estimated interest'),
                   style: GoogleFonts.poppins(
                     color: Colors.white70,
                     fontSize: 12,

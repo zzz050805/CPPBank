@@ -4,11 +4,14 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../app_preferences.dart';
 import '../data/user_firestore_service.dart';
+import '../effect/gentle_page_route.dart';
 import '../l10n/app_text.dart';
+import 'user_info_screen.dart';
 import 'search_screen.dart';
 import 'home_screen.dart';
 import 'chat_placeholder_screen.dart';
 import 'login.dart';
+import 'smart_otp_screen.dart';
 
 class SettingScreen extends StatefulWidget {
   const SettingScreen({super.key, this.showBottomNav = true});
@@ -61,7 +64,7 @@ class _SettingScreenState extends State<SettingScreen> {
         name: 'HẠNG KIM CƯƠNG',
         color: Color.fromARGB(255, 243, 248, 255),
         gradient: [
-          Color.fromARGB(255, 103, 156, 255),
+          Color.fromARGB(255, 100, 151, 247),
           Color.fromARGB(255, 83, 198, 255),
         ],
         icon: Icons.workspace_premium_outlined,
@@ -149,16 +152,16 @@ class _SettingScreenState extends State<SettingScreen> {
 
   IconData _resolveRankIcon(String rankName) {
     final String normalized = rankName.toLowerCase();
-    if (normalized.contains('vô cực') || normalized.contains('infinity')) {
+    if (normalized.contains('king') || normalized.contains('king')) {
       return Icons.all_inclusive;
     }
-    if (normalized.contains('tinh hoa') || normalized.contains('elite')) {
+    if (normalized.contains('royal') || normalized.contains('royal')) {
       return Icons.local_fire_department_outlined;
     }
-    if (normalized.contains('bạch kim') || normalized.contains('platinum')) {
+    if (normalized.contains('kim cương') || normalized.contains('diamond')) {
       return Icons.workspace_premium_outlined;
     }
-    if (normalized.contains('kim cương') || normalized.contains('diamond')) {
+    if (normalized.contains('bạch kim') || normalized.contains('platinum')) {
       return Icons.diamond_outlined;
     }
     if (normalized.contains('vàng') || normalized.contains('gold')) {
@@ -168,6 +171,34 @@ class _SettingScreenState extends State<SettingScreen> {
       return Icons.military_tech_outlined;
     }
     return Icons.person_outline;
+  }
+
+  String _localizedRankName(String rawName) {
+    final String normalized = rawName.trim().toLowerCase();
+    if (normalized.isEmpty) return rawName;
+
+    if (normalized.contains('king')) {
+      return _t('HẠNG KING', 'KING');
+    }
+    if (normalized.contains('royal')) {
+      return _t('HẠNG ROYAL', 'ROYAL');
+    }
+    if (normalized.contains('kim cương') || normalized.contains('diamond')) {
+      return _t('HẠNG KIM CƯƠNG', 'DIAMOND');
+    }
+    if (normalized.contains('bạch kim') || normalized.contains('platinum')) {
+      return _t('HẠNG BẠCH KIM', 'PLATINUM');
+    }
+    if (normalized.contains('vàng') || normalized.contains('gold')) {
+      return _t('HẠNG VÀNG', 'GOLD');
+    }
+    if (normalized.contains('bạc') || normalized.contains('silver')) {
+      return _t('HẠNG BẠC', 'SILVER');
+    }
+    if (normalized.contains('thành viên') || normalized.contains('member')) {
+      return _t('THÀNH VIÊN', 'MEMBER');
+    }
+    return rawName.toUpperCase();
   }
 
   double _readBalance(dynamic rawBalance) {
@@ -246,6 +277,31 @@ class _SettingScreenState extends State<SettingScreen> {
                         _buildSettingItem(
                           Icons.key_outlined,
                           _t("Quản lý Smart OTP", "Manage Smart OTP"),
+                          onTap: () {
+                            final String? uid =
+                                UserFirestoreService.instance.currentUserDocId;
+                            if (uid == null || uid.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Không tìm thấy tài khoản để mở Smart OTP.',
+                                  ),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                              return;
+                            }
+
+                            Navigator.push(
+                              context,
+                              GentlePageRoute<void>(
+                                page: SmartOTPScreen(
+                                  uid: uid,
+                                  isManagementMode: true,
+                                ),
+                              ),
+                            );
+                          },
                         ),
                         _buildSettingItem(
                           Icons.devices_outlined,
@@ -260,6 +316,18 @@ class _SettingScreenState extends State<SettingScreen> {
                       const SizedBox(height: 25),
                       _sectionTitle(_t("THÔNG TIN", "INFORMATION")),
                       _buildSettingsGroup([
+                        _buildSettingItem(
+                          Icons.assignment_ind_outlined,
+                          _t("Thông tin cá nhân", "Personal information"),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              GentlePageRoute<void>(
+                                page: const UserInfoScreen(),
+                              ),
+                            );
+                          },
+                        ),
                         _buildSettingItem(
                           Icons.info_outline,
                           _t("Về ứng dụng", "About app"),
@@ -425,7 +493,7 @@ class _SettingScreenState extends State<SettingScreen> {
           Icon(rank.icon, size: 13, color: Colors.white),
           const SizedBox(width: 6),
           Text(
-            rank.name.toUpperCase(),
+            _localizedRankName(rank.name).toUpperCase(),
             style: GoogleFonts.poppins(
               color: Colors.white,
               fontSize: 10,

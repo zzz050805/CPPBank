@@ -4,6 +4,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'dart:async';
 import 'dart:math';
 
+import '../data/services/user_service.dart';
+import '../l10n/app_text.dart';
+import '../widget/ccp_app_bar.dart';
 import 'nfc_screen.dart';
 
 /// Service mock gọi API OTP.
@@ -16,9 +19,20 @@ class OtpService {
 }
 
 class OtpScreen extends StatefulWidget {
-  const OtpScreen({super.key, required this.phoneNumber});
+  const OtpScreen({
+    super.key,
+    required this.phoneNumber,
+    this.isResetSmartOtp = false,
+    this.isVerifySmsOnly = false,
+    this.resetSmartOtpUid,
+    this.newSmartOtpPin,
+  });
 
   final String phoneNumber;
+  final bool isResetSmartOtp;
+  final bool isVerifySmsOnly;
+  final String? resetSmartOtpUid;
+  final String? newSmartOtpPin;
 
   @override
   State<OtpScreen> createState() => _OtpScreenState();
@@ -34,6 +48,7 @@ class _OtpScreenState extends State<OtpScreen> {
   static const Color primaryPurple = Color(0xFF4A3AFF);
 
   final OtpService _otpService = OtpService();
+  final UserService _userService = UserService();
   final List<TextEditingController> _controllers = List.generate(
     6,
     (_) => TextEditingController(),
@@ -47,6 +62,11 @@ class _OtpScreenState extends State<OtpScreen> {
   Timer? _smsHideTimer;
   bool _showSmsNotification = false;
   String _smsMessage = '';
+
+  String _t(String vi, String en) => AppText.tr(context, vi, en);
+
+  bool get _isSmartOtpSmsFlow =>
+      widget.isVerifySmsOnly || widget.isResetSmartOtp;
 
   @override
   void initState() {
@@ -94,8 +114,15 @@ class _OtpScreenState extends State<OtpScreen> {
   void _showMockSms(String otp) {
     _smsHideTimer?.cancel();
     setState(() {
-      _smsMessage =
-          'Mã Otp của bạn là: $otp. Vui lòng không cung cấp mã này cho người dùng nào khác không liên quan!';
+      _smsMessage = _isSmartOtpSmsFlow
+          ? _t(
+              'Mã xác thực Smart OTP của bạn là: $otp. Vui lòng không chia sẻ mã này cho bất kỳ ai.',
+              'Your Smart OTP verification code is: $otp. Please do not share this code with anyone.',
+            )
+          : _t(
+              'Mã OTP của bạn là: $otp. Vui lòng không cung cấp mã này cho người dùng nào khác không liên quan!',
+              'Your OTP code is: $otp. Please do not share this code with unauthorized users!',
+            );
       _showSmsNotification = true;
     });
 
@@ -142,12 +169,26 @@ class _OtpScreenState extends State<OtpScreen> {
     return _controllers.map((controller) => controller.text).join();
   }
 
+  void _onOtpChanged({required String value, required int index}) {
+    if (value.isNotEmpty && index < _focusNodes.length - 1) {
+      _focusNodes[index + 1].requestFocus();
+    }
+    if (value.isEmpty && index > 0) {
+      _focusNodes[index - 1].requestFocus();
+    }
+  }
+
   Future<void> _onNextPressed() async {
     final entered = _enteredOtp();
     if (entered.length < 6) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Vui lòng nhập đầy đủ 6 chữ số OTP.'),
+        SnackBar(
+          content: Text(
+            _t(
+              'Vui lòng nhập đầy đủ 6 chữ số OTP.',
+              'Please enter all 6 OTP digits.',
+            ),
+          ),
           backgroundColor: Colors.red,
           behavior: SnackBarBehavior.floating,
         ),
@@ -156,6 +197,64 @@ class _OtpScreenState extends State<OtpScreen> {
     }
 
     if (entered == _currentOtp) {
+      if (widget.isVerifySmsOnly) {
+        Navigator.pop(context, true);
+        return;
+      }
+
+      if (widget.isResetSmartOtp) {
+        final String? uid = widget.resetSmartOtpUid;
+        final String? newPin = widget.newSmartOtpPin;
+        if (uid == null ||
+            uid.isEmpty ||
+            newPin == null ||
+            newPin.length != 6) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                _t(
+                  'Thiếu dữ liệu cập nhật Smart OTP PIN.',
+                  'Missing Smart OTP PIN update data.',
+                ),
+              ),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          return;
+        }
+
+        try {
+          await _userService.updateSmartOtpPin(uid: uid, newPin: newPin);
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                _t(
+                  'Mã Smart OTP đã được cập nhật thành công',
+                  'Smart OTP PIN updated successfully',
+                ),
+              ),
+              backgroundColor: const Color(0xFF2E7D32),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          Navigator.pop(context, true);
+        } catch (e) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '${_t('Không thể cập nhật Smart OTP', 'Unable to update Smart OTP')}: $e',
+              ),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
+      }
+
       Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => const NFCScanningScreen()),
@@ -164,27 +263,18 @@ class _OtpScreenState extends State<OtpScreen> {
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Mã OTP không chính xác. Vui lòng thử lại.'),
+      SnackBar(
+        content: Text(
+          _t(
+            'Mã OTP không chính xác. Vui lòng thử lại.',
+            'Incorrect OTP code. Please try again.',
+          ),
+        ),
         backgroundColor: Colors.red,
         behavior: SnackBarBehavior.floating,
       ),
     );
     _clearOtpInputs();
-  }
-
-  void _onOtpChanged({required String value, required int index}) {
-    if (value.isNotEmpty && index < _focusNodes.length - 1) {
-      _focusNodes[index + 1].requestFocus();
-    } else if (value.isNotEmpty && index == _focusNodes.length - 1) {
-      FocusScope.of(context).unfocus();
-    }
-  }
-
-  void _onOtpBackspace({required String value, required int index}) {
-    if (value.isEmpty && index > 0) {
-      _focusNodes[index - 1].requestFocus();
-    }
   }
 
   @override
@@ -193,23 +283,11 @@ class _OtpScreenState extends State<OtpScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF3F4F8),
-      appBar: AppBar(
+      appBar: CCPAppBar(
+        title: _isSmartOtpSmsFlow
+            ? _t('Nhập SMS OTP', 'Enter SMS OTP')
+            : _t('Nhập OTP', 'Enter OTP'),
         backgroundColor: const Color(0xFFF3F4F8),
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 18),
-          color: primaryBlue,
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          'Nhập OTP',
-          style: GoogleFonts.poppins(
-            color: primaryBlue,
-            fontWeight: FontWeight.w700,
-            fontSize: 24,
-          ),
-        ),
-        centerTitle: false,
       ),
       body: Stack(
         children: [
@@ -223,7 +301,7 @@ class _OtpScreenState extends State<OtpScreen> {
                   borderRadius: BorderRadius.circular(18),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.04),
+                      color: Colors.black.withValues(alpha: 0.04),
                       blurRadius: 16,
                       offset: const Offset(0, 8),
                     ),
@@ -233,7 +311,9 @@ class _OtpScreenState extends State<OtpScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Nhập mã',
+                      _isSmartOtpSmsFlow
+                          ? _t('Nhập mã SMS OTP', 'Enter SMS OTP code')
+                          : _t('Nhập mã', 'Enter code'),
                       style: GoogleFonts.poppins(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -242,67 +322,80 @@ class _OtpScreenState extends State<OtpScreen> {
                     ),
                     const SizedBox(height: 14),
 
-                    // 6 ô OTP nằm ngang, focus đổi viền xanh, có bóng nhẹ.
-                    Row(
-                      children: List.generate(6, (index) {
-                        final bool isFocused = _focusNodes[index].hasFocus;
-                        return Expanded(
-                          child: Padding(
-                            padding: EdgeInsets.only(right: index == 5 ? 0 : 8),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 180),
-                              height: 56,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
+                    // 6 ô OTP cân đối hơn: bớt slim và khoảng cách gọn lại.
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        const double gap = 5;
+                        final double fieldWidth =
+                            ((constraints.maxWidth - (gap * 5)) / 6).clamp(
+                              40.0,
+                              48.0,
+                            );
+
+                        return Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: List.generate(6, (index) {
+                            final bool isFocused = _focusNodes[index].hasFocus;
+                            return SizedBox(
+                              width: fieldWidth,
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 180),
+                                height: 62,
+                                decoration: BoxDecoration(
                                   color: isFocused
-                                      ? primaryBlue
-                                      : const Color(0xFFD9DCE6),
-                                  width: isFocused ? 1.8 : 1.0,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
+                                      ? const Color(0xFFF3F6FF)
+                                      : const Color(0xFFF8FAFF),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
                                     color: isFocused
-                                        ? primaryBlue.withOpacity(0.14)
-                                        : Colors.black.withOpacity(0.04),
-                                    blurRadius: isFocused ? 12 : 8,
-                                    offset: const Offset(0, 3),
+                                        ? primaryBlue
+                                        : const Color(0xFFD7DDEE),
+                                    width: isFocused ? 1.2 : 0.9,
                                   ),
-                                ],
-                              ),
-                              child: TextField(
-                                controller: _controllers[index],
-                                focusNode: _focusNodes[index],
-                                autofocus: index == 0,
-                                keyboardType: TextInputType.number,
-                                textInputAction: index == 5
-                                    ? TextInputAction.done
-                                    : TextInputAction.next,
-                                textAlign: TextAlign.center,
-                                style: GoogleFonts.poppins(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 22,
-                                  color: const Color(0xFF272730),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: isFocused
+                                          ? primaryBlue.withValues(alpha: 0.18)
+                                          : Colors.black.withValues(
+                                              alpha: 0.03,
+                                            ),
+                                      blurRadius: isFocused ? 16 : 10,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
                                 ),
-                                inputFormatters: [
-                                  FilteringTextInputFormatter.digitsOnly,
-                                  LengthLimitingTextInputFormatter(1),
-                                ],
-                                decoration: const InputDecoration(
-                                  border: InputBorder.none,
-                                  counterText: '',
-                                  contentPadding: EdgeInsets.zero,
+                                child: TextField(
+                                  controller: _controllers[index],
+                                  focusNode: _focusNodes[index],
+                                  autofocus: index == 0,
+                                  keyboardType: TextInputType.number,
+                                  textInputAction: index == 5
+                                      ? TextInputAction.done
+                                      : TextInputAction.next,
+                                  textAlign: TextAlign.center,
+                                  style: GoogleFonts.poppins(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 23,
+                                    color: const Color(0xFF272730),
+                                  ),
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.digitsOnly,
+                                    LengthLimitingTextInputFormatter(1),
+                                  ],
+                                  decoration: const InputDecoration(
+                                    border: InputBorder.none,
+                                    counterText: '',
+                                    contentPadding: EdgeInsets.zero,
+                                  ),
+                                  onChanged: (value) {
+                                    _onOtpChanged(value: value, index: index);
+                                  },
                                 ),
-                                onChanged: (value) {
-                                  _onOtpChanged(value: value, index: index);
-                                  _onOtpBackspace(value: value, index: index);
-                                },
                               ),
-                            ),
-                          ),
+                            );
+                          }),
                         );
-                      }),
+                      },
                     ),
                     const SizedBox(height: 14),
 
@@ -317,8 +410,8 @@ class _OtpScreenState extends State<OtpScreen> {
                               : null,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: primaryPurple,
-                            disabledBackgroundColor: primaryPurple.withOpacity(
-                              0.35,
+                            disabledBackgroundColor: primaryPurple.withValues(
+                              alpha: 0.35,
                             ),
                             elevation: 0,
                             shape: RoundedRectangleBorder(
@@ -328,10 +421,13 @@ class _OtpScreenState extends State<OtpScreen> {
                           ),
                           child: Text(
                             _resendCooldown > 0
-                                ? 'Gửi lại mã ($_resendCooldown)s'
+                                ? _t(
+                                    'Gửi lại mã ($_resendCooldown)s',
+                                    'Resend code ($_resendCooldown)s',
+                                  )
                                 : (_isLoadingOtp
-                                      ? 'Đang gửi...'
-                                      : 'Gửi lại mã'),
+                                      ? _t('Đang gửi...', 'Sending...')
+                                      : _t('Gửi lại mã', 'Resend code')),
                             style: GoogleFonts.poppins(
                               color: Colors.white,
                               fontWeight: FontWeight.w600,
@@ -351,9 +447,16 @@ class _OtpScreenState extends State<OtpScreen> {
                           height: 1.42,
                         ),
                         children: [
-                          const TextSpan(
-                            text:
-                                'Chúng tôi đã gửi mã xác thực đến số điện thoại ',
+                          TextSpan(
+                            text: _isSmartOtpSmsFlow
+                                ? _t(
+                                    'Chúng tôi đã gửi mã xác thực SMS OTP đến số điện thoại ',
+                                    'We have sent an SMS OTP verification code to phone number ',
+                                  )
+                                : _t(
+                                    'Chúng tôi đã gửi mã xác thực đến số điện thoại ',
+                                    'We have sent a verification code to phone number ',
+                                  ),
                           ),
                           TextSpan(
                             text: widget.phoneNumber,
@@ -362,13 +465,16 @@ class _OtpScreenState extends State<OtpScreen> {
                               color: const Color(0xFF252531),
                             ),
                           ),
-                          const TextSpan(text: ' của bạn'),
+                          TextSpan(text: _t(' của bạn', '.')),
                         ],
                       ),
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      'Mã này sẽ hết hiệu lực sau 10 phút kể từ thời điểm gửi.',
+                      _t(
+                        'Mã này sẽ hết hiệu lực sau 10 phút kể từ thời điểm gửi.',
+                        'This code will expire 10 minutes after it is sent.',
+                      ),
                       style: GoogleFonts.poppins(
                         color: const Color(0xFF6A6A75),
                         fontSize: 18,
@@ -377,7 +483,15 @@ class _OtpScreenState extends State<OtpScreen> {
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      'Số điện thoại này gắn liền với tài khoản bạn sử dụng về sau.',
+                      _isSmartOtpSmsFlow
+                          ? _t(
+                              'Số điện thoại này đang được dùng để xác thực thay đổi Smart OTP.',
+                              'This phone number is used to verify Smart OTP changes.',
+                            )
+                          : _t(
+                              'Số điện thoại này gắn liền với tài khoản bạn sử dụng về sau.',
+                              'This phone number will be linked to your account for future use.',
+                            ),
                       style: GoogleFonts.poppins(
                         color: const Color(0xFF6A6A75),
                         fontSize: 18,
@@ -398,7 +512,9 @@ class _OtpScreenState extends State<OtpScreen> {
                           ),
                         ),
                         child: Text(
-                          'Tiếp theo',
+                          _isSmartOtpSmsFlow
+                              ? _t('Xác nhận', 'Confirm')
+                              : _t('Tiếp theo', 'Next'),
                           style: GoogleFonts.poppins(
                             color: Colors.white,
                             fontWeight: FontWeight.w700,
@@ -432,7 +548,7 @@ class _OtpScreenState extends State<OtpScreen> {
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.12),
+                        color: Colors.black.withValues(alpha: 0.12),
                         blurRadius: 18,
                         offset: const Offset(0, 8),
                       ),

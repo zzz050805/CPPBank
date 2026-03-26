@@ -22,6 +22,7 @@ class QRCodeScreen extends StatelessWidget {
       backgroundColor: const Color(0xFFF5F7FF),
       appBar: CCPAppBar(
         title: _t(context, 'Mã QR nhận tiền', 'Receive QR code'),
+        backgroundColor: const Color(0xFFF5F7FF),
       ),
       body: Stack(
         children: [

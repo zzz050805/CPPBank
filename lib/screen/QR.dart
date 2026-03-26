@@ -27,7 +27,10 @@ class QRScannerScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FF),
-      appBar: CCPAppBar(title: _t(context, 'Quét mã', 'Scan code')),
+      appBar: CCPAppBar(
+        title: _t(context, 'Quét mã', 'Scan code'),
+        backgroundColor: const Color(0xFFF5F7FF),
+      ),
       body: Stack(
         children: [
           Positioned(

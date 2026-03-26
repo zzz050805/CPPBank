@@ -210,7 +210,10 @@ class _ExchangeRateScreenState extends State<ExchangeRateScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: CCPAppBar(title: _t('Tỷ giá hối đoái', 'Exchange rates')),
+      appBar: CCPAppBar(
+        title: _t('Tỷ giá hối đoái', 'Exchange rates'),
+        backgroundColor: Colors.white,
+      ),
       body: FadeTransition(
         opacity: _fade,
         child: SlideTransition(

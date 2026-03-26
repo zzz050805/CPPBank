@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart'; // Thư viện mới
-import 'package:firebase_auth/firebase_auth.dart'; // Thư viện mới
 import 'package:flutter/foundation.dart';
 import '../data/user_firestore_service.dart';
 
@@ -13,7 +12,6 @@ class ChatApiService {
 
   // Khởi tạo các instance của Firebase
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
 
   // HÀM PHỤ: Lưu tin nhắn vào Firestore
   Future<void> _saveMessage(String text, String role) async {

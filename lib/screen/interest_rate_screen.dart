@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
+import '../l10n/app_text.dart';
 import '../widget/ccp_app_bar.dart';
 import '../widget/interest_calculator.dart';
 import '../widget/interest_chart.dart';
@@ -59,8 +60,17 @@ class _InterestRateScreenState extends State<InterestRateScreen> {
     text: '100,000,000',
   );
 
+  String _t(String vi, String en) => AppText.tr(context, vi, en);
+
   // Dữ liệu xu hướng 6 tháng gần nhất cho biểu đồ.
-  final List<String> _months = const ['T1', 'T2', 'T3', 'T4', 'T5', 'T6'];
+  List<String> get _monthLabels => <String>[
+    _t('T1', 'M1'),
+    _t('T2', 'M2'),
+    _t('T3', 'M3'),
+    _t('T4', 'M4'),
+    _t('T5', 'M5'),
+    _t('T6', 'M6'),
+  ];
   final List<double> _trendRates = const [5.5, 5.6, 5.8, 5.7, 6.0, 6.1];
 
   // Bảng lãi suất theo kỳ hạn (tham khảo).
@@ -117,13 +127,16 @@ class _InterestRateScreenState extends State<InterestRateScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF6F8FF),
-      appBar: const CCPAppBar(title: 'Lãi suất'),
+      appBar: CCPAppBar(
+        title: _t('Lãi suất', 'Interest rates'),
+        backgroundColor: Color(0xFFF6F8FF),
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
           child: Column(
             children: [
-              InterestChart(monthLabels: _months, rates: _trendRates),
+              InterestChart(monthLabels: _monthLabels, rates: _trendRates),
               const SizedBox(height: 14),
               InterestCalculator(
                 amountController: _amountController,
