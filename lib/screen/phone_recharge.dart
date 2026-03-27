@@ -37,6 +37,8 @@ class TopUpScreen extends StatefulWidget {
 class _TopUpScreenState extends State<TopUpScreen>
     with SingleTickerProviderStateMixin {
   static const Color _primaryBlue = Color(0xFF000DC0);
+  static const String _providerPlaceholderAsset =
+      'assets/images/nhacungcap.jpg';
 
   late final AnimationController _controller;
   late final Animation<double> _providerFade;
@@ -204,6 +206,81 @@ class _TopUpScreenState extends State<TopUpScreen>
     }
   }
 
+  String? _providerLogoAsset(String provider) {
+    switch (provider) {
+      case 'Viettel':
+        return 'assets/images/viettel.jpg';
+      case 'Mobifone':
+        return 'assets/images/mobifone.jpg';
+      case 'Vinaphone':
+        return 'assets/images/vinaphone.jpg';
+      case 'Vietnamobile':
+        return 'assets/images/vietnamobile.jpg';
+      case 'Gmobile':
+        return 'assets/images/Gmobile.jpg';
+      default:
+        return null;
+    }
+  }
+
+  Widget _buildProviderAvatar(
+    String provider, {
+    double size = 34,
+    double iconSize = 18,
+  }) {
+    final String? assetPath = _providerLogoAsset(provider);
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: _primaryBlue.withOpacity(0.1),
+      ),
+      child: ClipOval(
+        child: assetPath == null
+            ? Icon(_providerIcon(provider), color: _primaryBlue, size: iconSize)
+            : Image.asset(
+                assetPath,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) {
+                  return Icon(
+                    _providerIcon(provider),
+                    color: _primaryBlue,
+                    size: iconSize,
+                  );
+                },
+              ),
+      ),
+    );
+  }
+
+  Widget _buildProviderPlaceholderAvatar({
+    double size = 34,
+    double iconSize = 18,
+  }) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: _primaryBlue.withOpacity(0.1),
+      ),
+      child: ClipOval(
+        child: Image.asset(
+          _providerPlaceholderAsset,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) {
+            return Icon(
+              Icons.settings_input_antenna_rounded,
+              color: _primaryBlue,
+              size: iconSize,
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   Future<void> _showProviderPicker() async {
     await showModalBottomSheet<void>(
       context: context,
@@ -286,19 +363,7 @@ class _TopUpScreenState extends State<TopUpScreen>
                           ),
                           child: Row(
                             children: [
-                              Container(
-                                width: 34,
-                                height: 34,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: _primaryBlue.withOpacity(0.1),
-                                ),
-                                child: Icon(
-                                  _providerIcon(provider),
-                                  color: _primaryBlue,
-                                  size: 18,
-                                ),
-                              ),
+                              _buildProviderAvatar(provider),
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Text(
@@ -446,19 +511,9 @@ class _TopUpScreenState extends State<TopUpScreen>
                         ),
                         child: Row(
                           children: [
-                            Container(
-                              width: 34,
-                              height: 34,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: _primaryBlue.withOpacity(0.1),
-                              ),
-                              child: Icon(
-                                _providerIcon(selectedProvider ?? providers[0]),
-                                color: _primaryBlue,
-                                size: 18,
-                              ),
-                            ),
+                            selectedProvider == null
+                                ? _buildProviderPlaceholderAvatar()
+                                : _buildProviderAvatar(selectedProvider!),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
