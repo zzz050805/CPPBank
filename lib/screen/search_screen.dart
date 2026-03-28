@@ -21,7 +21,7 @@ class SearchScreen extends StatefulWidget {
 
 class _SearchScreenState extends State<SearchScreen> {
   // ĐẶT MẶC ĐỊNH LÀ 1 để nút Tìm kiếm active
-  int _selectedIndex = 1;
+  final int _selectedIndex = 1;
 
   String _t(String vi, String en) => AppText.tr(context, vi, en);
 
@@ -67,7 +67,7 @@ class _SearchScreenState extends State<SearchScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const BranchScreen(),
+                        builder: (context) => BranchMapScreen(),
                       ),
                     );
                   },

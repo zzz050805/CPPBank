@@ -1,16 +1,22 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:cloud_firestore/cloud_firestore.dart'; // Thư viện mới
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import '../data/user_firestore_service.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart'; // Import tủ bảo mật
 
 class ChatApiService {
-  // Giữ nguyên API Key của bro
-  static const String _apiKey =
-      "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";
-  static const String _url = "https://api.groq.com/openai/v1/chat/completions";
+  // 1. LOẠI BỎ MÃ KEY CỨNG - THAY BẰNG GETTER ĐỂ LẤY TỪ FILE .ENV
+  String get _apiKey => dotenv.env['GROQ_API_KEY'] ?? '';
 
-  // Khởi tạo các instance của Firebase
+  static const String _url = "https://api.groq.com/openai/v1/chat/completions";
+  static const List<String> _candidateModels = [
+    'llama-3.3-70b-versatile',
+    'llama-3.1-8b-instant',
+    'gemma2-9b-it',
+  ];
+
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   // HÀM PHỤ: Lưu tin nhắn vào Firestore
@@ -28,32 +34,29 @@ class ChatApiService {
           .collection('chat_history')
           .add({
             'text': text,
-            'role': role, // 'user' hoặc 'bot'
-            'timestamp':
-                FieldValue.serverTimestamp(), // Lưu thời gian để sắp xếp
+            'role': role,
+            'timestamp': FieldValue.serverTimestamp(),
           });
     } catch (e) {
       debugPrint('Lỗi lưu Firestore (chat_history): $e');
     }
   }
 
-  Future<String> sendMessage(String message) async {
-    // 1. Lưu tin nhắn của User ngay khi bấm gửi
-    await _saveMessage(message, 'user');
-
-    try {
-      final response = await http.post(
-        Uri.parse(_url),
-        headers: {
-          "Authorization": "Bearer $_apiKey",
-          "Content-Type": "application/json",
-        },
-        body: jsonEncode({
-          "model": "llama-3.3-70b-versatile",
-          "messages": [
-            {
-              "role": "system",
-              "content": """
+  Future<http.Response> _postChatRequest(String message, String model) {
+    // 2. SỬ DỤNG _apiKey ĐÃ ĐƯỢC BẢO MẬT
+    return http
+        .post(
+          Uri.parse(_url),
+          headers: {
+            "Authorization": "Bearer $_apiKey", // Lấy từ file .env ra dùng nè
+            "Content-Type": "application/json",
+          },
+          body: jsonEncode({
+            "model": model,
+            "messages": [
+              {
+                "role": "system",
+                "content": """
 Bạn là TRỢ LÝ ẢO CAO CẤP (AI Assistant) của Ngân hàng Thương mại 3 Thành Viên (CCPBank). 
 Hãy trả lời khách hàng bằng sự tự tin, chuyên nghiệp, lịch sự và luôn ưu tiên lợi ích của khách hàng.
 
@@ -90,23 +93,86 @@ QUY TẮC:
    - Từ chối khéo các câu hỏi ngoài lề ngân hàng.
    - Tuyệt đối không nói "Tôi không biết".
 """,
-            },
-            {"role": "user", "content": message},
-          ],
-        }),
-      );
+              },
+              {"role": "user", "content": message},
+            ],
+          }),
+        )
+        .timeout(const Duration(seconds: 25));
+  }
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(utf8.decode(response.bodyBytes));
-        String botReply = data['choices'][0]['message']['content'];
-
-        // 2. Lưu câu trả lời của Bot vào Firestore
-        await _saveMessage(botReply, 'bot');
-
-        return botReply;
-      } else {
-        return "Server CCPBank đang bảo trì, quý khách đợi tí nhé!";
+  String _extractApiErrorMessage(http.Response response) {
+    try {
+      final body = utf8.decode(response.bodyBytes);
+      final dynamic data = jsonDecode(body);
+      final String msg = (data['error']?['message'] ?? '').toString().trim();
+      if (msg.isNotEmpty) {
+        return msg;
       }
+      return body;
+    } catch (_) {
+      return response.body;
+    }
+  }
+
+  bool _isModelUnavailable(int statusCode, String errorMessage) {
+    if (statusCode != 400 && statusCode != 404) return false;
+    final lower = errorMessage.toLowerCase();
+    return lower.contains('model') &&
+        (lower.contains('not found') ||
+            lower.contains('decommissioned') ||
+            lower.contains('does not exist') ||
+            lower.contains('invalid'));
+  }
+
+  Future<String> sendMessage(String message) async {
+    await _saveMessage(message, 'user');
+
+    // KIỂM TRA KEY TRƯỚC KHI GỌI
+    if (_apiKey.isEmpty) {
+      return "Lỗi cấu hình: Không tìm thấy khóa API trong hệ thống. Vui lòng kiểm tra file .env!";
+    }
+
+    try {
+      String? lastModelError;
+
+      for (final model in _candidateModels) {
+        final response = await _postChatRequest(message, model);
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(utf8.decode(response.bodyBytes));
+          final String botReply =
+              (data['choices']?[0]?['message']?['content'] ?? '').toString();
+
+          if (botReply.trim().isEmpty) {
+            return "Hiện tại hệ thống phản hồi chậm, Quý khách vui lòng thử lại sau ít phút.";
+          }
+
+          await _saveMessage(botReply, 'bot');
+          return botReply;
+        }
+
+        final errorMessage = _extractApiErrorMessage(response);
+
+        if (response.statusCode == 401 || response.statusCode == 403) {
+          return "Khóa API của trợ lý AI đã bị vô hiệu hóa hoặc sai. Vui lòng cập nhật mã Key mới trong file .env!";
+        }
+
+        if (response.statusCode == 429) {
+          return "Trợ lý AI đang quá tải yêu cầu. Quý khách vui lòng thử lại sau khoảng 1 phút.";
+        }
+
+        if (_isModelUnavailable(response.statusCode, errorMessage)) {
+          lastModelError = errorMessage;
+          continue;
+        }
+
+        return "Trợ lý AI đang gián đoạn: $errorMessage";
+      }
+
+      return "Model AI hiện tại không khả dụng. Chi tiết: ${lastModelError ?? 'không xác định'}.";
+    } on TimeoutException {
+      return "Kết nối tới trợ lý AI đang quá thời gian chờ, Quý khách thử lại giúp CCPBank nhé.";
     } catch (e) {
       return "Lỗi kết nối: $e";
     }

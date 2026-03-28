@@ -26,6 +26,36 @@ class _ChatPlaceholderScreenState extends State<ChatPlaceholderScreen> {
   final List<Map<String, dynamic>> _localMessages = [];
   bool _isLoading = false;
 
+  String _messageSignature(Map<String, dynamic> message) {
+    final role = (message['role'] ?? '').toString();
+    final text = (message['text'] ?? '').toString().trim();
+    return '$role|$text';
+  }
+
+  List<Map<String, dynamic>> _mergeFirestoreWithUnsyncedLocal(
+    List<Map<String, dynamic>> firestoreMessages,
+  ) {
+    // Keep only local messages that are not yet visible from Firestore.
+    final Map<String, int> firestoreCounts = {};
+    for (final message in firestoreMessages) {
+      final key = _messageSignature(message);
+      firestoreCounts[key] = (firestoreCounts[key] ?? 0) + 1;
+    }
+
+    final List<Map<String, dynamic>> unsyncedLocalNewestFirst = [];
+    for (final local in _localMessages.reversed) {
+      final key = _messageSignature(local);
+      final count = firestoreCounts[key] ?? 0;
+      if (count > 0) {
+        firestoreCounts[key] = count - 1;
+        continue;
+      }
+      unsyncedLocalNewestFirst.add(local);
+    }
+
+    return [...unsyncedLocalNewestFirst, ...firestoreMessages];
+  }
+
   void _handleSend() async {
     if (_controller.text.trim().isEmpty) return;
 
@@ -173,7 +203,10 @@ class _ChatPlaceholderScreenState extends State<ChatPlaceholderScreen> {
         final firestoreMessages = docs
             .map((doc) => doc.data() as Map<String, dynamic>)
             .toList();
-        return _buildMessagesList(firestoreMessages);
+        final mergedMessages = _mergeFirestoreWithUnsyncedLocal(
+          firestoreMessages,
+        );
+        return _buildMessagesList(mergedMessages);
       },
     );
   }

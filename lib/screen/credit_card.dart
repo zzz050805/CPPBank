@@ -589,7 +589,7 @@ class _TopUpAtBranchButton extends StatelessWidget {
         onTap: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => const BranchScreen()),
+            MaterialPageRoute(builder: (_) => BranchMapScreen()),
           );
         },
         child: Container(

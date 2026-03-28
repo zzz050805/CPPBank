@@ -23,7 +23,7 @@ class SettingScreen extends StatefulWidget {
 }
 
 class _SettingScreenState extends State<SettingScreen> {
-  int _selectedIndex = 3;
+  final int _selectedIndex = 3;
   bool _isDarkMode = false; // Chức năng Dark Mode
 
   String _t(String vi, String en) => AppText.tr(context, vi, en);
@@ -842,12 +842,12 @@ class _SettingScreenState extends State<SettingScreen> {
     bool isSelected = _selectedIndex == index;
     return GestureDetector(
       onTap: () {
-        if (index == 0)
+        if (index == 0) {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (_) => const HomeScreen()),
           );
-        else if (index == 1)
+        } else if (index == 1)
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (_) => const SearchScreen()),

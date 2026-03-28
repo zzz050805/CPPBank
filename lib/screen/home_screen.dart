@@ -26,7 +26,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _selectedIndex = 0;
+  final int _selectedIndex = 0;
   bool _isBalanceVisible = false;
   int _currentBannerIndex = 0;
   late final Stream<UserProfileData?> _profileStream;
