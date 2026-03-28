@@ -11,6 +11,7 @@ import 'search_screen.dart';
 import 'setting_screen.dart';
 import 'transfer_money.dart';
 import 'phone_recharge.dart';
+import 'bill.dart';
 import 'QR.dart';
 import 'credit_card.dart';
 import 'chat_placeholder_screen.dart';
@@ -655,6 +656,7 @@ class _HomeScreenState extends State<HomeScreen> {
         icon: Icons.receipt_long,
         color: Colors.green,
         title: _t('Thanh toán\nhóa đơn', 'Bill\npayment'),
+        onTap: () => _pushPremium(const BillScreen()),
       ),
       _ActionItemData(
         icon: Icons.atm,
