@@ -1,7 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../data/user_firestore_service.dart';
-import 'otp_screen.dart';
+import 'OTP_screen.dart';
 
 void main() => runApp(const MyApp());
 

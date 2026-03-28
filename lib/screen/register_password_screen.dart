@@ -3,7 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../data/user_firestore_service.dart';
-import 'otp_screen.dart';
+import 'OTP_screen.dart';
 
 class RegisterPasswordScreen extends StatefulWidget {
   // --- THÊM: KHAI BÁO CÁC BIẾN ĐỂ NHẬN DỮ LIỆU TỪ TRANG TRƯỚC ---
