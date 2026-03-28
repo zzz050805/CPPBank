@@ -44,7 +44,7 @@ class CCPAppBar extends StatelessWidget implements PreferredSizeWidget {
       leading: showBackButton
           ? IconButton(
               icon: const Icon(Icons.arrow_back_ios_new, size: 20),
-              color: _primaryBlue,
+              color: const Color(0xFF000DC0),
               onPressed: onBackPressed ?? () => Navigator.maybePop(context),
             )
           : null,
