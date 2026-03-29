@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../l10n/app_text.dart';
 import '../widget/ccp_app_bar.dart';
+import 'electric_bill.dart';
 import 'phone_recharge.dart';
 
 class BillScreen extends StatelessWidget {
@@ -73,7 +74,14 @@ class BillScreen extends StatelessWidget {
                 icon: Icons.bolt,
                 iconBackground: const Color(0xFF1D2A7A),
                 iconForeground: const Color(0xFFFFD54F),
-                onTap: () {},
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const ElectricBillScreen(),
+                    ),
+                  );
+                },
               ),
               const SizedBox(height: 12),
               _ServiceCard(
@@ -88,7 +96,19 @@ class BillScreen extends StatelessWidget {
                 icon: Icons.water_drop_outlined,
                 iconBackground: const Color(0xFF1D6FD1),
                 iconForeground: Colors.white,
-                onTap: () {},
+                onTap: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        _t(
+                          context,
+                          'Tính năng thanh toán tiền nước sẽ sớm ra mắt.',
+                          'Water bill payment is coming soon.',
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
               const SizedBox(height: 12),
               _ServiceCard(
@@ -103,7 +123,19 @@ class BillScreen extends StatelessWidget {
                 icon: Icons.wifi,
                 iconBackground: const Color(0xFF0B5866),
                 iconForeground: Colors.white,
-                onTap: () {},
+                onTap: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        _t(
+                          context,
+                          'Tính năng thanh toán Internet sẽ sớm ra mắt.',
+                          'Internet bill payment is coming soon.',
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
               const SizedBox(height: 12),
               _ServiceCard(
@@ -132,7 +164,7 @@ class BillScreen extends StatelessWidget {
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [primary, primary.withOpacity(0.82)],
+                    colors: [primary, primary.withValues(alpha: 0.82)],
                   ),
                 ),
                 child: Row(
@@ -144,7 +176,7 @@ class BillScreen extends StatelessWidget {
                           Text(
                             _t(context, 'ƯU ĐÃI ĐỘC QUYỀN', 'EXCLUSIVE OFFER'),
                             style: GoogleFonts.poppins(
-                              color: Colors.white.withOpacity(0.85),
+                              color: Colors.white.withValues(alpha: 0.85),
                               fontSize: 10,
                               fontWeight: FontWeight.w600,
                               letterSpacing: 0.7,
@@ -191,7 +223,7 @@ class BillScreen extends StatelessWidget {
                       width: 70,
                       height: 70,
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.16),
+                        color: Colors.white.withValues(alpha: 0.16),
                         borderRadius: BorderRadius.circular(18),
                       ),
                       child: const Icon(
@@ -246,7 +278,7 @@ class _ServiceCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(18),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
+                color: Colors.black.withValues(alpha: 0.05),
                 blurRadius: 14,
                 offset: const Offset(0, 8),
               ),

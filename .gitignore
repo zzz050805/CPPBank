@@ -45,3 +45,4 @@ app.*.map.json
 /android/app/release
 lib/api_config.dart
 .env
+assets/app.env
