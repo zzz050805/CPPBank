@@ -31,6 +31,18 @@ class BranchInfo {
   final LatLng position;
 }
 
+class _RouteResult {
+  const _RouteResult({
+    required this.points,
+    this.distanceMeters,
+    this.durationSeconds,
+  });
+
+  final List<LatLng> points;
+  final double? distanceMeters;
+  final double? durationSeconds;
+}
+
 class BranchMapScreen extends StatefulWidget {
   const BranchMapScreen({super.key});
 
@@ -38,11 +50,13 @@ class BranchMapScreen extends StatefulWidget {
   State<BranchMapScreen> createState() => _BranchMapScreenState();
 }
 
-class _BranchMapScreenState extends State<BranchMapScreen> {
+class _BranchMapScreenState extends State<BranchMapScreen>
+    with WidgetsBindingObserver {
   static const Color primaryBlue = Color(0xFF000DC0);
   static const Color mapBackground = Color(0xFFEFF3FB);
   static const double focusZoomLevel = 15.5;
   static const double userLocationZoomLevel = 15.0;
+  static LatLng? _cachedUserLocation;
   static const String _directionsApiKey =
       'AIzaSyCnOT1cldbQw9V0buoOxfEj2Y6r25pD9Lo';
 
@@ -57,7 +71,16 @@ class _BranchMapScreenState extends State<BranchMapScreen> {
   LatLng? _userLocation;
   bool _hasCenteredOnUser = false;
   bool _hasShownFakeLocationWarning = false;
+  bool _hasShownEmulatorLocationHint = false;
   Set<Polyline> _routePolylines = <Polyline>{};
+  double? _routeDistanceMeters;
+  double? _routeDurationSeconds;
+  int? _routeBranchId;
+  Map<int, double> _branchRouteDistanceMeters = <int, double>{};
+  LatLng? _branchRouteDistanceOrigin;
+  Timer? _branchRouteDebounce;
+  DateTime? _lastBranchRouteFetchAt;
+  bool _isRefreshingBranchRouteDistances = false;
   late List<BranchInfo> _displayBranches;
 
   final List<BranchInfo> _allBranches = const [
@@ -106,6 +129,231 @@ class _BranchMapScreenState extends State<BranchMapScreen> {
       isOpen: true,
       position: LatLng(10.8506, 106.7718),
     ),
+    BranchInfo(
+      id: 6,
+      name: 'CCPBank Củ Chi',
+      address: '238 Tỉnh lộ 8, Thị trấn Củ Chi, TP.HCM',
+      phone: '028 3790 1188',
+      hours: '08:00 - 17:00',
+      isOpen: true,
+      position: LatLng(10.9738, 106.4939),
+    ),
+    BranchInfo(
+      id: 7,
+      name: 'CCPBank Hóc Môn',
+      address: '12 Lý Thường Kiệt, Thị trấn Hóc Môn, TP.HCM',
+      phone: '028 3891 2233',
+      hours: '08:00 - 17:00',
+      isOpen: true,
+      position: LatLng(10.8865, 106.5923),
+    ),
+    BranchInfo(
+      id: 8,
+      name: 'CCPBank Quận 12',
+      address: '451 Lê Văn Khương, Quận 12, TP.HCM',
+      phone: '028 3889 4567',
+      hours: '08:00 - 17:00',
+      isOpen: true,
+      position: LatLng(10.8614, 106.6540),
+    ),
+    BranchInfo(
+      id: 9,
+      name: 'CCPBank Nhà Bè',
+      address: '1016 Huỳnh Tấn Phát, Huyện Nhà Bè, TP.HCM',
+      phone: '028 3777 8811',
+      hours: '08:00 - 17:00',
+      isOpen: false,
+      position: LatLng(10.6979, 106.7398),
+    ),
+    BranchInfo(
+      id: 10,
+      name: 'CCPBank Bình Chánh',
+      address: '68 Đường số 1, TT. Tân Túc, Bình Chánh, TP.HCM',
+      phone: '028 3760 2399',
+      hours: '08:00 - 17:00',
+      isOpen: true,
+      position: LatLng(10.7251, 106.5904),
+    ),
+    BranchInfo(
+      id: 11,
+      name: 'CCPBank Quận 3',
+      address: '221 Võ Thị Sáu, Quận 3, TP.HCM',
+      phone: '028 3930 2233',
+      hours: '08:00 - 17:00',
+      isOpen: true,
+      position: LatLng(10.7829, 106.6866),
+    ),
+    BranchInfo(
+      id: 12,
+      name: 'CCPBank Phú Nhuận',
+      address: '151 Nguyễn Văn Trỗi, Phú Nhuận, TP.HCM',
+      phone: '028 3997 8800',
+      hours: '08:00 - 17:00',
+      isOpen: true,
+      position: LatLng(10.8011, 106.6799),
+    ),
+    BranchInfo(
+      id: 13,
+      name: 'CCPBank Gò Vấp',
+      address: '86 Quang Trung, Gò Vấp, TP.HCM',
+      phone: '028 3589 1177',
+      hours: '08:00 - 17:00',
+      isOpen: true,
+      position: LatLng(10.8396, 106.6655),
+    ),
+    BranchInfo(
+      id: 14,
+      name: 'CCPBank Tân Phú',
+      address: '402 Lũy Bán Bích, Tân Phú, TP.HCM',
+      phone: '028 3812 7744',
+      hours: '08:00 - 17:00',
+      isOpen: false,
+      position: LatLng(10.7923, 106.6281),
+    ),
+    BranchInfo(
+      id: 15,
+      name: 'CCPBank Bình Tân',
+      address: '170 Kinh Dương Vương, Bình Tân, TP.HCM',
+      phone: '028 3756 6611',
+      hours: '08:00 - 17:00',
+      isOpen: true,
+      position: LatLng(10.7656, 106.6039),
+    ),
+    BranchInfo(
+      id: 16,
+      name: 'CCPBank Tân An',
+      address: '55 Hùng Vương, Phường 2, TP. Tân An, Long An',
+      phone: '0272 3822 166',
+      hours: '07:30 - 17:00',
+      isOpen: true,
+      position: LatLng(10.5354, 106.4120),
+    ),
+    BranchInfo(
+      id: 17,
+      name: 'CCPBank Bến Lức',
+      address: '177 Nguyễn Hữu Thọ, TT. Bến Lức, Long An',
+      phone: '0272 3876 118',
+      hours: '07:30 - 17:00',
+      isOpen: true,
+      position: LatLng(10.6388, 106.4862),
+    ),
+    BranchInfo(
+      id: 18,
+      name: 'CCPBank Mỹ Tho',
+      address: '12 Trần Hưng Đạo, Phường 1, TP. Mỹ Tho, Tiền Giang',
+      phone: '0273 3879 422',
+      hours: '07:30 - 17:00',
+      isOpen: false,
+      position: LatLng(10.3605, 106.3597),
+    ),
+    BranchInfo(
+      id: 19,
+      name: 'CCPBank Cai Lậy',
+      address: '101 Quốc lộ 1A, Khu 4, Cai Lậy, Tiền Giang',
+      phone: '0273 3922 705',
+      hours: '07:30 - 17:00',
+      isOpen: true,
+      position: LatLng(10.4078, 106.1190),
+    ),
+    BranchInfo(
+      id: 20,
+      name: 'CCPBank Ninh Kiều',
+      address: '82 Nguyễn Trãi, Ninh Kiều, Cần Thơ',
+      phone: '0292 3765 919',
+      hours: '08:00 - 17:00',
+      isOpen: true,
+      position: LatLng(10.0342, 105.7872),
+    ),
+    BranchInfo(
+      id: 21,
+      name: 'CCPBank Cái Răng',
+      address: '255 Võ Nguyên Giáp, Cái Răng, Cần Thơ',
+      phone: '0292 3890 221',
+      hours: '08:00 - 17:00',
+      isOpen: true,
+      position: LatLng(10.0041, 105.7637),
+    ),
+    BranchInfo(
+      id: 22,
+      name: 'CCPBank Vũng Tàu',
+      address: '164 Lê Hồng Phong, TP. Vũng Tàu, Bà Rịa - Vũng Tàu',
+      phone: '0254 3578 889',
+      hours: '08:00 - 17:00',
+      isOpen: true,
+      position: LatLng(10.3458, 107.0843),
+    ),
+    BranchInfo(
+      id: 23,
+      name: 'CCPBank Bà Rịa',
+      address: '39 Cách Mạng Tháng Tám, TP. Bà Rịa, Bà Rịa - Vũng Tàu',
+      phone: '0254 3733 118',
+      hours: '08:00 - 17:00',
+      isOpen: false,
+      position: LatLng(10.4964, 107.1682),
+    ),
+    BranchInfo(
+      id: 24,
+      name: 'CCPBank Biên Hòa',
+      address: '228 Phạm Văn Thuận, Biên Hòa, Đồng Nai',
+      phone: '0251 3811 606',
+      hours: '08:00 - 17:00',
+      isOpen: true,
+      position: LatLng(10.9447, 106.8244),
+    ),
+    BranchInfo(
+      id: 25,
+      name: 'CCPBank Long Khánh',
+      address: '18 Hùng Vương, TP. Long Khánh, Đồng Nai',
+      phone: '0251 3873 455',
+      hours: '08:00 - 17:00',
+      isOpen: true,
+      position: LatLng(10.9285, 107.2431),
+    ),
+    BranchInfo(
+      id: 26,
+      name: 'CCPBank Thủ Dầu Một',
+      address: '51 Đại lộ Bình Dương, Thủ Dầu Một, Bình Dương',
+      phone: '0274 3827 119',
+      hours: '08:00 - 17:00',
+      isOpen: true,
+      position: LatLng(10.9804, 106.6519),
+    ),
+    BranchInfo(
+      id: 27,
+      name: 'CCPBank Dĩ An',
+      address: '105 Nguyễn An Ninh, Dĩ An, Bình Dương',
+      phone: '0274 3791 126',
+      hours: '08:00 - 17:00',
+      isOpen: true,
+      position: LatLng(10.9058, 106.7694),
+    ),
+    BranchInfo(
+      id: 28,
+      name: 'CCPBank Tây Ninh',
+      address: '223 Cách Mạng Tháng 8, TP. Tây Ninh, Tây Ninh',
+      phone: '0276 3822 044',
+      hours: '07:30 - 17:00',
+      isOpen: true,
+      position: LatLng(11.3162, 106.0987),
+    ),
+    BranchInfo(
+      id: 29,
+      name: 'CCPBank Hòa Thành',
+      address: '55 Phạm Hùng, Thị xã Hòa Thành, Tây Ninh',
+      phone: '0276 3890 778',
+      hours: '07:30 - 17:00',
+      isOpen: false,
+      position: LatLng(11.2762, 106.1397),
+    ),
+    BranchInfo(
+      id: 30,
+      name: 'CCPBank Long Xuyên',
+      address: '92 Trần Hưng Đạo, TP. Long Xuyên, An Giang',
+      phone: '0296 3852 611',
+      hours: '08:00 - 17:00',
+      isOpen: true,
+      position: LatLng(10.3864, 105.4352),
+    ),
   ];
 
   String _t(String vi, String en) => AppText.tr(context, vi, en);
@@ -113,15 +361,42 @@ class _BranchMapScreenState extends State<BranchMapScreen> {
   @override
   void initState() {
     super.initState();
-    _displayBranches = List<BranchInfo>.from(_allBranches);
+    WidgetsBinding.instance.addObserver(this);
+
+    // Reuse the last user location in this app session so the map opens there instantly.
+    if (_cachedUserLocation != null) {
+      _userLocation = _cachedUserLocation;
+      _currentCenter = _cachedUserLocation!;
+      _hasCenteredOnUser = true;
+    }
+
+    _displayBranches = _sortBranchesByDistance(_allBranches);
+
     _initUserLocationTracking();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _positionSubscription?.cancel();
+    _branchRouteDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      if (mounted) {
+        setState(() {
+          _branchRouteDistanceMeters = <int, double>{};
+          _branchRouteDistanceOrigin = null;
+        });
+      }
+      _lastBranchRouteFetchAt = null;
+      _scheduleRefreshBranchRouteDistances(immediate: true);
+      _startRealtimeLocationTracking();
+    }
   }
 
   Future<void> _initUserLocationTracking() async {
@@ -145,6 +420,7 @@ class _BranchMapScreenState extends State<BranchMapScreen> {
         accuracy: LocationAccuracy.bestForNavigation,
         distanceFilter: 0,
         forceLocationManager: true,
+        timeLimit: const Duration(seconds: 12),
       );
     }
 
@@ -153,12 +429,14 @@ class _BranchMapScreenState extends State<BranchMapScreen> {
         accuracy: LocationAccuracy.bestForNavigation,
         distanceFilter: 0,
         activityType: ActivityType.fitness,
+        timeLimit: const Duration(seconds: 12),
       );
     }
 
     return const LocationSettings(
       accuracy: LocationAccuracy.bestForNavigation,
       distanceFilter: 0,
+      timeLimit: Duration(seconds: 12),
     );
   }
 
@@ -202,6 +480,24 @@ class _BranchMapScreenState extends State<BranchMapScreen> {
       return false;
     }
     return true;
+  }
+
+  bool _handleLikelyEmulatorDefaultPosition(Position position) {
+    final bool isDefaultEmulatorPoint = _isLikelyDefaultEmulatorPosition(
+      LatLng(position.latitude, position.longitude),
+    );
+
+    if (isDefaultEmulatorPoint && !_hasShownEmulatorLocationHint) {
+      _hasShownEmulatorLocationHint = true;
+      _showLocationNotice(
+        _t(
+          'Bạn đang dùng giả lập. Hãy mở Emulator > Extended controls > Location và nhập tọa độ thật.',
+          'You are using an emulator. Open Extended controls > Location and set a mock location.',
+        ),
+      );
+    }
+
+    return isDefaultEmulatorPoint;
   }
 
   Future<bool> _ensureLocationPermission({
@@ -259,7 +555,6 @@ class _BranchMapScreenState extends State<BranchMapScreen> {
     try {
       position = await Geolocator.getCurrentPosition(
         locationSettings: _buildCurrentLocationSettings(),
-        timeLimit: const Duration(seconds: 12),
       );
     } catch (_) {
       final Position? fallback = await Geolocator.getLastKnownPosition();
@@ -276,6 +571,10 @@ class _BranchMapScreenState extends State<BranchMapScreen> {
           ),
         );
       }
+      return;
+    }
+
+    if (_handleLikelyEmulatorDefaultPosition(position)) {
       return;
     }
 
@@ -312,6 +611,9 @@ class _BranchMapScreenState extends State<BranchMapScreen> {
           locationSettings: _buildStreamLocationSettings(),
         ).listen(
           (Position position) {
+            if (_handleLikelyEmulatorDefaultPosition(position)) {
+              return;
+            }
             if (!_isReliablePosition(position)) {
               return;
             }
@@ -333,12 +635,27 @@ class _BranchMapScreenState extends State<BranchMapScreen> {
       return;
     }
 
+    _cachedUserLocation = userPosition;
+
+    final bool isRouteDistanceStale =
+        _branchRouteDistanceOrigin != null &&
+        _distanceBetween(_branchRouteDistanceOrigin!, userPosition) > 25;
+
     setState(() {
       _userLocation = userPosition;
+      if (isRouteDistanceStale) {
+        _branchRouteDistanceMeters = <int, double>{};
+        _branchRouteDistanceOrigin = null;
+      }
+      _displayBranches = _sortBranchesByDistance(_displayBranches);
       if (!_hasCenteredOnUser) {
         _currentCenter = userPosition;
       }
     });
+
+    _scheduleRefreshBranchRouteDistances(
+      immediate: _branchRouteDistanceMeters.isEmpty,
+    );
 
     final bool shouldCenter = centerCamera || !_hasCenteredOnUser;
     if (shouldCenter && _mapController != null) {
@@ -350,13 +667,29 @@ class _BranchMapScreenState extends State<BranchMapScreen> {
   Future<void> _moveToMyLocation() async {
     if (_userLocation != null) {
       _animatedMove(_userLocation!, userLocationZoomLevel);
+      await _startRealtimeLocationTracking();
       return;
     }
 
     await _initUserLocationTracking();
   }
 
-  Future<List<LatLng>> _fetchDrivingRoute(
+  Future<_RouteResult> _fetchDrivingRoute(
+    LatLng origin,
+    LatLng destination,
+  ) async {
+    final _RouteResult googleRoute = await _fetchGoogleDrivingRoute(
+      origin,
+      destination,
+    );
+    if (googleRoute.points.isNotEmpty) {
+      return googleRoute;
+    }
+
+    return _fetchOsrmDrivingRoute(origin, destination);
+  }
+
+  Future<_RouteResult> _fetchGoogleDrivingRoute(
     LatLng origin,
     LatLng destination,
   ) async {
@@ -371,29 +704,102 @@ class _BranchMapScreenState extends State<BranchMapScreen> {
 
     final http.Response response = await http.get(uri);
     if (response.statusCode != 200) {
-      return <LatLng>[];
+      return const _RouteResult(points: <LatLng>[]);
     }
 
     final Map<String, dynamic> data =
         jsonDecode(response.body) as Map<String, dynamic>;
     if (data['status'] != 'OK') {
-      return <LatLng>[];
+      return const _RouteResult(points: <LatLng>[]);
     }
 
     final List<dynamic>? routes = data['routes'] as List<dynamic>?;
     if (routes == null || routes.isEmpty) {
-      return <LatLng>[];
+      return const _RouteResult(points: <LatLng>[]);
     }
+
+    final Map<String, dynamic> route = routes.first as Map<String, dynamic>;
 
     final Map<String, dynamic>? overview =
-        (routes.first as Map<String, dynamic>)['overview_polyline']
-            as Map<String, dynamic>?;
+        route['overview_polyline'] as Map<String, dynamic>?;
     final String encoded = overview?['points'] as String? ?? '';
     if (encoded.isEmpty) {
-      return <LatLng>[];
+      return const _RouteResult(points: <LatLng>[]);
     }
 
-    return _decodePolyline(encoded);
+    final List<dynamic>? legs = route['legs'] as List<dynamic>?;
+    final Map<String, dynamic>? firstLeg = (legs != null && legs.isNotEmpty)
+        ? legs.first as Map<String, dynamic>
+        : null;
+
+    final double? distanceMeters =
+        ((firstLeg?['distance'] as Map<String, dynamic>?)?['value'] as num?)
+            ?.toDouble();
+    final double? durationSeconds =
+        ((firstLeg?['duration'] as Map<String, dynamic>?)?['value'] as num?)
+            ?.toDouble();
+
+    return _RouteResult(
+      points: _decodePolyline(encoded),
+      distanceMeters: distanceMeters,
+      durationSeconds: durationSeconds,
+    );
+  }
+
+  Future<_RouteResult> _fetchOsrmDrivingRoute(
+    LatLng origin,
+    LatLng destination,
+  ) async {
+    final Uri uri = Uri.parse(
+      'https://router.project-osrm.org/route/v1/driving/'
+      '${origin.longitude},${origin.latitude};'
+      '${destination.longitude},${destination.latitude}'
+      '?overview=full&geometries=geojson&steps=true',
+    );
+
+    final http.Response response = await http.get(uri);
+    if (response.statusCode != 200) {
+      return const _RouteResult(points: <LatLng>[]);
+    }
+
+    final Map<String, dynamic> data =
+        jsonDecode(response.body) as Map<String, dynamic>;
+
+    if (data['code'] != 'Ok') {
+      return const _RouteResult(points: <LatLng>[]);
+    }
+
+    final List<dynamic>? routes = data['routes'] as List<dynamic>?;
+    if (routes == null || routes.isEmpty) {
+      return const _RouteResult(points: <LatLng>[]);
+    }
+
+    final Map<String, dynamic> route = routes.first as Map<String, dynamic>;
+
+    final Map<String, dynamic>? geometry =
+        route['geometry'] as Map<String, dynamic>?;
+    final List<dynamic>? coordinates =
+        geometry?['coordinates'] as List<dynamic>?;
+    if (coordinates == null || coordinates.isEmpty) {
+      return const _RouteResult(points: <LatLng>[]);
+    }
+
+    final List<LatLng> points = <LatLng>[];
+    for (final dynamic coordinate in coordinates) {
+      if (coordinate is List && coordinate.length >= 2) {
+        final double? lng = (coordinate[0] as num?)?.toDouble();
+        final double? lat = (coordinate[1] as num?)?.toDouble();
+        if (lat != null && lng != null) {
+          points.add(LatLng(lat, lng));
+        }
+      }
+    }
+
+    return _RouteResult(
+      points: points,
+      distanceMeters: (route['distance'] as num?)?.toDouble(),
+      durationSeconds: (route['duration'] as num?)?.toDouble(),
+    );
   }
 
   List<LatLng> _decodePolyline(String encoded) {
@@ -547,15 +953,26 @@ class _BranchMapScreenState extends State<BranchMapScreen> {
       _selectedBranchId = branch.id;
     });
 
-    List<LatLng> routePoints = <LatLng>[];
+    _RouteResult route = const _RouteResult(points: <LatLng>[]);
     try {
-      routePoints = await _fetchDrivingRoute(origin, branch.position);
+      route = await _fetchDrivingRoute(origin, branch.position);
     } catch (_) {
-      routePoints = <LatLng>[];
+      route = const _RouteResult(points: <LatLng>[]);
     }
+
+    List<LatLng> routePoints = route.points;
+    double? routeDistanceMeters = route.distanceMeters;
+    double? routeDurationSeconds;
 
     if (routePoints.isEmpty) {
       routePoints = <LatLng>[origin, branch.position];
+      routeDistanceMeters = Geolocator.distanceBetween(
+        origin.latitude,
+        origin.longitude,
+        branch.position.latitude,
+        branch.position.longitude,
+      );
+      routeDurationSeconds = _estimateDurationSeconds(routeDistanceMeters);
       _showLocationNotice(
         _t(
           'Không lấy được tuyến đường chi tiết, hiển thị đường thẳng tạm thời.',
@@ -563,6 +980,9 @@ class _BranchMapScreenState extends State<BranchMapScreen> {
         ),
       );
     }
+
+    routeDistanceMeters ??= _polylineDistanceMeters(routePoints);
+    routeDurationSeconds = _estimateDurationSeconds(routeDistanceMeters);
 
     setState(() {
       _routePolylines = <Polyline>{
@@ -576,22 +996,303 @@ class _BranchMapScreenState extends State<BranchMapScreen> {
           endCap: Cap.roundCap,
         ),
       };
+      _routeDistanceMeters = routeDistanceMeters;
+      _routeDurationSeconds = routeDurationSeconds;
+      _routeBranchId = branch.id;
     });
 
     _fitCameraToPoints(<LatLng>[origin, ...routePoints, branch.position]);
   }
 
+  double _distanceFromUser(BranchInfo branch) {
+    final LatLng? userLocation = _userLocation;
+    if (userLocation == null) {
+      return double.infinity;
+    }
+
+    return _distanceBetween(userLocation, branch.position);
+  }
+
+  double _distanceBetween(LatLng from, LatLng to) {
+    return Geolocator.distanceBetween(
+      from.latitude,
+      from.longitude,
+      to.latitude,
+      to.longitude,
+    );
+  }
+
+  double _polylineDistanceMeters(List<LatLng> points) {
+    if (points.length < 2) {
+      return 0;
+    }
+
+    double total = 0;
+    for (int i = 1; i < points.length; i++) {
+      total += Geolocator.distanceBetween(
+        points[i - 1].latitude,
+        points[i - 1].longitude,
+        points[i].latitude,
+        points[i].longitude,
+      );
+    }
+    return total;
+  }
+
+  double _estimateDurationSeconds(double distanceMeters) {
+    // Use motorbike-focused estimate for urban traffic in Vietnam.
+    const double averageCitySpeedKmh = 24;
+    final double hours = (distanceMeters / 1000) / averageCitySpeedKmh;
+    final double seconds = hours * 3600;
+    return seconds < 60 ? 60 : seconds;
+  }
+
+  void _scheduleRefreshBranchRouteDistances({bool immediate = false}) {
+    _branchRouteDebounce?.cancel();
+    if (immediate) {
+      _refreshBranchRouteDistances();
+      return;
+    }
+
+    _branchRouteDebounce = Timer(const Duration(milliseconds: 700), () {
+      _refreshBranchRouteDistances();
+    });
+  }
+
+  Future<void> _refreshBranchRouteDistances() async {
+    if (_isRefreshingBranchRouteDistances) {
+      return;
+    }
+
+    final LatLng? origin = _userLocation;
+    if (origin == null || _displayBranches.isEmpty) {
+      return;
+    }
+
+    final DateTime now = DateTime.now();
+    final DateTime? lastFetch = _lastBranchRouteFetchAt;
+    if (lastFetch != null &&
+        now.difference(lastFetch) < const Duration(seconds: 3)) {
+      return;
+    }
+    _lastBranchRouteFetchAt = now;
+
+    _isRefreshingBranchRouteDistances = true;
+
+    Map<int, double> routeDistances = <int, double>{};
+    try {
+      routeDistances = await _fetchOsrmDistanceTable(origin, _displayBranches);
+    } catch (_) {
+      routeDistances = <int, double>{};
+    } finally {
+      _isRefreshingBranchRouteDistances = false;
+    }
+
+    if (routeDistances.isEmpty) {
+      _lastBranchRouteFetchAt = null;
+    }
+
+    if (!mounted || routeDistances.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _branchRouteDistanceMeters = routeDistances;
+      _branchRouteDistanceOrigin = origin;
+      _displayBranches = _sortBranchesByDistance(_displayBranches);
+    });
+  }
+
+  Future<Map<int, double>> _fetchOsrmDistanceTable(
+    LatLng origin,
+    List<BranchInfo> branches,
+  ) async {
+    if (branches.isEmpty) {
+      return <int, double>{};
+    }
+
+    final String coordinates = [
+      '${origin.longitude},${origin.latitude}',
+      ...branches.map(
+        (branch) => '${branch.position.longitude},${branch.position.latitude}',
+      ),
+    ].join(';');
+
+    final Uri uri = Uri.parse(
+      'https://router.project-osrm.org/table/v1/driving/$coordinates?sources=0&annotations=distance',
+    );
+
+    final http.Response response = await http.get(uri);
+    if (response.statusCode != 200) {
+      return <int, double>{};
+    }
+
+    final Map<String, dynamic> data =
+        jsonDecode(response.body) as Map<String, dynamic>;
+    if (data['code'] != 'Ok') {
+      return <int, double>{};
+    }
+
+    final List<dynamic>? distances = data['distances'] as List<dynamic>?;
+    if (distances == null || distances.isEmpty || distances.first is! List) {
+      return <int, double>{};
+    }
+
+    final List<dynamic> firstRow = distances.first as List<dynamic>;
+    final Map<int, double> result = <int, double>{};
+    for (int i = 0; i < branches.length; i++) {
+      final int distanceIndex = i + 1;
+      if (distanceIndex >= firstRow.length) {
+        continue;
+      }
+
+      final double? meters = (firstRow[distanceIndex] as num?)?.toDouble();
+      if (meters != null && meters > 0) {
+        result[branches[i].id] = meters;
+      }
+    }
+
+    return result;
+  }
+
+  BranchInfo? _selectedBranch() {
+    final int? selectedBranchId = _selectedBranchId;
+    if (selectedBranchId == null) {
+      return null;
+    }
+
+    for (final BranchInfo branch in _allBranches) {
+      if (branch.id == selectedBranchId) {
+        return branch;
+      }
+    }
+    return null;
+  }
+
+  double _resolvedRouteDistanceMeters() {
+    final double? routeDistanceMeters = _routeDistanceMeters;
+    if (routeDistanceMeters != null && routeDistanceMeters > 0) {
+      return routeDistanceMeters;
+    }
+
+    final List<Polyline> polylines = _routePolylines.toList();
+    if (polylines.isNotEmpty && polylines.first.points.length >= 2) {
+      final double polylineDistance = _polylineDistanceMeters(
+        polylines.first.points,
+      );
+      if (polylineDistance > 0) {
+        return polylineDistance;
+      }
+    }
+
+    final LatLng? userLocation = _userLocation;
+    final BranchInfo? branch = _selectedBranch();
+    if (userLocation != null && branch != null) {
+      return _distanceBetween(userLocation, branch.position);
+    }
+
+    return 0;
+  }
+
+  double _resolvedRouteDurationSeconds() {
+    final double? routeDurationSeconds = _routeDurationSeconds;
+    if (routeDurationSeconds != null && routeDurationSeconds > 0) {
+      return routeDurationSeconds;
+    }
+
+    return _estimateDurationSeconds(_resolvedRouteDistanceMeters());
+  }
+
+  double _distanceForBranchCard(BranchInfo branch) {
+    final bool hasActiveRouteForBranch =
+        _routePolylines.isNotEmpty && _routeBranchId == branch.id;
+    if (hasActiveRouteForBranch) {
+      return _resolvedRouteDistanceMeters();
+    }
+
+    final LatLng? userLocation = _userLocation;
+    final LatLng? routeDistanceOrigin = _branchRouteDistanceOrigin;
+    final bool isRouteDistanceStillValid =
+        userLocation != null &&
+        routeDistanceOrigin != null &&
+        _distanceBetween(routeDistanceOrigin, userLocation) <= 25;
+
+    if (isRouteDistanceStillValid) {
+      final double? batchedRouteDistance =
+          _branchRouteDistanceMeters[branch.id];
+      if (batchedRouteDistance != null && batchedRouteDistance > 0) {
+        return batchedRouteDistance;
+      }
+    }
+
+    return _distanceFromUser(branch);
+  }
+
+  String _formatDistance(double? meters) {
+    if (meters == null || meters.isNaN || meters.isInfinite) {
+      return '--';
+    }
+
+    if (meters <= 0) {
+      return '--';
+    }
+
+    if (meters < 1000) {
+      return '${meters.round()} m';
+    }
+
+    return '${(meters / 1000).toStringAsFixed(1)} km';
+  }
+
+  String _formatDuration(double? seconds) {
+    if (seconds == null ||
+        seconds.isNaN ||
+        seconds.isInfinite ||
+        seconds <= 0) {
+      return _t('1 phút', '1 min');
+    }
+
+    final int totalMinutes = (seconds / 60).round().clamp(1, 24 * 60);
+    if (totalMinutes < 60) {
+      return _t('$totalMinutes phút', '$totalMinutes min');
+    }
+
+    final int hours = totalMinutes ~/ 60;
+    final int remainMinutes = totalMinutes % 60;
+    if (remainMinutes == 0) {
+      return _t('$hours giờ', '$hours hr');
+    }
+
+    return _t('$hours giờ $remainMinutes phút', '$hours hr $remainMinutes min');
+  }
+
+  List<BranchInfo> _sortBranchesByDistance(List<BranchInfo> branches) {
+    if (_userLocation == null || branches.length <= 1) {
+      return List<BranchInfo>.from(branches);
+    }
+
+    final List<BranchInfo> sorted = List<BranchInfo>.from(branches);
+    sorted.sort(
+      (a, b) => _distanceForBranchCard(a).compareTo(_distanceForBranchCard(b)),
+    );
+    return sorted;
+  }
+
   void _handleSearchChanged(String value) {
     final query = value.trim().toLowerCase();
     setState(() {
-      _displayBranches = _allBranches
-          .where(
-            (b) =>
-                b.name.toLowerCase().contains(query) ||
-                b.address.toLowerCase().contains(query),
-          )
-          .toList();
+      _displayBranches = _sortBranchesByDistance(
+        _allBranches
+            .where(
+              (b) =>
+                  b.name.toLowerCase().contains(query) ||
+                  b.address.toLowerCase().contains(query),
+            )
+            .toList(),
+      );
     });
+
+    _scheduleRefreshBranchRouteDistances(immediate: true);
   }
 
   @override
@@ -611,7 +1312,14 @@ class _BranchMapScreenState extends State<BranchMapScreen> {
             ),
             onMapCreated: (controller) {
               _mapController = controller;
+              setState(() {
+                _branchRouteDistanceMeters = <int, double>{};
+                _branchRouteDistanceOrigin = null;
+              });
+              _lastBranchRouteFetchAt = null;
+              _scheduleRefreshBranchRouteDistances(immediate: true);
               _moveToMyLocation();
+              _startRealtimeLocationTracking();
             },
             markers: _buildMarkers(),
             polylines: _routePolylines,
@@ -626,7 +1334,66 @@ class _BranchMapScreenState extends State<BranchMapScreen> {
 
           Positioned(top: 74, right: 14, child: _buildLocateMeButton()),
 
+          if (_routePolylines.isNotEmpty)
+            Positioned(
+              top: 74,
+              left: 14,
+              right: 66,
+              child: _buildRouteSummaryBar(),
+            ),
+
           _buildDraggableSheet(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRouteSummaryBar() {
+    final double resolvedDistanceMeters = _resolvedRouteDistanceMeters();
+    final double resolvedDurationSeconds = _resolvedRouteDurationSeconds();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      decoration: BoxDecoration(
+        color: primaryBlue,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x33000DC0),
+            blurRadius: 16,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.alt_route_rounded, color: Colors.white, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _t('Tuyến đường dự kiến', 'Estimated route'),
+                  style: GoogleFonts.poppins(
+                    color: Colors.white.withOpacity(0.9),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${_formatDistance(resolvedDistanceMeters)} • ${_formatDuration(resolvedDurationSeconds)}',
+                  style: GoogleFonts.poppins(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -724,6 +1491,10 @@ class _BranchMapScreenState extends State<BranchMapScreen> {
                   itemBuilder: (context, index) {
                     final branch = _displayBranches[index];
                     final bool isSelected = branch.id == _selectedBranchId;
+                    final bool isNearest = index == 0 && _userLocation != null;
+                    final double distanceMeters = _distanceForBranchCard(
+                      branch,
+                    );
                     return GestureDetector(
                       onTap: () => _focusBranch(branch),
                       child: AnimatedContainer(
@@ -745,13 +1516,77 @@ class _BranchMapScreenState extends State<BranchMapScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              branch.name,
-                              style: GoogleFonts.poppins(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                              ),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Row(
+                                    children: [
+                                      Flexible(
+                                        child: Text(
+                                          branch.name,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ),
+                                      if (isNearest) ...[
+                                        const SizedBox(width: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 3,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFEAF0FF),
+                                            borderRadius: BorderRadius.circular(
+                                              999,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            _t('Gần nhất', 'Nearest'),
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w700,
+                                              color: primaryBlue,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                                if (_userLocation != null) ...[
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 9,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF2F4FA),
+                                      borderRadius: BorderRadius.circular(999),
+                                      border: Border.all(
+                                        color: const Color(0xFFDDE2EE),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      _formatDistance(distanceMeters),
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                        color: const Color(0xFF3D4454),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
+                            const SizedBox(height: 4),
                             Text(
                               branch.address,
                               style: GoogleFonts.poppins(
@@ -761,6 +1596,7 @@ class _BranchMapScreenState extends State<BranchMapScreen> {
                             ),
                             const SizedBox(height: 8),
                             Row(
+                              crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
                                 Icon(
                                   Icons.access_time,
@@ -783,7 +1619,7 @@ class _BranchMapScreenState extends State<BranchMapScreen> {
                                       : _t('Đóng cửa', 'Closed'),
                                   style: GoogleFonts.poppins(
                                     fontSize: 12,
-                                    fontWeight: FontWeight.w600,
+                                    fontWeight: FontWeight.w700,
                                     color: branch.isOpen
                                         ? Colors.green
                                         : Colors.red,

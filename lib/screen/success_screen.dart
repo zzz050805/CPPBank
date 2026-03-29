@@ -2,6 +2,7 @@
 import 'package:google_fonts/google_fonts.dart';
 import 'package:confetti/confetti.dart';
 import 'dart:math';
+import '../l10n/app_text.dart';
 
 class SuccessScreen extends StatefulWidget {
   const SuccessScreen({super.key});
@@ -13,11 +14,15 @@ class SuccessScreen extends StatefulWidget {
 class _SuccessScreenState extends State<SuccessScreen> {
   late ConfettiController _confettiController;
 
+  String _t(String vi, String en) => AppText.tr(context, vi, en);
+
   @override
   void initState() {
     super.initState();
     // Bắn pháo hoa giấy trong 3 giây
-    _confettiController = ConfettiController(duration: const Duration(seconds: 3));
+    _confettiController = ConfettiController(
+      duration: const Duration(seconds: 3),
+    );
     _confettiController.play();
   }
 
@@ -48,34 +53,40 @@ class _SuccessScreenState extends State<SuccessScreen> {
                     'assets/images/SCF.png',
                     fit: BoxFit.contain,
                     errorBuilder: (context, error, stackTrace) => const Icon(
-                      Icons.account_balance_wallet_rounded, 
-                      size: 100, 
-                      color: Color(0xFF281C9D)
+                      Icons.account_balance_wallet_rounded,
+                      size: 100,
+                      color: Color(0xFF281C9D),
                     ),
                   ),
                 ),
-                
+
                 const SizedBox(height: 10),
 
                 Text(
-                  "Tạo tài khoản thành công",
+                  _t(
+                    'Tạo tài khoản thành công',
+                    'Account created successfully',
+                  ),
                   textAlign: TextAlign.center,
                   style: GoogleFonts.poppins(
-                    color: const Color(0xFF281C9D), 
-                    fontSize: 22, 
-                    fontWeight: FontWeight.bold
+                    color: const Color(0xFF281C9D),
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-                
+
                 const SizedBox(height: 12),
 
                 Text(
-                  "Bạn đã tạo tài khoản thành công!\nVui lòng đăng nhập tiếp để sử dụng",
+                  _t(
+                    'Bạn đã tạo tài khoản thành công!\nVui lòng đăng nhập tiếp để sử dụng',
+                    'Your account has been created successfully!\nPlease log in to continue.',
+                  ),
                   textAlign: TextAlign.center,
                   style: GoogleFonts.poppins(
-                    color: Colors.grey[600], 
+                    color: Colors.grey[600],
                     fontSize: 14,
-                    height: 1.5
+                    height: 1.5,
                   ),
                 ),
 
@@ -97,11 +108,11 @@ class _SuccessScreenState extends State<SuccessScreen> {
                       Navigator.of(context).popUntil((route) => route.isFirst);
                     },
                     child: Text(
-                      "ĐĂNG NHẬP",
+                      _t('ĐĂNG NHẬP', 'LOG IN'),
                       style: GoogleFonts.poppins(
-                        color: Colors.white, 
-                        fontWeight: FontWeight.bold, 
-                        fontSize: 16
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
                       ),
                     ),
                   ),
@@ -120,11 +131,11 @@ class _SuccessScreenState extends State<SuccessScreen> {
             numberOfParticles: 25,
             gravity: 0.15,
             colors: const [
-              Colors.blue, 
-              Colors.pink, 
-              Colors.orange, 
-              Colors.green, 
-              Color(0xFF281C9D)
+              Colors.blue,
+              Colors.pink,
+              Colors.orange,
+              Colors.green,
+              Color(0xFF281C9D),
             ],
           ),
         ],
@@ -132,4 +143,3 @@ class _SuccessScreenState extends State<SuccessScreen> {
     );
   }
 }
-

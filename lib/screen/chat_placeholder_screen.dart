@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'chat_service.dart';
 import 'search_screen.dart';
+import '../l10n/app_text.dart';
 import '../data/user_firestore_service.dart';
 
 class ChatPlaceholderScreen extends StatefulWidget {
@@ -25,6 +26,8 @@ class _ChatPlaceholderScreenState extends State<ChatPlaceholderScreen> {
   final ChatApiService _apiService = ChatApiService();
   final List<Map<String, dynamic>> _localMessages = [];
   bool _isLoading = false;
+
+  String _t(String vi, String en) => AppText.tr(context, vi, en);
 
   String _messageSignature(Map<String, dynamic> message) {
     final role = (message['role'] ?? '').toString();
@@ -79,7 +82,10 @@ class _ChatPlaceholderScreenState extends State<ChatPlaceholderScreen> {
       if (mounted) {
         setState(() {
           _localMessages.add({
-            'text': 'Không thể gửi tin nhắn lúc này. Vui lòng thử lại.',
+            'text': _t(
+              'Không thể gửi tin nhắn lúc này. Vui lòng thử lại.',
+              'Unable to send message right now. Please try again.',
+            ),
             'role': 'bot',
           });
         });
@@ -101,7 +107,7 @@ class _ChatPlaceholderScreenState extends State<ChatPlaceholderScreen> {
         backgroundColor: const Color(0xFF000DC0),
         elevation: 0,
         title: Text(
-          "Trợ lý ảo CCPBank",
+          _t('Trợ lý ảo CCPBank', 'CCPBank virtual assistant'),
           style: GoogleFonts.poppins(
             color: Colors.white,
             fontWeight: FontWeight.bold,
@@ -147,7 +153,10 @@ class _ChatPlaceholderScreenState extends State<ChatPlaceholderScreen> {
                   ),
                   const SizedBox(width: 10),
                   Text(
-                    "AI đang kiểm tra dữ liệu hệ thống...",
+                    _t(
+                      'AI đang kiểm tra dữ liệu hệ thống...',
+                      'AI is checking system data...',
+                    ),
                     style: GoogleFonts.poppins(
                       fontSize: 12,
                       color: Colors.grey[600],
@@ -183,7 +192,14 @@ class _ChatPlaceholderScreenState extends State<ChatPlaceholderScreen> {
           if (_localMessages.isNotEmpty) {
             return _buildMessagesList(_localMessages.reversed.toList());
           }
-          return const Center(child: Text("Đã xảy ra lỗi khi tải tin nhắn"));
+          return Center(
+            child: Text(
+              _t(
+                'Đã xảy ra lỗi khi tải tin nhắn',
+                'An error occurred while loading messages',
+              ),
+            ),
+          );
         }
 
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -289,7 +305,10 @@ class _ChatPlaceholderScreenState extends State<ChatPlaceholderScreen> {
                 controller: _controller,
                 style: GoogleFonts.poppins(fontSize: 14),
                 decoration: InputDecoration(
-                  hintText: "Hỏi tôi về dịch vụ CCPBank...",
+                  hintText: _t(
+                    'Hỏi tôi về dịch vụ CCPBank...',
+                    'Ask me about CCPBank services...',
+                  ),
                   hintStyle: GoogleFonts.poppins(
                     fontSize: 13,
                     color: Colors.grey,
@@ -323,14 +342,17 @@ class _ChatPlaceholderScreenState extends State<ChatPlaceholderScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Xóa lịch sử?"),
-        content: const Text(
-          "Bạn có chắc chắn muốn xóa toàn bộ cuộc hội thoại này?",
+        title: Text(_t('Xóa lịch sử?', 'Delete history?')),
+        content: Text(
+          _t(
+            'Bạn có chắc chắn muốn xóa toàn bộ cuộc hội thoại này?',
+            'Are you sure you want to delete this entire conversation?',
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("Hủy"),
+            child: Text(_t('Hủy', 'Cancel')),
           ),
           TextButton(
             onPressed: () async {
@@ -348,7 +370,10 @@ class _ChatPlaceholderScreenState extends State<ChatPlaceholderScreen> {
               }
               if (mounted) Navigator.pop(context);
             },
-            child: const Text("Xóa", style: TextStyle(color: Colors.red)),
+            child: Text(
+              _t('Xóa', 'Delete'),
+              style: const TextStyle(color: Colors.red),
+            ),
           ),
         ],
       ),

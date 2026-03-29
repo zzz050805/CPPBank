@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../l10n/app_text.dart';
 
 class ResetPasswordPage extends StatefulWidget {
   const ResetPasswordPage({super.key});
@@ -16,6 +17,8 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
   // State để ẩn/hiện mật khẩu
   bool _showNew = false;
   bool _showConfirm = false;
+
+  String _t(String vi, String en) => AppText.tr(context, vi, en);
 
   @override
   Widget build(BuildContext context) {
@@ -41,8 +44,8 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                       constraints: const BoxConstraints(),
                     ),
                     const SizedBox(width: 8),
-                    const Text(
-                      "Quên mật khẩu",
+                    Text(
+                      _t('Quên mật khẩu', 'Forgot password'),
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
@@ -71,7 +74,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                     children: [
                       // Nhập mật khẩu mới
                       _buildPasswordField(
-                        label: "Nhập mật khẩu mới",
+                        label: _t('Nhập mật khẩu mới', 'Enter new password'),
                         controller: _passwordController,
                         isHidden: !_showNew,
                         onToggle: () => setState(() => _showNew = !_showNew),
@@ -79,7 +82,10 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                       const SizedBox(height: 20),
                       // Nhập lại mật khẩu mới
                       _buildPasswordField(
-                        label: "Nhập lại mật khẩu mới",
+                        label: _t(
+                          'Nhập lại mật khẩu mới',
+                          'Re-enter new password',
+                        ),
                         controller: _confirmPasswordController,
                         isHidden: !_showConfirm,
                         onToggle: () =>
@@ -98,7 +104,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                   child: ElevatedButton(
                     onPressed: () {
                       // Xử lý đổi mật khẩu tại đây
-                      print("New Password: ${_passwordController.text}");
+                      debugPrint('New Password: ${_passwordController.text}');
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFD9D9D9),
@@ -108,8 +114,8 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                       ),
                       elevation: 0,
                     ),
-                    child: const Text(
-                      "Đổi mật khẩu",
+                    child: Text(
+                      _t('Đổi mật khẩu', 'Change password'),
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,

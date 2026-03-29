@@ -2,6 +2,7 @@
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/services.dart';
 import '../l10n/app_text.dart';
+import '../widget/ccp_app_bar.dart';
 import 'enter_money.dart';
 
 void main() => runApp(const MyApp());
@@ -26,6 +27,9 @@ class AddBeneficiaryScreen extends StatefulWidget {
 }
 
 class _AddBeneficiaryScreenState extends State<AddBeneficiaryScreen> {
+  static const Color primaryBlue = Color(0xFF000DC0);
+  static const Color pageBackground = Color(0xFFF6F8FF);
+
   final List<String> banks = const [
     'Vietcombank',
     'BIDV',
@@ -90,7 +94,8 @@ class _AddBeneficiaryScreenState extends State<AddBeneficiaryScreen> {
                 child: ListView.separated(
                   shrinkWrap: true,
                   itemCount: banks.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  separatorBuilder: (context, index) =>
+                      const Divider(height: 1),
                   itemBuilder: (context, index) {
                     final bank = banks[index];
                     final isSelected = bank == selectedBank;
@@ -119,131 +124,214 @@ class _AddBeneficiaryScreenState extends State<AddBeneficiaryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        // Nút quay lại
-        leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios,
-            color: Colors.black87,
-            size: 20,
-          ),
-          onPressed: () {
-            Navigator.pop(context);
-          },
-        ),
-        // Nút Hủy bên phải
+      backgroundColor: pageBackground,
+      appBar: CCPAppBar(
+        title: _t('Người nhận mới', 'New beneficiary'),
+        backgroundColor: pageBackground,
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.pop(context);
-              Navigator.pop(context);
+              Navigator.of(context).popUntil((route) => route.isFirst);
             },
             child: Text(
               _t('Hủy', 'Cancel'),
               style: GoogleFonts.poppins(
-                color: Colors.blue,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
+                color: primaryBlue,
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
+      body: SafeArea(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            const SizedBox(height: 10),
-
-            // Ô Chọn ngân hàng (Giả lập Dropdown)
-            Center(
-              child: SizedBox(
-                width: 300,
-                height: 60,
-                child: InkWell(
-                  onTap: _showBankPicker,
-                  borderRadius: BorderRadius.circular(20),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey.shade400),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          selectedBank ?? _t('Chọn ngân hàng', 'Select bank'),
-                          style: GoogleFonts.poppins(
-                            color: selectedBank == null
-                                ? Colors.grey.shade700
-                                : Colors.black87,
-                            fontSize: 16,
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF1C2ACA), Color(0xFF000DC0)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x33000DC0),
+                            blurRadius: 18,
+                            offset: Offset(0, 10),
                           ),
-                        ),
-                        const Icon(
-                          Icons.keyboard_arrow_down,
-                          color: Colors.black54,
-                          size: 30,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 15),
-
-            // Ô Nhập số tài khoản
-            Center(
-              child: SizedBox(
-                width: 300,
-                height: 60,
-                child: TextField(
-                  controller: accountNumberController,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.digitsOnly,
-                    LengthLimitingTextInputFormatter(10),
-                  ],
-                  decoration: InputDecoration(
-                    hintText: _t('Nhập số tài khoản', 'Enter account number'),
-                    hintStyle: GoogleFonts.poppins(color: Colors.grey.shade400),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 18,
-                    ),
-                    // Viền khi ở trạng thái bình thường
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      borderSide: BorderSide(color: Colors.grey.shade400),
-                    ),
-                    // Viền khi được nhấn vào (Focus)
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      borderSide: const BorderSide(
-                        color: Colors.blue,
-                        width: 1.5,
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _t('Thiết lập người nhận', 'Set up beneficiary'),
+                            style: GoogleFonts.poppins(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 5),
+                          Text(
+                            _t(
+                              'Nhập đúng ngân hàng và số tài khoản để giao dịch chính xác.',
+                              'Enter bank and account number correctly for accurate transfers.',
+                            ),
+                            style: GoogleFonts.poppins(
+                              color: Colors.white.withValues(alpha: 0.86),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
+                    const SizedBox(height: 14),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _t('Ngân hàng thụ hưởng', 'Beneficiary bank'),
+                            style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF2A2D3E),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          InkWell(
+                            onTap: _showBankPicker,
+                            borderRadius: BorderRadius.circular(14),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 14,
+                              ),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: const Color(0xFFE6E9F2),
+                                ),
+                                color: const Color(0xFFFAFBFF),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.account_balance_rounded,
+                                    size: 20,
+                                    color: primaryBlue,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      selectedBank ??
+                                          _t('Chọn ngân hàng', 'Select bank'),
+                                      style: GoogleFonts.poppins(
+                                        color: selectedBank == null
+                                            ? const Color(0xFF9AA1B5)
+                                            : const Color(0xFF232634),
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                  const Icon(
+                                    Icons.expand_more_rounded,
+                                    color: Color(0xFF7A8195),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            _t('Số tài khoản', 'Account number'),
+                            style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF2A2D3E),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: accountNumberController,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                              LengthLimitingTextInputFormatter(20),
+                            ],
+                            style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            decoration: InputDecoration(
+                              hintText: _t(
+                                'Nhập số tài khoản',
+                                'Enter account number',
+                              ),
+                              hintStyle: GoogleFonts.poppins(
+                                color: const Color(0xFF9AA1B5),
+                                fontSize: 13,
+                              ),
+                              prefixIcon: const Icon(
+                                Icons.badge_outlined,
+                                color: Color(0xFF6E768A),
+                              ),
+                              filled: true,
+                              fillColor: const Color(0xFFFAFBFF),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 14,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide: BorderSide.none,
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide: const BorderSide(
+                                  color: Color(0xFFE6E9F2),
+                                ),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide: const BorderSide(
+                                  color: primaryBlue,
+                                  width: 1.4,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
-
-            const SizedBox(height: 40),
-
-            // Nút Tiếp theo
-            Center(
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
               child: SizedBox(
-                width: 267,
-                height: 44,
+                width: double.infinity,
+                height: 54,
                 child: ElevatedButton(
                   onPressed: () {
                     if (selectedBank == null) {
@@ -280,25 +368,23 @@ class _AddBeneficiaryScreenState extends State<AddBeneficiaryScreen> {
                     );
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF000DC0),
+                    backgroundColor: primaryBlue,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(25),
+                      borderRadius: BorderRadius.circular(16),
                     ),
                     elevation: 0,
                   ),
                   child: Text(
-                    _t('Tiếp theo', 'Next'),
+                    _t('Tiếp tục', 'Continue'),
                     style: GoogleFonts.poppins(
                       color: Colors.white,
                       fontSize: 16,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
               ),
             ),
-
-            const SizedBox(height: 20),
           ],
         ),
       ),

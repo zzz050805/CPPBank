@@ -27,6 +27,7 @@ class _SettingScreenState extends State<SettingScreen> {
   bool _isDarkMode = false; // Chức năng Dark Mode
 
   String _t(String vi, String en) => AppText.tr(context, vi, en);
+  String _logoutT(String vi, String en) => vi;
 
   String get _languageLabel {
     return AppPreferences.instance.locale.languageCode == 'en'
@@ -282,9 +283,12 @@ class _SettingScreenState extends State<SettingScreen> {
                                 UserFirestoreService.instance.currentUserDocId;
                             if (uid == null || uid.isEmpty) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
+                                SnackBar(
                                   content: Text(
-                                    'Không tìm thấy tài khoản để mở Smart OTP.',
+                                    _t(
+                                      'Không tìm thấy tài khoản để mở Smart OTP.',
+                                      'Account not found to open Smart OTP.',
+                                    ),
                                   ),
                                   behavior: SnackBarBehavior.floating,
                                 ),
@@ -646,7 +650,7 @@ class _SettingScreenState extends State<SettingScreen> {
           padding: const EdgeInsets.symmetric(vertical: 15),
         ),
         child: Text(
-          _t("Đăng xuất", "Log out"),
+          _logoutT("Đăng xuất", "Log out"),
           style: TextStyle(
             color: Colors.redAccent,
             fontWeight: FontWeight.bold,
@@ -676,7 +680,7 @@ class _SettingScreenState extends State<SettingScreen> {
         SnackBar(
           backgroundColor: Colors.red,
           content: Text(
-            _t(
+            _logoutT(
               'Đăng xuất thất bại, vui lòng thử lại.',
               'Logout failed, please try again.',
             ),
@@ -729,7 +733,7 @@ class _SettingScreenState extends State<SettingScreen> {
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  _t('Xác nhận đăng xuất', 'Confirm logout'),
+                  _logoutT('Xác nhận đăng xuất', 'Confirm logout'),
                   textAlign: TextAlign.center,
                   style: GoogleFonts.poppins(
                     fontSize: 18,
@@ -739,7 +743,7 @@ class _SettingScreenState extends State<SettingScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  _t(
+                  _logoutT(
                     'Bạn có chắc chắn muốn đăng xuất khỏi tài khoản này?',
                     'Are you sure you want to log out of this account?',
                   ),
@@ -765,7 +769,7 @@ class _SettingScreenState extends State<SettingScreen> {
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
                         child: Text(
-                          _t('Hủy', 'Cancel'),
+                          _logoutT('Hủy', 'Cancel'),
                           style: GoogleFonts.poppins(
                             color: _textColor,
                             fontWeight: FontWeight.w600,
@@ -786,7 +790,7 @@ class _SettingScreenState extends State<SettingScreen> {
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
                         child: Text(
-                          _t('Đăng xuất', 'Log out'),
+                          _logoutT('Đăng xuất', 'Log out'),
                           style: GoogleFonts.poppins(
                             color: Colors.white,
                             fontWeight: FontWeight.w600,

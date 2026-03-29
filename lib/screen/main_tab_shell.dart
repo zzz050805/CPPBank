@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../l10n/app_text.dart';
 
 import 'chat_placeholder_screen.dart';
 import 'home_screen.dart';
@@ -19,6 +20,8 @@ class _MainTabShellState extends State<MainTabShell> {
   late final PageController _pageController;
   late int _currentIndex;
   late final List<Widget> _pages;
+
+  String _t(String vi, String en) => AppText.tr(context, vi, en);
 
   @override
   void initState() {
@@ -100,8 +103,8 @@ class _MainTabShellState extends State<MainTabShell> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    _buildNavItem(Icons.home, 'Trang chính', 0),
-                    _buildNavItem(Icons.search, 'Tìm kiếm', 1),
+                    _buildNavItem(Icons.home, _t('Trang chính', 'Home'), 0),
+                    _buildNavItem(Icons.search, _t('Tìm kiếm', 'Search'), 1),
                     _buildNavItem(Icons.chat_bubble_outline, '', 2),
                     _buildNavItem(Icons.settings_outlined, '', 3),
                   ],

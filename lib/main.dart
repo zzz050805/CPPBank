@@ -1,38 +1,53 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Thêm cái này để chỉnh thanh trạng thái
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 import 'app_preferences.dart';
 import 'data/user_firestore_service.dart';
 import 'data/firebase_helper.dart';
 import 'effect/app_transitions.dart';
 import 'screen/welcome.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart'; 
 
 void main() async {
-  // 1. Khởi tạo ràng buộc Flutter (Bắt buộc khi dùng async trong main)
+  // 1. Khởi tạo ràng buộc Flutter
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 2. NẠP CHÌA KHÓA TỪ FILE .ENV (Thêm phần này vào nè bro)
+  // 2. Chỉnh thanh trạng thái (Status Bar) cho giống App ngân hàng thật
+  // Giúp thanh pin, sóng trông trong suốt và đẹp hơn trên nền trắng
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness:
+          Brightness.dark, // Icon màu đen vì nền app mình màu sáng
+    ),
+  );
+
+  // 3. Nạp chìa khóa bí mật (.env)
   try {
     await dotenv.load(fileName: ".env");
-    debugPrint('DotEnv loaded successfully!');
+    // ignore: avoid_print
+    print('Kiểm tra .env: ${dotenv.env.keys}');
+    debugPrint(
+      '✅ DotEnv loaded: ${dotenv.env['VIETQR_CLIENT_ID']?.substring(0, 5)}***',
+    );
   } catch (e) {
-    debugPrint('Error loading .env file: $e');
-    // Nếu lỗi, bro kiểm tra xem đã khai báo file .env trong pubspec.yaml chưa nhé
+    debugPrint('❌ Error loading .env: $e');
   }
 
-  // 3. Khởi tạo Firebase
+  // 4. Khởi tạo Firebase
   try {
     await FirebaseHelper.initializeFirebase();
   } catch (e) {
-    debugPrint('Firebase init failed: $e');
+    debugPrint('❌ Firebase init failed: $e');
   }
 
-  // 4. Đồng bộ dữ liệu User
+  // 5. Đồng bộ dữ liệu User (Nên chạy sau khi Firebase đã OK)
   try {
     await UserFirestoreService.instance.syncCurrentUserData();
   } catch (e) {
-    debugPrint('Initial user sync failed: $e');
+    debugPrint('❌ Initial user sync failed: $e');
   }
 
   runApp(const MyApp());
@@ -48,6 +63,7 @@ class MyApp extends StatelessWidget {
       builder: (context, _) {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
+          title: 'CCPBank', // Đặt tên app ở đây luôn bro
           locale: AppPreferences.instance.locale,
           supportedLocales: AppPreferences.supportedLocales,
           localizationsDelegates: const [
@@ -56,6 +72,10 @@ class MyApp extends StatelessWidget {
             GlobalCupertinoLocalizations.delegate,
           ],
           theme: ThemeData(
+            useMaterial3: true, // Bật Material 3 cho giao diện hiện đại
+            scaffoldBackgroundColor: const Color(
+              0xFFF8F9FD,
+            ), // Nền xám nhạt "quý tộc"
             textTheme: GoogleFonts.poppinsTextTheme(
               Theme.of(context).textTheme,
             ),
@@ -67,11 +87,11 @@ class MyApp extends StatelessWidget {
               },
             ),
             appBarTheme: AppBarTheme(
-              toolbarHeight: 60,
+              toolbarHeight: 64,
               centerTitle: true,
               backgroundColor: Colors.white,
-              surfaceTintColor: Colors.white,
-              elevation: 2,
+              surfaceTintColor: Colors.transparent, // Tránh bị đổi màu khi cuộn
+              elevation: 0.5, // Đổ bóng nhẹ thôi cho sang
               shadowColor: Colors.black12,
               iconTheme: const IconThemeData(color: Color(0xFF000DC0)),
               titleTextStyle: GoogleFonts.poppins(

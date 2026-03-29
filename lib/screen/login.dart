@@ -23,6 +23,8 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _cccdError;
   String? _passwordError;
 
+  String _t(String vi, String en) => vi;
+
   @override
   void initState() {
     super.initState();
@@ -49,10 +51,13 @@ class _LoginScreenState extends State<LoginScreen> {
   void _handleLogin() async {
     setState(() {
       if (_cccdController.text.isEmpty) {
-        _cccdError = "Bạn cần nhập số điện thoại/CCCD";
+        _cccdError = _t(
+          'Bạn cần nhập số điện thoại/CCCD',
+          'Please enter phone number/ID card',
+        );
       }
       if (_passwordController.text.isEmpty) {
-        _passwordError = "Bạn cần nhập mật khẩu";
+        _passwordError = _t('Bạn cần nhập mật khẩu', 'Please enter password');
       }
     });
 
@@ -110,8 +115,13 @@ class _LoginScreenState extends State<LoginScreen> {
         if (!mounted) return;
         closeLoadingDialog();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Tài khoản hoặc mật khẩu không chính xác!"),
+          SnackBar(
+            content: Text(
+              _t(
+                'Tài khoản hoặc mật khẩu không chính xác!',
+                'Incorrect account or password!',
+              ),
+            ),
             backgroundColor: Colors.red,
           ),
         );
@@ -140,8 +150,13 @@ class _LoginScreenState extends State<LoginScreen> {
           if (!mounted) return;
           closeLoadingDialog();
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("Tài khoản hoặc mật khẩu không chính xác!"),
+            SnackBar(
+              content: Text(
+                _t(
+                  'Tài khoản hoặc mật khẩu không chính xác!',
+                  'Incorrect account or password!',
+                ),
+              ),
               backgroundColor: Colors.red,
             ),
           );
@@ -271,8 +286,11 @@ class _LoginScreenState extends State<LoginScreen> {
           (e.code == 'wrong-password' ||
               e.code == 'invalid-credential' ||
               e.code == 'user-not-found')
-          ? "Tài khoản hoặc mật khẩu không chính xác!"
-          : "Lỗi đăng nhập: ${e.message ?? e.code}";
+          ? _t(
+              'Tài khoản hoặc mật khẩu không chính xác!',
+              'Incorrect account or password!',
+            )
+          : '${_t('Lỗi đăng nhập', 'Login error')}: ${e.message ?? e.code}';
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(message), backgroundColor: Colors.red),
@@ -282,7 +300,7 @@ class _LoginScreenState extends State<LoginScreen> {
       closeLoadingDialog();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("Lỗi hệ thống: $e"),
+          content: Text('${_t('Lỗi hệ thống', 'System error')}: $e'),
           backgroundColor: Colors.red,
         ),
       );
@@ -326,7 +344,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      "Xác thực xong",
+                      _t('Xác thực xong', 'Authenticated'),
                       style: GoogleFonts.poppins(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -400,7 +418,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                "Chào bạn!",
+                                _t('Chào bạn!', 'Welcome!'),
                                 style: GoogleFonts.poppins(
                                   color: const Color(0xFF000DC0),
                                   fontSize: 28,
@@ -409,7 +427,10 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                "Thuận tiện hơn khi vay qua App",
+                                _t(
+                                  'Thuận tiện hơn khi vay qua App',
+                                  'A more convenient way to borrow via the app',
+                                ),
                                 style: GoogleFonts.poppins(
                                   color: const Color(0xFF343434),
                                   fontSize: 16,
@@ -427,7 +448,10 @@ class _LoginScreenState extends State<LoginScreen> {
                               const SizedBox(height: 20),
 
                               _buildTextField(
-                                "Số điện thoại/CCCD",
+                                _t(
+                                  'Số điện thoại/CCCD',
+                                  'Phone number/ID card',
+                                ),
                                 controller: _cccdController,
                                 errorText: _cccdError,
                                 keyboardType: TextInputType.text,
@@ -439,7 +463,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               const SizedBox(height: 16),
 
                               _buildTextField(
-                                "Mật khẩu",
+                                _t('Mật khẩu', 'Password'),
                                 controller: _passwordController,
                                 errorText: _passwordError,
                                 isObscured: true,
@@ -451,7 +475,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               Align(
                                 alignment: Alignment.centerRight,
                                 child: Text(
-                                  "Quên mật khẩu ?",
+                                  _t('Quên mật khẩu ?', 'Forgot password?'),
                                   style: GoogleFonts.poppins(
                                     color: const Color.fromARGB(
                                       255,
@@ -481,7 +505,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ),
                                     onPressed: _handleLogin,
                                     child: Text(
-                                      "ĐĂNG NHẬP",
+                                      _t('ĐĂNG NHẬP', 'LOG IN'),
                                       style: GoogleFonts.poppins(
                                         color: _isLoginEnabled
                                             ? Colors.white
@@ -523,14 +547,17 @@ class _LoginScreenState extends State<LoginScreen> {
                                   },
                                   child: RichText(
                                     text: TextSpan(
-                                      text: "Bạn chưa có tài khoản? ",
+                                      text: _t(
+                                        'Bạn chưa có tài khoản? ',
+                                        'Do not have an account? ',
+                                      ),
                                       style: GoogleFonts.poppins(
                                         color: const Color(0xFF343434),
                                         fontSize: 14,
                                       ),
                                       children: [
                                         TextSpan(
-                                          text: "Đăng ký",
+                                          text: _t('Đăng ký', 'Register'),
                                           style: GoogleFonts.poppins(
                                             color: const Color(0xFF000DC0),
                                             fontWeight: FontWeight.w600,

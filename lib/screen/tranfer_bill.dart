@@ -1,6 +1,10 @@
-﻿import 'package:flutter/material.dart';
+import 'dart:async';
+
+import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../data/user_firestore_service.dart';
+import '../l10n/app_text.dart';
+import 'main_tab_shell.dart';
 
 void main() => runApp(const MyApp());
 
@@ -17,90 +21,125 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class SuccessTransactionScreen extends StatelessWidget {
+class SuccessTransactionScreen extends StatefulWidget {
   const SuccessTransactionScreen({super.key});
 
-  // Ảnh minh họa giao dịch thành công từ assets
-  final String imageAsset = 'assets/images/bill_tranfer.png';
+  @override
+  State<SuccessTransactionScreen> createState() =>
+      _SuccessTransactionScreenState();
+}
+
+class _SuccessTransactionScreenState extends State<SuccessTransactionScreen> {
+  Timer? _redirectTimer;
+  bool _redirected = false;
 
   static const Color primaryBlue = Color(0xFF000DC0);
-  static const Color successGreen = Color(0xFF4ADBB3);
+  static const Color pageBackground = Color(0xFFF6F8FF);
+
+  String _t(String vi, String en) => AppText.tr(context, vi, en);
+
+  @override
+  void initState() {
+    super.initState();
+    _redirectTimer = Timer(const Duration(seconds: 3), _goHome);
+  }
+
+  @override
+  void dispose() {
+    _redirectTimer?.cancel();
+    super.dispose();
+  }
+
+  void _goHome() {
+    if (!mounted || _redirected) {
+      return;
+    }
+    _redirected = true;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const MainTabShell(initialIndex: 0)),
+      (_) => false,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: pageBackground,
       body: SafeArea(
         child: Column(
           children: [
             Expanded(
               child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                 child: Column(
                   children: [
-                    const SizedBox(height: 20),
-
-                    // --- PHẦN ẢNH LOGO LỚN ---
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Image.asset(
-                        imageAsset,
-                        height: 250,
-                        fit: BoxFit.contain,
-                        // Hiển thị icon lỗi nếu ảnh assets không tồn tại
-                        errorBuilder: (context, error, stackTrace) => Container(
-                          height: 250,
-                          color: Colors.grey.shade100,
-                          child: const Icon(
-                            Icons.image_not_supported,
-                            size: 50,
-                            color: Colors.grey,
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF1B29CA), Color(0xFF000DC0)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(22),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x33000DC0),
+                            blurRadius: 20,
+                            offset: Offset(0, 10),
                           ),
-                        ),
+                        ],
                       ),
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    // Thông báo thành công
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.check_circle_outline,
-                          color: successGreen,
-                          size: 28,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          "Bạn đã chuyển tiền thành công",
-                          style: GoogleFonts.poppins(
-                            color: successGreen,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
+                      child: Column(
+                        children: [
+                          Container(
+                            width: 52,
+                            height: 52,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: const Icon(
+                              Icons.check_rounded,
+                              color: Colors.white,
+                              size: 30,
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 10),
-                    Text(
-                      "1.000.000 VND",
-                      style: GoogleFonts.poppins(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: primaryBlue,
+                          const SizedBox(height: 10),
+                          Text(
+                            _t(
+                              'Bạn đã chuyển tiền thành công',
+                              'Transfer completed successfully',
+                            ),
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.poppins(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 17,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            '1.000.000 VND',
+                            style: GoogleFonts.poppins(
+                              fontSize: 26,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                          Text(
+                            _t('Một triệu đồng', 'One million dong'),
+                            style: GoogleFonts.poppins(
+                              color: Colors.white.withValues(alpha: 0.9),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    Text(
-                      "Một triệu đồng",
-                      style: GoogleFonts.poppins(
-                        color: Colors.grey,
-                        fontSize: 14,
-                      ),
-                    ),
-
-                    const SizedBox(height: 30),
-
+                    const SizedBox(height: 12),
                     StreamBuilder<UserProfileData?>(
                       stream: UserFirestoreService.instance
                           .currentUserProfileStream(),
@@ -110,73 +149,88 @@ class SuccessTransactionScreen extends StatelessWidget {
                             snapshot.data ??
                             UserFirestoreService.instance.latestProfile;
                         final String senderName = snapshot.hasError
-                            ? 'Không tìm thấy user'
+                            ? _t('Không tìm thấy user', 'User not found')
                             : ((profile?.fullname.isNotEmpty == true)
                                   ? profile!.fullname
-                                  : 'Khach hang');
-
-                        return Column(
-                          children: [
-                            const Divider(height: 1),
-                            _buildInfoRow(
-                              "Từ",
-                              "${senderName.toUpperCase()}\n****** 456",
-                            ),
-                            const Divider(height: 1),
-                            _buildInfoRow(
-                              "Đến",
-                              "TRAN THANH B\nMC-BANK\n312 555 867",
-                            ),
-                            const Divider(height: 1),
-                            _buildInfoRow(
-                              "Chuyển lúc",
-                              "12/12/2025 , 10:10:21",
-                            ),
-                            const Divider(height: 1),
-                            _buildInfoRow("Phí", "Miễn phí"),
-                            const Divider(height: 1),
-                            _buildInfoRow("Mã giao dịch", "3421"),
-                            const Divider(height: 1),
-                          ],
-                        );
-                      },
-                    ),
-
-                    // Nội dung chuyển tiền
-                    StreamBuilder<UserProfileData?>(
-                      stream: UserFirestoreService.instance
-                          .currentUserProfileStream(),
-                      initialData: UserFirestoreService.instance.latestProfile,
-                      builder: (context, snapshot) {
-                        final UserProfileData? profile =
-                            snapshot.data ??
-                            UserFirestoreService.instance.latestProfile;
-                        final String senderName = snapshot.hasError
-                            ? 'Không tìm thấy user'
-                            : ((profile?.fullname.isNotEmpty == true)
-                                  ? profile!.fullname
-                                  : 'Khach hang');
+                                  : _t('Khách hàng', 'Customer'));
 
                         return Container(
                           width: double.infinity,
-                          padding: const EdgeInsets.all(20),
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Column(
+                            children: [
+                              _buildInfoRow(
+                                _t('Từ', 'From'),
+                                '${senderName.toUpperCase()}\n****** 456',
+                              ),
+                              const Divider(height: 18),
+                              _buildInfoRow(
+                                _t('Đến', 'To'),
+                                'TRAN THANH B\nMC-BANK\n312 555 867',
+                              ),
+                              const Divider(height: 18),
+                              _buildInfoRow(
+                                _t('Chuyển lúc', 'Transferred at'),
+                                '12/12/2025 , 10:10:21',
+                              ),
+                              const Divider(height: 18),
+                              _buildInfoRow(
+                                _t('Phí', 'Fee'),
+                                _t('Miễn phí', 'Free'),
+                              ),
+                              const Divider(height: 18),
+                              _buildInfoRow(
+                                _t('Mã giao dịch', 'Transaction ID'),
+                                '3421',
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    StreamBuilder<UserProfileData?>(
+                      stream: UserFirestoreService.instance
+                          .currentUserProfileStream(),
+                      initialData: UserFirestoreService.instance.latestProfile,
+                      builder: (context, snapshot) {
+                        final UserProfileData? profile =
+                            snapshot.data ??
+                            UserFirestoreService.instance.latestProfile;
+                        final String senderName = snapshot.hasError
+                            ? _t('Không tìm thấy user', 'User not found')
+                            : ((profile?.fullname.isNotEmpty == true)
+                                  ? profile!.fullname
+                                  : _t('Khách hàng', 'Customer'));
+
+                        return Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                "Nội dung",
+                                _t('Nội dung', 'Content'),
                                 style: GoogleFonts.poppins(
-                                  color: Colors.grey,
+                                  color: const Color(0xFF8A91A6),
                                   fontSize: 13,
                                 ),
                               ),
-                              const SizedBox(height: 5),
+                              const SizedBox(height: 6),
                               Text(
-                                "${senderName.toUpperCase()} CHUYEN TIEN",
+                                '${senderName.toUpperCase()} ${_t('CHUYỂN TIỀN', 'TRANSFER')}',
                                 style: GoogleFonts.poppins(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 15,
-                                  color: Colors.black87,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                  color: const Color(0xFF23283A),
                                 ),
                               ),
                             ],
@@ -188,58 +242,52 @@ class SuccessTransactionScreen extends StatelessWidget {
                 ),
               ),
             ),
-
-            // --- HÀNG NÚT BẤM DƯỚI CÙNG ---
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
               child: Row(
                 children: [
-                  // Nút Đóng
                   Expanded(
                     child: SizedBox(
-                      height: 55,
+                      height: 52,
                       child: OutlinedButton(
-                        onPressed: () => Navigator.of(
-                          context,
-                        ).popUntil((route) => route.isFirst),
+                        onPressed: _goHome,
                         style: OutlinedButton.styleFrom(
-                          backgroundColor: const Color(0xFFF0F2F8),
-                          side: BorderSide.none,
+                          backgroundColor: const Color(0xFFEFF2FB),
+                          side: const BorderSide(color: Color(0xFFDDE3F1)),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(15),
+                            borderRadius: BorderRadius.circular(14),
                           ),
                         ),
                         child: Text(
-                          "Đóng",
+                          _t('Đóng', 'Close'),
                           style: GoogleFonts.poppins(
                             color: primaryBlue,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
                           ),
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 15),
-                  // Nút Gửi (Chia sẻ)
+                  const SizedBox(width: 10),
                   Expanded(
                     child: SizedBox(
-                      height: 55,
+                      height: 52,
                       child: ElevatedButton(
-                        onPressed: () {},
+                        onPressed: _goHome,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: primaryBlue,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(15),
+                            borderRadius: BorderRadius.circular(14),
                           ),
                           elevation: 0,
                         ),
                         child: Text(
-                          "Gửi",
+                          _t('Gửi', 'Send'),
                           style: GoogleFonts.poppins(
                             color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
                           ),
                         ),
                       ),
@@ -254,10 +302,9 @@ class SuccessTransactionScreen extends StatelessWidget {
     );
   }
 
-  // Hàm helper để tạo các dòng thông tin
   Widget _buildInfoRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -265,7 +312,11 @@ class SuccessTransactionScreen extends StatelessWidget {
             flex: 2,
             child: Text(
               label,
-              style: GoogleFonts.poppins(color: Colors.grey, fontSize: 13),
+              style: GoogleFonts.poppins(
+                color: const Color(0xFF8A91A6),
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
           Expanded(
@@ -274,9 +325,9 @@ class SuccessTransactionScreen extends StatelessWidget {
               value,
               textAlign: TextAlign.right,
               style: GoogleFonts.poppins(
-                fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.w700,
                 fontSize: 14,
-                color: Colors.black87,
+                color: const Color(0xFF24293A),
               ),
             ),
           ),

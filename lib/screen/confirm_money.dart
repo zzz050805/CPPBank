@@ -1,7 +1,10 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../data/user_firestore_service.dart';
-import 'OTP_screen.dart';
+import '../l10n/app_text.dart';
+import '../widget/ccp_app_bar.dart';
+import 'smart_otp_transfer_pin_screen.dart';
 
 void main() => runApp(const MyApp());
 
@@ -22,96 +25,220 @@ class MyApp extends StatelessWidget {
 }
 
 class ConfirmTransferScreen extends StatelessWidget {
-  const ConfirmTransferScreen({super.key});
+  const ConfirmTransferScreen({
+    super.key,
+    this.amountText = '',
+    this.transferContent = '',
+    this.recipientAccountNumber = '',
+    this.recipientAccountName = 'TRAN THANH B',
+    this.recipientBankName = 'MC-BANK',
+    this.recipientBankId = 'mc_bank',
+  });
 
-  // Màu xanh chủ đạo bạn yêu cầu
+  final String amountText;
+  final String transferContent;
+  final String recipientAccountNumber;
+  final String recipientAccountName;
+  final String recipientBankName;
+  final String recipientBankId;
+
   static const Color primaryBlue = Color(0xFF000DC0);
+  static const Color pageBackground = Color(0xFFF6F8FF);
+
+  String _t(BuildContext context, String vi, String en) =>
+      AppText.tr(context, vi, en);
+
+  String _formatAmount(String rawAmount) {
+    final String digits = rawAmount.replaceAll(RegExp(r'\D'), '');
+    if (digits.isEmpty) {
+      return '1.000.000 VND';
+    }
+
+    final StringBuffer buffer = StringBuffer();
+    int count = 0;
+    for (int i = digits.length - 1; i >= 0; i--) {
+      buffer.write(digits[i]);
+      count++;
+      if (count == 3 && i != 0) {
+        buffer.write('.');
+        count = 0;
+      }
+    }
+
+    return '${buffer.toString().split('').reversed.join()} VND';
+  }
+
+  String _safeRecipientAccount() {
+    final String value = recipientAccountNumber.trim();
+    if (value.isEmpty) {
+      return '312 555 867';
+    }
+    return value;
+  }
+
+  String _safeRecipientName() {
+    final String value = recipientAccountName.trim();
+    if (value.isEmpty) {
+      return 'TRAN THANH B';
+    }
+    return value.toUpperCase();
+  }
+
+  String _safeRecipientBank() {
+    final String value = recipientBankName.trim();
+    if (value.isEmpty) {
+      return 'MC-BANK';
+    }
+    return value;
+  }
+
+  String _recipientInitials() {
+    final List<String> parts = _safeRecipientName()
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .toList(growable: false);
+
+    if (parts.isEmpty) {
+      return 'U';
+    }
+    if (parts.length == 1) {
+      return parts.first.substring(0, 1).toUpperCase();
+    }
+    return '${parts.first.substring(0, 1)}${parts.last.substring(0, 1)}'
+        .toUpperCase();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final String displayAmount = _formatAmount(amountText);
+    final String displayContent = transferContent.trim().isEmpty
+        ? _t(context, 'CHUYỂN TIỀN', 'TRANSFER')
+        : transferContent.trim();
+    final String displayRecipientAccount = _safeRecipientAccount();
+    final String displayRecipientName = _safeRecipientName();
+    final String displayRecipientBank = _safeRecipientBank();
+    final String resolvedBankId = recipientBankId.trim().isEmpty
+        ? displayRecipientBank.toLowerCase().replaceAll(RegExp(r'\s+'), '_')
+        : recipientBankId.trim();
+
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios,
-            color: Colors.black87,
-            size: 20,
-          ),
-          onPressed: () => Navigator.pop(context),
-        ),
+      backgroundColor: pageBackground,
+      appBar: CCPAppBar(
+        title: _t(context, 'Xác nhận chuyển tiền', 'Confirm transfer'),
+        backgroundColor: pageBackground,
         actions: [
           TextButton(
             onPressed: () {
               Navigator.of(context).popUntil((route) => route.isFirst);
             },
             child: Text(
-              "Hủy",
+              _t(context, 'Hủy', 'Cancel'),
               style: GoogleFonts.poppins(
                 color: primaryBlue,
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                fontSize: 14,
               ),
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
         ],
       ),
       body: Column(
         children: [
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 25),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const SizedBox(height: 10),
-                  Text(
-                    "Xác nhận chuyển tiền",
-                    style: GoogleFonts.poppins(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    "1.000.000 VND",
-                    style: GoogleFonts.poppins(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87, // Đen nhẹ
-                    ),
-                  ),
-                  Text(
-                    "Một triệu đồng",
-                    style: GoogleFonts.poppins(
-                      color: Colors.grey,
-                      fontSize: 14,
-                    ),
-                  ),
-                  const SizedBox(height: 30),
-
-                  // Khung bao quanh thông tin tài khoản
                   Container(
-                    padding: const EdgeInsets.all(20),
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(25),
-                      border: Border.all(color: Colors.grey.shade200),
-                      boxShadow: [
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF1D2BCB), Color(0xFF000DC0)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(22),
+                      boxShadow: const [
                         BoxShadow(
-                          color: Colors.grey.withOpacity(0.1),
-                          blurRadius: 15,
-                          offset: const Offset(0, 10),
+                          color: Color(0x33000DC0),
+                          blurRadius: 20,
+                          offset: Offset(0, 10),
                         ),
                       ],
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: const Icon(
+                            Icons.payments_rounded,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _t(
+                                  context,
+                                  'Số tiền chuyển',
+                                  'Transfer amount',
+                                ),
+                                style: GoogleFonts.poppins(
+                                  color: Colors.white.withValues(alpha: 0.88),
+                                  fontSize: 12,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                displayAmount,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              Text(
+                                _t(
+                                  context,
+                                  'Một triệu đồng',
+                                  'One million dong',
+                                ),
+                                style: GoogleFonts.poppins(
+                                  color: Colors.white.withValues(alpha: 0.88),
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildSectionLabel("Từ tài khoản"),
+                        _buildSectionLabel(
+                          context,
+                          _t(context, 'Từ tài khoản', 'From account'),
+                        ),
                         const SizedBox(height: 10),
                         StreamBuilder<UserProfileData?>(
                           stream: UserFirestoreService.instance
@@ -123,26 +250,89 @@ class ConfirmTransferScreen extends StatelessWidget {
                                 snapshot.data ??
                                 UserFirestoreService.instance.latestProfile;
                             final String senderName = snapshot.hasError
-                                ? 'Không tìm thấy user'
+                                ? _t(
+                                    context,
+                                    'Không tìm thấy user',
+                                    'User not found',
+                                  )
                                 : ((profile?.fullname.isNotEmpty == true)
                                       ? profile!.fullname
-                                      : 'Khach hang');
+                                      : _t(context, 'Khách hàng', 'Customer'));
 
                             return _buildAccountCard(
                               name: senderName.toUpperCase(),
-                              id: "123 568 567 456",
+                              id: '123 568 567 456',
                               isSource: true,
                             );
                           },
                         ),
-                        const SizedBox(height: 25),
-                        _buildSectionLabel("Đến tài khoản"),
+                        const SizedBox(height: 16),
+                        _buildSectionLabel(
+                          context,
+                          _t(context, 'Đến tài khoản', 'To account'),
+                        ),
                         const SizedBox(height: 10),
                         _buildAccountCard(
-                          name: "TRAN THANH B",
-                          bank: "MC-BANK",
-                          id: "312 555 867",
+                          name: displayRecipientName,
+                          bank: displayRecipientBank,
+                          id: displayRecipientAccount,
                           isSource: false,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildSectionLabel(
+                          context,
+                          _t(context, 'Nội dung', 'Content'),
+                        ),
+                        const SizedBox(height: 10),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFAFBFF),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFE2E7F2)),
+                          ),
+                          child: Text(
+                            displayContent,
+                            style: GoogleFonts.poppins(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF23283A),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF6F8FF),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFE4E9F5)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.info_outline_rounded,
+                                size: 17,
+                                color: Color(0xFF68708A),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _t(
+                                    context,
+                                    'Vui lòng kiểm tra kỹ thông tin trước khi xác nhận.',
+                                    'Please verify details carefully before confirming.',
+                                  ),
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 12,
+                                    color: const Color(0xFF636B83),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -151,60 +341,83 @@ class ConfirmTransferScreen extends StatelessWidget {
               ),
             ),
           ),
-
-          // Nút Xác nhận ở dưới cùng
           Padding(
-            padding: const EdgeInsets.all(25),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
             child: SizedBox(
               width: double.infinity,
-              height: 55,
+              height: 54,
               child: ElevatedButton(
                 onPressed: () {
+                  final String? uid =
+                      UserFirestoreService.instance.currentUserDocId ??
+                      FirebaseAuth.instance.currentUser?.uid;
+                  if (uid == null || uid.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          _t(
+                            context,
+                            'Không tìm thấy tài khoản để xác thực Smart OTP.',
+                            'Account not found for Smart OTP verification.',
+                          ),
+                        ),
+                        behavior: SnackBarBehavior.floating,
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                    return;
+                  }
+
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) =>
-                          const OTPScreen(phoneNumber: '(+84) 0398829xxx'),
+                      builder: (_) => SmartOtpTransferPinScreen(
+                        uid: uid,
+                        accountNumber: displayRecipientAccount,
+                        accountName: displayRecipientName,
+                        bankName: displayRecipientBank,
+                        bankId: resolvedBankId,
+                        initials: _recipientInitials(),
+                        amountText: amountText,
+                        transferContent: displayContent,
+                      ),
                     ),
                   );
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: primaryBlue,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(16),
                   ),
                   elevation: 0,
                 ),
                 child: Text(
-                  "Xác nhận",
+                  _t(context, 'Xác nhận', 'Confirm'),
                   style: GoogleFonts.poppins(
                     color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
             ),
           ),
-          const SizedBox(height: 10),
         ],
       ),
     );
   }
 
-  // Widget hiển thị nhãn "Từ tài khoản / Đến tài khoản"
-  Widget _buildSectionLabel(String label) {
+  Widget _buildSectionLabel(BuildContext context, String label) {
     return Text(
       label,
       style: GoogleFonts.poppins(
-        color: Colors.grey.shade500,
-        fontSize: 13,
-        fontWeight: FontWeight.w500,
+        color: const Color(0xFF8B92A6),
+        fontSize: 12,
+        fontWeight: FontWeight.w600,
       ),
     );
   }
 
-  // Widget hiển thị thẻ tài khoản (Trắng hoặc Xanh)
   Widget _buildAccountCard({
     required String name,
     required String id,
@@ -213,11 +426,11 @@ class ConfirmTransferScreen extends StatelessWidget {
   }) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(15),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: isSource ? Colors.white : primaryBlue,
-        borderRadius: BorderRadius.circular(15),
-        border: isSource ? Border.all(color: Colors.grey.shade300) : null,
+        color: isSource ? const Color(0xFFFAFBFF) : primaryBlue,
+        borderRadius: BorderRadius.circular(14),
+        border: isSource ? Border.all(color: const Color(0xFFE2E7F2)) : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -225,29 +438,32 @@ class ConfirmTransferScreen extends StatelessWidget {
           Text(
             name,
             style: GoogleFonts.poppins(
-              color: isSource ? Colors.black87 : Colors.white,
-              fontWeight: FontWeight.bold,
+              color: isSource ? const Color(0xFF252A3A) : Colors.white,
+              fontWeight: FontWeight.w700,
               fontSize: 15,
             ),
           ),
           if (bank != null)
             Text(
               bank,
-              style: GoogleFonts.poppins(color: Colors.white70, fontSize: 12),
+              style: GoogleFonts.poppins(
+                color: Colors.white.withValues(alpha: 0.88),
+                fontSize: 12,
+              ),
             ),
           const SizedBox(height: 8),
           Row(
             children: [
               Icon(
                 Icons.account_balance,
-                color: isSource ? Colors.grey : Colors.white,
+                color: isSource ? const Color(0xFF7A8195) : Colors.white,
                 size: 18,
               ),
               const SizedBox(width: 8),
               Text(
                 id,
                 style: GoogleFonts.poppins(
-                  color: isSource ? Colors.grey.shade600 : Colors.white,
+                  color: isSource ? const Color(0xFF626A82) : Colors.white,
                   fontWeight: FontWeight.w500,
                   fontSize: 14,
                 ),

@@ -1,6 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'success_screen.dart'; 
+import '../l10n/app_text.dart';
+import 'success_screen.dart';
 
 class NfcScreen extends StatefulWidget {
   const NfcScreen({super.key});
@@ -12,6 +13,8 @@ class NfcScreen extends StatefulWidget {
 class _NfcScreenState extends State<NfcScreen> {
   int _scanStep = 0; // 0: Chuẩn bị, 1: Đang quét, 2: Đã xong
   int _activeDots = 0; // Số lượng chấm xanh hiển thị lúc đang quét
+
+  String _t(String vi, String en) => AppText.tr(context, vi, en);
 
   @override
   void initState() {
@@ -25,20 +28,27 @@ class _NfcScreenState extends State<NfcScreen> {
     if (!mounted) return;
 
     // 2. Chuyển sang "Đang quét" (Chạy 10 chấm xanh)
-    setState(() { _scanStep = 1; });
+    setState(() {
+      _scanStep = 1;
+    });
     for (int i = 1; i <= 10; i++) {
-      await Future.delayed(const Duration(milliseconds: 200)); 
+      await Future.delayed(const Duration(milliseconds: 200));
       if (!mounted) return;
-      setState(() { _activeDots = i; });
+      setState(() {
+        _activeDots = i;
+      });
     }
 
     // 3. Quét xong -> Hiện dấu tích xanh (Bước "Đã xong")
-    setState(() { _scanStep = 2; });
+    setState(() {
+      _scanStep = 2;
+    });
 
     // --- THÊM ĐOẠN NÀY: Đợi 3 giây rồi tự nhảy qua trang Success ---
     await Future.delayed(const Duration(seconds: 3));
     if (mounted) {
-      Navigator.pushReplacement( // Dùng pushReplacement để người dùng không back lại trang quét nữa
+      Navigator.pushReplacement(
+        // Dùng pushReplacement để người dùng không back lại trang quét nữa
         context,
         MaterialPageRoute(builder: (context) => const SuccessScreen()),
       );
@@ -53,11 +63,15 @@ class _NfcScreenState extends State<NfcScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Color(0xFF343434), size: 20),
+          icon: const Icon(
+            Icons.arrow_back_ios,
+            color: Color(0xFF343434),
+            size: 20,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          "Quét NFC",
+          _t('Quét NFC', 'NFC Scan'),
           style: GoogleFonts.poppins(
             color: const Color(0xFF343434),
             fontWeight: FontWeight.bold,
@@ -72,7 +86,10 @@ class _NfcScreenState extends State<NfcScreen> {
           children: [
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 20,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -87,7 +104,7 @@ class _NfcScreenState extends State<NfcScreen> {
                             color: Colors.black.withOpacity(0.06),
                             blurRadius: 15,
                             offset: const Offset(0, 5),
-                          )
+                          ),
                         ],
                       ),
                       child: Image.asset(
@@ -98,21 +115,47 @@ class _NfcScreenState extends State<NfcScreen> {
                             border: Border.all(color: Colors.grey),
                             borderRadius: BorderRadius.circular(16),
                           ),
-                          child: const Center(child: Icon(Icons.credit_card, size: 80, color: Colors.grey)),
+                          child: const Center(
+                            child: Icon(
+                              Icons.credit_card,
+                              size: 80,
+                              color: Colors.grey,
+                            ),
+                          ),
                         ),
                       ),
                     ),
                     const SizedBox(height: 30),
-                    _buildBulletPoint("Đặt điện thoại lên thẻ CCCD"),
-                    _buildBulletPoint("Giữ mặt lưng điện thoại sát vào chip ở chính giữa thẻ CCCD"),
-                    _buildBulletPoint("Lưu ý:"),
+                    _buildBulletPoint(
+                      _t(
+                        'Đặt điện thoại lên thẻ CCCD',
+                        'Place your phone on your ID card',
+                      ),
+                    ),
+                    _buildBulletPoint(
+                      _t(
+                        'Giữ mặt lưng điện thoại sát vào chip ở chính giữa thẻ CCCD',
+                        'Keep the back of your phone close to the chip in the center of the ID card',
+                      ),
+                    ),
+                    _buildBulletPoint(_t('Lưu ý:', 'Notes:')),
                     Padding(
                       padding: const EdgeInsets.only(left: 10),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _buildSubBulletPoint("* Giữ yên thiết bị trong vài giây."),
-                          _buildSubBulletPoint("* Đảm bảo đã bật NFC trên điện thoại."),
+                          _buildSubBulletPoint(
+                            _t(
+                              '* Giữ yên thiết bị trong vài giây.',
+                              '* Keep the device still for a few seconds.',
+                            ),
+                          ),
+                          _buildSubBulletPoint(
+                            _t(
+                              '* Đảm bảo đã bật NFC trên điện thoại.',
+                              '* Make sure NFC is enabled on your phone.',
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -131,16 +174,25 @@ class _NfcScreenState extends State<NfcScreen> {
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(color: Colors.blue[200]!, width: 1.5),
                 boxShadow: [
-                  BoxShadow(color: Colors.blue.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, 10)),
+                  BoxShadow(
+                    color: Colors.blue.withOpacity(0.05),
+                    blurRadius: 20,
+                    offset: const Offset(0, 10),
+                  ),
                 ],
               ),
               child: Column(
                 children: [
                   // SỬA CHỖ NÀY: Chữ tự động nhảy theo trạng thái quét
                   Text(
-                    _scanStep == 0 
-                        ? "Chuẩn bị CCCD để quét" 
-                        : (_scanStep == 1 ? "Đang quét CCCD" : "Đã xong"),
+                    _scanStep == 0
+                        ? _t(
+                            'Chuẩn bị CCCD để quét',
+                            'Prepare ID card for scanning',
+                          )
+                        : (_scanStep == 1
+                              ? _t('Đang quét CCCD', 'Scanning ID card')
+                              : _t('Đã xong', 'Done')),
                     style: GoogleFonts.poppins(
                       color: const Color(0xFF0084FF),
                       fontSize: 22,
@@ -148,26 +200,32 @@ class _NfcScreenState extends State<NfcScreen> {
                     ),
                   ),
                   const SizedBox(height: 24),
-                  
+
                   Container(
                     width: 80,
                     height: 80,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      border: Border.all(color: const Color(0xFF0084FF), width: 3),
+                      border: Border.all(
+                        color: const Color(0xFF0084FF),
+                        width: 3,
+                      ),
                       color: Colors.blue[50],
                     ),
                     child: Icon(
                       _scanStep == 2 ? Icons.check : Icons.phone_android,
-                      size: 40, 
-                      color: const Color(0xFF0084FF)
+                      size: 40,
+                      color: const Color(0xFF0084FF),
                     ),
                   ),
                   const SizedBox(height: 24),
 
                   if (_scanStep == 0)
                     Text(
-                      "Giữ phần trên của thiết bị tiếp xúc trực\ntiếp với tâm của thẻ CCCD.",
+                      _t(
+                        'Giữ phần trên của thiết bị tiếp xúc trực\ntiếp với tâm của thẻ CCCD.',
+                        'Keep the top of your device in direct\ncontact with the center of the ID card.',
+                      ),
                       textAlign: TextAlign.center,
                       style: GoogleFonts.poppins(
                         color: const Color(0xFF0084FF),
@@ -179,19 +237,23 @@ class _NfcScreenState extends State<NfcScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: List.generate(10, (index) {
-                        bool isBlue = _scanStep == 2 || (_scanStep == 1 && index < _activeDots);
+                        bool isBlue =
+                            _scanStep == 2 ||
+                            (_scanStep == 1 && index < _activeDots);
                         return Container(
                           margin: const EdgeInsets.symmetric(horizontal: 4),
                           width: 14,
                           height: 14,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: isBlue ? const Color(0xFF0084FF) : Colors.grey[300],
+                            color: isBlue
+                                ? const Color(0xFF0084FF)
+                                : Colors.grey[300],
                           ),
                         );
                       }),
                     ),
-                  
+
                   if (_scanStep == 0) ...[
                     const SizedBox(height: 24),
                     SizedBox(
@@ -201,18 +263,24 @@ class _NfcScreenState extends State<NfcScreen> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFEBEBEB),
                           elevation: 0,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
                         onPressed: () {
-                          print("Bấm để sau");
+                          debugPrint('Scan skipped for now');
                         },
                         child: Text(
-                          "Để sau",
-                          style: GoogleFonts.poppins(color: Colors.black54, fontWeight: FontWeight.w600, fontSize: 15),
+                          _t('Để sau', 'Later'),
+                          style: GoogleFonts.poppins(
+                            color: Colors.black54,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 15,
+                          ),
                         ),
                       ),
                     ),
-                  ]
+                  ],
                 ],
               ),
             ),
@@ -232,12 +300,19 @@ class _NfcScreenState extends State<NfcScreen> {
             margin: const EdgeInsets.only(top: 6, right: 10),
             width: 5,
             height: 5,
-            decoration: const BoxDecoration(color: Colors.grey, shape: BoxShape.circle),
+            decoration: const BoxDecoration(
+              color: Colors.grey,
+              shape: BoxShape.circle,
+            ),
           ),
           Expanded(
             child: Text(
               text,
-              style: GoogleFonts.poppins(color: Colors.grey[700], fontSize: 13, height: 1.5),
+              style: GoogleFonts.poppins(
+                color: Colors.grey[700],
+                fontSize: 13,
+                height: 1.5,
+              ),
             ),
           ),
         ],
@@ -250,9 +325,12 @@ class _NfcScreenState extends State<NfcScreen> {
       padding: const EdgeInsets.only(bottom: 6),
       child: Text(
         text,
-        style: GoogleFonts.poppins(color: Colors.grey[700], fontSize: 13, height: 1.5),
+        style: GoogleFonts.poppins(
+          color: Colors.grey[700],
+          fontSize: 13,
+          height: 1.5,
+        ),
       ),
     );
   }
 }
-

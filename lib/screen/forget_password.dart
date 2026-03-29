@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../l10n/app_text.dart';
 import 'login.dart';
 
 void main() {
@@ -22,6 +23,8 @@ class ForgotPasswordScreen extends StatefulWidget {
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final TextEditingController _phoneController = TextEditingController();
   bool _isPhoneValid = false;
+
+  String _t(String vi, String en) => AppText.tr(context, vi, en);
 
   @override
   void initState() {
@@ -93,7 +96,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           },
         ),
         title: Text(
-          'Quên mật khẩu',
+          _t('Quên mật khẩu', 'Forgot password'),
           style: GoogleFonts.poppins(
             color: Colors.black,
             fontWeight: FontWeight.w600,
@@ -123,7 +126,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Nhập số điện thoại của bạn',
+                    _t('Nhập số điện thoại của bạn', 'Enter your phone number'),
                     style: GoogleFonts.poppins(
                       color: Colors.grey[400],
                       fontSize: 14,
@@ -138,7 +141,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       LengthLimitingTextInputFormatter(10),
                     ],
                     decoration: InputDecoration(
-                      hintText: 'Nhập số điện thoại',
+                      hintText: _t('Nhập số điện thoại', 'Enter phone number'),
                       hintStyle: GoogleFonts.poppins(
                         color: Colors.grey[400],
                         fontWeight: FontWeight.w500,
@@ -159,7 +162,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   ),
                   const SizedBox(height: 20),
                   Text(
-                    'Chúng tôi đã gửi mã xác minh đến số điện thoại của bạn.',
+                    _t(
+                      'Chúng tôi đã gửi mã xác minh đến số điện thoại của bạn.',
+                      'We have sent a verification code to your phone number.',
+                    ),
                     style: GoogleFonts.poppins(
                       color: Colors.black87,
                       fontSize: 13,
@@ -174,9 +180,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       onPressed: _isPhoneValid
                           ? () {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
+                                SnackBar(
                                   content: Text(
-                                    'Đã hủy liên kết với trang OTP.',
+                                    _t(
+                                      'Đã hủy liên kết với trang OTP.',
+                                      'OTP screen is currently disabled.',
+                                    ),
                                   ),
                                 ),
                               );
@@ -193,7 +202,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                         elevation: 0,
                       ),
                       child: Text(
-                        'Gửi',
+                        _t('Gửi', 'Send'),
                         style: GoogleFonts.poppins(
                           color: Colors.white,
                           fontSize: 16,
