@@ -1,37 +1,37 @@
-import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
-import 'electric_bill_otp.dart';
-import 'main_tab_shell.dart';
 import '../data/user_firestore_service.dart';
 import '../l10n/app_text.dart';
 import '../widget/ccp_app_bar.dart';
+import 'main_tab_shell.dart';
+import 'water_bill_otp.dart';
 
-class ElectricBillPayScreen extends StatefulWidget {
-  const ElectricBillPayScreen({
+class WaterBillPayScreen extends StatefulWidget {
+  const WaterBillPayScreen({
     super.key,
-    this.customerCode = 'PE13000456281',
-    this.customerName = 'NGUYEN VAN AN',
-    this.serviceAddress = '123 Duong Lang, Ha Noi',
-    this.usageKwh = 450,
-    this.billingPeriod = '10/2023',
-    this.totalAmount = 1120500,
+    this.customerCode = 'PE13000245678',
+    this.customerName = 'NGUYEN THI MAI',
+    this.serviceAddress = '288 Le Loi, Quan 1, TP.HCM',
+    this.usageM3 = 36,
+    this.billingPeriod = '03/2026',
+    this.totalAmount = 426000,
   });
 
   final String customerCode;
   final String customerName;
   final String serviceAddress;
-  final double usageKwh;
+  final double usageM3;
   final String billingPeriod;
   final double totalAmount;
 
   @override
-  State<ElectricBillPayScreen> createState() => _ElectricBillPayScreenState();
+  State<WaterBillPayScreen> createState() => _WaterBillPayScreenState();
 }
 
-class _ElectricBillPayScreenState extends State<ElectricBillPayScreen>
+class _WaterBillPayScreenState extends State<WaterBillPayScreen>
     with SingleTickerProviderStateMixin {
   static const Color _primaryBlue = Color(0xFF000DC0);
   static const Color _surface = Color(0xFFF6F7FF);
@@ -93,7 +93,7 @@ class _ElectricBillPayScreenState extends State<ElectricBillPayScreen>
     return StreamBuilder<UserProfileData?>(
       stream: _profileStream,
       initialData: UserFirestoreService.instance.latestProfile,
-      builder: (context, profileSnapshot) {
+      builder: (BuildContext context, AsyncSnapshot<UserProfileData?> profileSnapshot) {
         final UserProfileData? profile =
             profileSnapshot.data ?? UserFirestoreService.instance.latestProfile;
         final String? uid = profile?.uid;
@@ -110,11 +110,11 @@ class _ElectricBillPayScreenState extends State<ElectricBillPayScreen>
         }
 
         return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-          stream: FirebaseFirestore.instance
-              .collection('users')
-              .doc(uid)
-              .snapshots(),
-          builder: (context, userSnapshot) {
+          stream: FirebaseFirestore.instance.collection('users').doc(uid).snapshots(),
+          builder: (
+            BuildContext context,
+            AsyncSnapshot<DocumentSnapshot<Map<String, dynamic>>> userSnapshot,
+          ) {
             final bool hasVipCard = _parseHasVipCard(
               userSnapshot.data?.data()?['hasVipCard'],
             );
@@ -125,7 +125,10 @@ class _ElectricBillPayScreenState extends State<ElectricBillPayScreen>
                   .doc(uid)
                   .collection('cards')
                   .snapshots(),
-              builder: (context, cardsSnapshot) {
+              builder: (
+                BuildContext context,
+                AsyncSnapshot<QuerySnapshot<Map<String, dynamic>>> cardsSnapshot,
+              ) {
                 if (cardsSnapshot.connectionState == ConnectionState.waiting &&
                     !cardsSnapshot.hasData) {
                   return Text(
@@ -202,142 +205,6 @@ class _ElectricBillPayScreenState extends State<ElectricBillPayScreen>
           end: Offset.zero,
         ).animate(animation),
         child: child,
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _surface,
-      appBar: CCPAppBar(
-        title: _t('Thanh toán hoá đơn', 'Payment'),
-        backgroundColor: _surface,
-        onBackPressed: () => Navigator.maybePop(context),
-        actions: <Widget>[
-          IconButton(
-            onPressed: _goHome,
-            icon: const Icon(Icons.home_rounded),
-            color: _primaryBlue,
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              _reveal(
-                0,
-                Row(
-                  children: <Widget>[
-                    Text(
-                      _t('BƯỚC 2/4', 'STEP 2/4'),
-                      style: GoogleFonts.poppins(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: _primaryBlue,
-                      ),
-                    ),
-                    const Spacer(),
-                    Text(
-                      _t('Xác nhận', 'Confirm'),
-                      style: GoogleFonts.poppins(
-                        fontSize: 13,
-                        color: const Color(0xFF9A9FB6),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 10),
-              _reveal(1, _buildProgressLine()),
-              const SizedBox(height: 14),
-              _reveal(
-                2,
-                Text(
-                  _t('Kiểm tra hóa đơn', 'Review bill'),
-                  style: GoogleFonts.poppins(
-                    fontSize: 43,
-                    height: 1.04,
-                    color: const Color(0xFF1A1E35),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              _reveal(
-                3,
-                Text(
-                  _t(
-                    'Vui lòng kiểm tra kỹ thông tin khách hàng và số tiền trước khi thanh toán.',
-                    'Please review customer details and amount before paying.',
-                  ),
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    height: 1.45,
-                    color: const Color(0xFF7B819A),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              _reveal(4, _buildReviewCard()),
-              const SizedBox(height: 18),
-              _reveal(
-                5,
-                Text(
-                  _t('Phương thức thanh toán', 'Payment method'),
-                  style: GoogleFonts.poppins(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF1B1E30),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 11),
-              _reveal(6, _buildCcpBankPaymentTile()),
-              const SizedBox(height: 20),
-              _reveal(
-                7,
-                SizedBox(
-                  width: double.infinity,
-                  height: 55,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ElectricBillOtpScreen(
-                            totalAmount: widget.totalAmount,
-                            customerName: widget.customerName,
-                            customerCode: widget.customerCode,
-                          ),
-                        ),
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _primaryBlue,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(28),
-                      ),
-                      elevation: 0,
-                    ),
-                    child: Text(
-                      _t('THANH TOÁN NGAY', 'PAY NOW'),
-                      style: GoogleFonts.poppins(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -437,7 +304,7 @@ class _ElectricBillPayScreenState extends State<ElectricBillPayScreen>
           ),
           const SizedBox(height: 12),
           _buildInfoPanel(
-            icon: Icons.bolt_rounded,
+            icon: Icons.water_drop_rounded,
             title: _t('Chi tiết tiêu thụ', 'Consumption details'),
             child: Column(
               children: <Widget>[
@@ -445,9 +312,8 @@ class _ElectricBillPayScreenState extends State<ElectricBillPayScreen>
                   children: <Widget>[
                     Expanded(
                       child: _metricBlock(
-                        label: _t('LƯỢNG ĐIỆN TIÊU THỤ', 'ENERGY USAGE'),
-                        value:
-                            '${widget.usageKwh.toStringAsFixed(0)} ${_t('kWh', 'kWh')}',
+                        label: _t('LƯỢNG NƯỚC SỬ DỤNG', 'WATER USAGE'),
+                        value: '${widget.usageM3.toStringAsFixed(0)} m3',
                       ),
                     ),
                     Expanded(
@@ -461,10 +327,7 @@ class _ElectricBillPayScreenState extends State<ElectricBillPayScreen>
                 const SizedBox(height: 12),
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF1F4FF),
                     borderRadius: BorderRadius.circular(12),
@@ -621,6 +484,142 @@ class _ElectricBillPayScreenState extends State<ElectricBillPayScreen>
               size: 20,
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _surface,
+      appBar: CCPAppBar(
+        title: _t('Thanh toán hoá đơn', 'Bill payment'),
+        backgroundColor: _surface,
+        onBackPressed: () => Navigator.maybePop(context),
+        actions: <Widget>[
+          IconButton(
+            onPressed: _goHome,
+            icon: const Icon(Icons.home_rounded),
+            color: _primaryBlue,
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              _reveal(
+                0,
+                Row(
+                  children: <Widget>[
+                    Text(
+                      _t('BƯỚC 2/4', 'STEP 2/4'),
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: _primaryBlue,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      _t('Xác nhận', 'Confirm'),
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        color: const Color(0xFF9A9FB6),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              _reveal(1, _buildProgressLine()),
+              const SizedBox(height: 14),
+              _reveal(
+                2,
+                Text(
+                  _t('Kiểm tra hóa đơn', 'Review bill'),
+                  style: GoogleFonts.poppins(
+                    fontSize: 43,
+                    height: 1.04,
+                    color: const Color(0xFF1A1E35),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              _reveal(
+                3,
+                Text(
+                  _t(
+                    'Vui lòng kiểm tra kỹ thông tin khách hàng và số tiền trước khi thanh toán.',
+                    'Please review customer details and amount before paying.',
+                  ),
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    height: 1.45,
+                    color: const Color(0xFF7B819A),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              _reveal(4, _buildReviewCard()),
+              const SizedBox(height: 18),
+              _reveal(
+                5,
+                Text(
+                  _t('Phương thức thanh toán', 'Payment method'),
+                  style: GoogleFonts.poppins(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF1B1E30),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 11),
+              _reveal(6, _buildCcpBankPaymentTile()),
+              const SizedBox(height: 20),
+              _reveal(
+                7,
+                SizedBox(
+                  width: double.infinity,
+                  height: 55,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => WaterBillOtpScreen(
+                            totalAmount: widget.totalAmount,
+                            customerName: widget.customerName,
+                            customerCode: widget.customerCode,
+                          ),
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _primaryBlue,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(28),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: Text(
+                      _t('THANH TOÁN NGAY', 'PAY NOW'),
+                      style: GoogleFonts.poppins(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

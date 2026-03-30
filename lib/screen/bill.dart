@@ -5,6 +5,7 @@ import '../l10n/app_text.dart';
 import '../widget/ccp_app_bar.dart';
 import 'electric_bill.dart';
 import 'phone_recharge.dart';
+import 'water_bill.dart';
 
 class BillScreen extends StatelessWidget {
   const BillScreen({super.key});
@@ -97,15 +98,11 @@ class BillScreen extends StatelessWidget {
                 iconBackground: const Color(0xFF1D6FD1),
                 iconForeground: Colors.white,
                 onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        _t(
-                          context,
-                          'Tính năng thanh toán tiền nước sẽ sớm ra mắt.',
-                          'Water bill payment is coming soon.',
-                        ),
-                      ),
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (BuildContext context) =>
+                          const WaterBillScreen(),
                     ),
                   );
                 },

@@ -7,8 +7,8 @@ import '../widget/ccp_app_bar.dart';
 import 'bill.dart';
 import 'main_tab_shell.dart';
 
-class ElectricBillSuccessScreen extends StatelessWidget {
-  const ElectricBillSuccessScreen({
+class WaterBillSuccessScreen extends StatelessWidget {
+  const WaterBillSuccessScreen({
     super.key,
     required this.totalAmount,
     required this.customerName,
@@ -33,14 +33,14 @@ class ElectricBillSuccessScreen extends StatelessWidget {
   void _goHome(BuildContext context) {
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const MainTabShell(initialIndex: 0)),
-      (route) => false,
+      (Route<dynamic> route) => false,
     );
   }
 
   void _payAnotherBill(BuildContext context) {
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const BillScreen()),
-      (route) => route.isFirst,
+      (Route<dynamic> route) => route.isFirst,
     );
   }
 
@@ -51,7 +51,7 @@ class ElectricBillSuccessScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: _surface,
       appBar: CCPAppBar(
-        title: _t(context, 'Hoàn tất', 'Completed'),
+        title: _t(context, 'Hoàn tất', 'Bill payment'),
         backgroundColor: _surface,
         onBackPressed: () => _goHome(context),
       ),
@@ -86,8 +86,8 @@ class ElectricBillSuccessScreen extends StatelessWidget {
                     Text(
                       _t(
                         context,
-                        'Thanh toán hóa đơn thành công',
-                        'Bill payment completed',
+                        'Thanh toán hoá đơn nước thành công',
+                        'Water bill payment completed',
                       ),
                       textAlign: TextAlign.center,
                       style: GoogleFonts.poppins(
@@ -167,7 +167,11 @@ class ElectricBillSuccessScreen extends StatelessWidget {
                     ),
                   ),
                   child: Text(
-                    _t(context, 'THANH TOÁN HÓA ĐƠN KHÁC', 'PAY ANOTHER BILL'),
+                    _t(
+                      context,
+                      'THANH TOÁN HOÁ ĐƠN KHÁC',
+                      'PAY ANOTHER BILL',
+                    ),
                     style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
                   ),
                 ),

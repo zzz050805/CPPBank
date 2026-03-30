@@ -3,13 +3,13 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
-import 'electric_bill_success.dart';
-import 'main_tab_shell.dart';
 import '../l10n/app_text.dart';
 import '../widget/ccp_app_bar.dart';
+import 'main_tab_shell.dart';
+import 'water_bill_success.dart';
 
-class ElectricBillOtpScreen extends StatefulWidget {
-  const ElectricBillOtpScreen({
+class WaterBillOtpScreen extends StatefulWidget {
+  const WaterBillOtpScreen({
     super.key,
     required this.totalAmount,
     required this.customerName,
@@ -23,10 +23,10 @@ class ElectricBillOtpScreen extends StatefulWidget {
   final String maskedPhone;
 
   @override
-  State<ElectricBillOtpScreen> createState() => _ElectricBillOtpScreenState();
+  State<WaterBillOtpScreen> createState() => _WaterBillOtpScreenState();
 }
 
-class _ElectricBillOtpScreenState extends State<ElectricBillOtpScreen>
+class _WaterBillOtpScreenState extends State<WaterBillOtpScreen>
     with SingleTickerProviderStateMixin {
   static const Color _primaryBlue = Color(0xFF000DC0);
   static const Color _surface = Color(0xFFF6F7FF);
@@ -106,7 +106,7 @@ class _ElectricBillOtpScreenState extends State<ElectricBillOtpScreen>
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (_) => ElectricBillSuccessScreen(
+        builder: (_) => WaterBillSuccessScreen(
           totalAmount: widget.totalAmount,
           customerName: widget.customerName,
           customerCode: widget.customerCode,
@@ -183,10 +183,10 @@ class _ElectricBillOtpScreenState extends State<ElectricBillOtpScreen>
 
   Widget _buildOtpRow() {
     return LayoutBuilder(
-      builder: (context, constraints) {
+      builder: (BuildContext context, BoxConstraints constraints) {
         const double gap = 8;
-        final double fieldWidth = ((constraints.maxWidth - (gap * 5)) / 6)
-            .clamp(44.0, 52.0);
+        final double fieldWidth =
+            ((constraints.maxWidth - (gap * 5)) / 6).clamp(44.0, 52.0);
 
         return Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -297,7 +297,7 @@ class _ElectricBillOtpScreenState extends State<ElectricBillOtpScreen>
                       borderRadius: BorderRadius.circular(28),
                     ),
                     child: const Icon(
-                      Icons.admin_panel_settings_rounded,
+                      Icons.shield_rounded,
                       color: _primaryBlue,
                       size: 44,
                     ),
@@ -345,10 +345,7 @@ class _ElectricBillOtpScreenState extends State<ElectricBillOtpScreen>
                 6,
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 13,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
                   decoration: BoxDecoration(
                     color: const Color(0xFFEDEBFF),
                     borderRadius: BorderRadius.circular(16),
@@ -363,7 +360,7 @@ class _ElectricBillOtpScreenState extends State<ElectricBillOtpScreen>
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
-                          Icons.bolt_rounded,
+                          Icons.water_drop_rounded,
                           color: _primaryBlue,
                           size: 20,
                         ),
@@ -374,7 +371,7 @@ class _ElectricBillOtpScreenState extends State<ElectricBillOtpScreen>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: <Widget>[
                             Text(
-                              _t('HÓA ĐƠN ĐIỆN LỰC', 'ELECTRIC BILL'),
+                              _t('HÓA ĐƠN NƯỚC', 'WATER BILL'),
                               style: GoogleFonts.poppins(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,
