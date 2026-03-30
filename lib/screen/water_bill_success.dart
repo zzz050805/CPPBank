@@ -167,11 +167,7 @@ class WaterBillSuccessScreen extends StatelessWidget {
                     ),
                   ),
                   child: Text(
-                    _t(
-                      context,
-                      'THANH TOÁN HOÁ ĐƠN KHÁC',
-                      'PAY ANOTHER BILL',
-                    ),
+                    _t(context, 'THANH TOÁN HOÁ ĐƠN KHÁC', 'PAY ANOTHER BILL'),
                     style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
                   ),
                 ),

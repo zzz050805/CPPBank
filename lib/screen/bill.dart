@@ -3,8 +3,8 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../l10n/app_text.dart';
 import '../widget/ccp_app_bar.dart';
+import 'data_bill.dart';
 import 'electric_bill.dart';
-import 'phone_recharge.dart';
 import 'water_bill.dart';
 
 class BillScreen extends StatelessWidget {
@@ -147,7 +147,7 @@ class BillScreen extends StatelessWidget {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const PhoneRechargeScreen(),
+                      builder: (context) => const DataBillScreen(),
                     ),
                   );
                 },

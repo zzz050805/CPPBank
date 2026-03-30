@@ -5,29 +5,27 @@ import 'package:intl/intl.dart';
 
 import '../l10n/app_text.dart';
 import '../widget/ccp_app_bar.dart';
+import 'data_bill_success.dart';
 import 'main_tab_shell.dart';
-import 'water_bill_success.dart';
 
-class WaterBillOtpScreen extends StatefulWidget {
-  const WaterBillOtpScreen({
+class DataBillOtpScreen extends StatefulWidget {
+  const DataBillOtpScreen({
     super.key,
-    required this.totalAmount,
-    required this.customerName,
-    required this.customerCode,
-    this.maskedPhone = '******889',
+    required this.phoneNumber,
+    required this.planName,
+    required this.totalText,
   });
 
-  final double totalAmount;
-  final String customerName;
-  final String customerCode;
-  final String maskedPhone;
+  final String phoneNumber;
+  final String planName;
+  final String totalText;
 
   @override
-  State<WaterBillOtpScreen> createState() => _WaterBillOtpScreenState();
+  State<DataBillOtpScreen> createState() => _DataBillOtpScreenState();
 }
 
-class _WaterBillOtpScreenState extends State<WaterBillOtpScreen>
-    with SingleTickerProviderStateMixin {
+class _DataBillOtpScreenState extends State<DataBillOtpScreen>
+  with SingleTickerProviderStateMixin {
   static const Color _primaryBlue = Color(0xFF000DC0);
   static const Color _surface = Color(0xFFF6F7FF);
 
@@ -58,8 +56,8 @@ class _WaterBillOtpScreenState extends State<WaterBillOtpScreen>
     for (final TextEditingController controller in _otpControllers) {
       controller.dispose();
     }
-    for (final FocusNode node in _otpFocusNodes) {
-      node.dispose();
+    for (final FocusNode focus in _otpFocusNodes) {
+      focus.dispose();
     }
     super.dispose();
   }
@@ -71,48 +69,26 @@ class _WaterBillOtpScreenState extends State<WaterBillOtpScreen>
     );
   }
 
-  String _formatAmount(double amount) {
+  String _maskedPhone() {
+    if (widget.phoneNumber.length < 4) return widget.phoneNumber;
+    return '******${widget.phoneNumber.substring(widget.phoneNumber.length - 3)}';
+  }
+
+  String _formatAmountText() {
+    final String rawDigits = widget.totalText.replaceAll(RegExp(r'[^0-9]'), '');
+    final int amount = int.tryParse(rawDigits) ?? 0;
     return '${_moneyFormat.format(amount)} VND';
   }
 
-  String _enteredOtp() {
-    return _otpControllers
-        .map((TextEditingController controller) => controller.text)
-        .join();
-  }
+  String _enteredOtp() => _otpControllers.map((c) => c.text).join();
 
-  void _onOtpChanged({required String value, required int index}) {
-    if (value.isNotEmpty && index < _otpFocusNodes.length - 1) {
+  void _onOtpChanged(String value, int index) {
+    if (value.isNotEmpty && index < 5) {
       _otpFocusNodes[index + 1].requestFocus();
     }
     if (value.isEmpty && index > 0) {
       _otpFocusNodes[index - 1].requestFocus();
     }
-  }
-
-  void _onConfirm() {
-    if (_enteredOtp().length != 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            _t('Vui lòng nhập đủ 6 số OTP.', 'Please enter all 6 OTP digits.'),
-          ),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
-      return;
-    }
-
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => WaterBillSuccessScreen(
-          totalAmount: widget.totalAmount,
-          customerName: widget.customerName,
-          customerCode: widget.customerCode,
-        ),
-      ),
-    );
   }
 
   Widget _reveal(int index, Widget child) {
@@ -223,8 +199,7 @@ class _WaterBillOtpScreenState extends State<WaterBillOtpScreen>
                         contentPadding: EdgeInsets.zero,
                       ),
                       maxLength: 1,
-                      onChanged: (String value) =>
-                          _onOtpChanged(value: value, index: index),
+                      onChanged: (String value) => _onOtpChanged(value, index),
                     ),
                   ),
                 ),
@@ -233,6 +208,31 @@ class _WaterBillOtpScreenState extends State<WaterBillOtpScreen>
           }),
         );
       },
+    );
+  }
+
+  void _submit() {
+    if (_enteredOtp().length != 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _t('Vui lòng nhập đủ 6 số OTP.', 'Please enter all 6 OTP digits.'),
+          ),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DataBillSuccessScreen(
+          phoneNumber: widget.phoneNumber,
+          planName: widget.planName,
+          totalText: widget.totalText,
+        ),
+      ),
     );
   }
 
@@ -297,14 +297,14 @@ class _WaterBillOtpScreenState extends State<WaterBillOtpScreen>
                       borderRadius: BorderRadius.circular(28),
                     ),
                     child: const Icon(
-                      Icons.shield_rounded,
+                      Icons.verified_user_rounded,
                       color: _primaryBlue,
                       size: 44,
                     ),
                   ),
                 ),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
               _reveal(
                 3,
                 Center(
@@ -327,7 +327,7 @@ class _WaterBillOtpScreenState extends State<WaterBillOtpScreen>
                   child: Text(
                     _t(
                       'Vui lòng nhập mã SmartOTP 6 chữ số',
-                      'Please enter the 6-digit OTP sent to ${widget.maskedPhone}',
+                      'Please enter the 6-digit OTP sent to ${_maskedPhone()}',
                     ),
                     style: GoogleFonts.poppins(
                       fontSize: 12,
@@ -363,7 +363,7 @@ class _WaterBillOtpScreenState extends State<WaterBillOtpScreen>
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
-                          Icons.water_drop_rounded,
+                          Icons.data_usage_rounded,
                           color: _primaryBlue,
                           size: 20,
                         ),
@@ -374,7 +374,7 @@ class _WaterBillOtpScreenState extends State<WaterBillOtpScreen>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: <Widget>[
                             Text(
-                              _t('HÓA ĐƠN NƯỚC', 'WATER BILL'),
+                              _t('NẠP DATA', 'DATA TOP-UP'),
                               style: GoogleFonts.poppins(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,
@@ -384,7 +384,7 @@ class _WaterBillOtpScreenState extends State<WaterBillOtpScreen>
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              _formatAmount(widget.totalAmount),
+                              _formatAmountText(),
                               style: GoogleFonts.poppins(
                                 fontSize: 21,
                                 fontWeight: FontWeight.w700,
@@ -405,7 +405,7 @@ class _WaterBillOtpScreenState extends State<WaterBillOtpScreen>
                   width: double.infinity,
                   height: 55,
                   child: ElevatedButton(
-                    onPressed: _onConfirm,
+                    onPressed: _submit,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _primaryBlue,
                       foregroundColor: Colors.white,

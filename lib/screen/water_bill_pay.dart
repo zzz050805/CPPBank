@@ -93,99 +93,125 @@ class _WaterBillPayScreenState extends State<WaterBillPayScreen>
     return StreamBuilder<UserProfileData?>(
       stream: _profileStream,
       initialData: UserFirestoreService.instance.latestProfile,
-      builder: (BuildContext context, AsyncSnapshot<UserProfileData?> profileSnapshot) {
-        final UserProfileData? profile =
-            profileSnapshot.data ?? UserFirestoreService.instance.latestProfile;
-        final String? uid = profile?.uid;
-
-        if (uid == null || uid.isEmpty) {
-          return Text(
-            '${_t('Số dư', 'Balance')}: --',
-            style: GoogleFonts.poppins(
-              fontSize: 12,
-              color: const Color(0xFF7E85A1),
-              fontWeight: FontWeight.w500,
-            ),
-          );
-        }
-
-        return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-          stream: FirebaseFirestore.instance.collection('users').doc(uid).snapshots(),
-          builder: (
+      builder:
+          (
             BuildContext context,
-            AsyncSnapshot<DocumentSnapshot<Map<String, dynamic>>> userSnapshot,
+            AsyncSnapshot<UserProfileData?> profileSnapshot,
           ) {
-            final bool hasVipCard = _parseHasVipCard(
-              userSnapshot.data?.data()?['hasVipCard'],
-            );
+            final UserProfileData? profile =
+                profileSnapshot.data ??
+                UserFirestoreService.instance.latestProfile;
+            final String? uid = profile?.uid;
 
-            return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            if (uid == null || uid.isEmpty) {
+              return Text(
+                '${_t('Số dư', 'Balance')}: --',
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  color: const Color(0xFF7E85A1),
+                  fontWeight: FontWeight.w500,
+                ),
+              );
+            }
+
+            return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
               stream: FirebaseFirestore.instance
                   .collection('users')
                   .doc(uid)
-                  .collection('cards')
                   .snapshots(),
-              builder: (
-                BuildContext context,
-                AsyncSnapshot<QuerySnapshot<Map<String, dynamic>>> cardsSnapshot,
-              ) {
-                if (cardsSnapshot.connectionState == ConnectionState.waiting &&
-                    !cardsSnapshot.hasData) {
-                  return Text(
-                    '${_t('Số dư', 'Balance')}: ...',
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      color: const Color(0xFF7E85A1),
-                      fontWeight: FontWeight.w500,
-                    ),
-                  );
-                }
+              builder:
+                  (
+                    BuildContext context,
+                    AsyncSnapshot<DocumentSnapshot<Map<String, dynamic>>>
+                    userSnapshot,
+                  ) {
+                    final bool hasVipCard = _parseHasVipCard(
+                      userSnapshot.data?.data()?['hasVipCard'],
+                    );
 
-                if (cardsSnapshot.hasError || userSnapshot.hasError) {
-                  return Text(
-                    _t('Không tải được số dư', 'Unable to load balance'),
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      color: const Color(0xFF7E85A1),
-                      fontWeight: FontWeight.w500,
-                    ),
-                  );
-                }
+                    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                      stream: FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(uid)
+                          .collection('cards')
+                          .snapshots(),
+                      builder:
+                          (
+                            BuildContext context,
+                            AsyncSnapshot<QuerySnapshot<Map<String, dynamic>>>
+                            cardsSnapshot,
+                          ) {
+                            if (cardsSnapshot.connectionState ==
+                                    ConnectionState.waiting &&
+                                !cardsSnapshot.hasData) {
+                              return Text(
+                                '${_t('Số dư', 'Balance')}: ...',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 12,
+                                  color: const Color(0xFF7E85A1),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              );
+                            }
 
-                double standardBalance = 0;
-                double vipBalance = 0;
+                            if (cardsSnapshot.hasError ||
+                                userSnapshot.hasError) {
+                              return Text(
+                                _t(
+                                  'Không tải được số dư',
+                                  'Unable to load balance',
+                                ),
+                                style: GoogleFonts.poppins(
+                                  fontSize: 12,
+                                  color: const Color(0xFF7E85A1),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              );
+                            }
 
-                for (final QueryDocumentSnapshot<Map<String, dynamic>> doc
-                    in (cardsSnapshot.data?.docs ??
-                        <QueryDocumentSnapshot<Map<String, dynamic>>>[])) {
-                  final Map<String, dynamic> data = doc.data();
-                  final double balance = _parseBalance(data['balance']);
-                  final String docId = doc.id.toLowerCase();
+                            double standardBalance = 0;
+                            double vipBalance = 0;
 
-                  if (docId == 'standard') {
-                    standardBalance = balance;
-                  } else if (docId == 'vip') {
-                    vipBalance = balance;
-                  }
-                }
+                            for (final QueryDocumentSnapshot<
+                                  Map<String, dynamic>
+                                >
+                                doc
+                                in (cardsSnapshot.data?.docs ??
+                                    <
+                                      QueryDocumentSnapshot<
+                                        Map<String, dynamic>
+                                      >
+                                    >[])) {
+                              final Map<String, dynamic> data = doc.data();
+                              final double balance = _parseBalance(
+                                data['balance'],
+                              );
+                              final String docId = doc.id.toLowerCase();
 
-                final double totalBalance = hasVipCard
-                    ? standardBalance + vipBalance
-                    : standardBalance;
+                              if (docId == 'standard') {
+                                standardBalance = balance;
+                              } else if (docId == 'vip') {
+                                vipBalance = balance;
+                              }
+                            }
 
-                return Text(
-                  _formatBalanceLine(totalBalance),
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    color: const Color(0xFF7E85A1),
-                    fontWeight: FontWeight.w500,
-                  ),
-                );
-              },
+                            final double totalBalance = hasVipCard
+                                ? standardBalance + vipBalance
+                                : standardBalance;
+
+                            return Text(
+                              _formatBalanceLine(totalBalance),
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                color: const Color(0xFF7E85A1),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            );
+                          },
+                    );
+                  },
             );
           },
-        );
-      },
     );
   }
 
@@ -327,7 +353,10 @@ class _WaterBillPayScreenState extends State<WaterBillPayScreen>
                 const SizedBox(height: 12),
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF1F4FF),
                     borderRadius: BorderRadius.circular(12),
