@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'app_preferences.dart';
+import 'core/local_notification_service.dart';
 import 'data/user_firestore_service.dart';
 import 'data/firebase_helper.dart';
 import 'effect/app_transitions.dart';
@@ -48,6 +49,13 @@ void main() async {
     await UserFirestoreService.instance.syncCurrentUserData();
   } catch (e) {
     debugPrint('❌ Initial user sync failed: $e');
+  }
+
+  // 6. Khởi tạo local notification để hiển thị popup kiểu SMS.
+  try {
+    await LocalNotificationService.instance.initialize();
+  } catch (e) {
+    debugPrint('❌ Local notification init failed: $e');
   }
 
   runApp(const MyApp());

@@ -1,6 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import '../data/user_firestore_service.dart';
 import '../l10n/app_text.dart';
 import '../widget/ccp_app_bar.dart';
@@ -51,21 +52,10 @@ class ConfirmTransferScreen extends StatelessWidget {
   String _formatAmount(String rawAmount) {
     final String digits = rawAmount.replaceAll(RegExp(r'\D'), '');
     if (digits.isEmpty) {
-      return '1.000.000 VND';
+      return '0 VND';
     }
-
-    final StringBuffer buffer = StringBuffer();
-    int count = 0;
-    for (int i = digits.length - 1; i >= 0; i--) {
-      buffer.write(digits[i]);
-      count++;
-      if (count == 3 && i != 0) {
-        buffer.write('.');
-        count = 0;
-      }
-    }
-
-    return '${buffer.toString().split('').reversed.join()} VND';
+    final int value = int.tryParse(digits) ?? 0;
+    return '${NumberFormat('#,###', 'en_US').format(value)} VND';
   }
 
   String _safeRecipientAccount() {
@@ -211,8 +201,8 @@ class ConfirmTransferScreen extends StatelessWidget {
                               Text(
                                 _t(
                                   context,
-                                  'Một triệu đồng',
-                                  'One million dong',
+                                  'Đã nhập: $displayAmount',
+                                  'Entered: $displayAmount',
                                 ),
                                 style: GoogleFonts.poppins(
                                   color: Colors.white.withValues(alpha: 0.88),

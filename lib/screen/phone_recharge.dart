@@ -39,6 +39,7 @@ class _TopUpScreenState extends State<TopUpScreen>
   static const Color _primaryBlue = Color(0xFF000DC0);
   static const String _providerPlaceholderAsset =
       'assets/images/nhacungcap.jpg';
+  static const String _otherAmountKey = '__other_amount__';
 
   late final AnimationController _controller;
   late final Animation<double> _providerFade;
@@ -70,7 +71,7 @@ class _TopUpScreenState extends State<TopUpScreen>
     '200.000',
     '300.000',
     '500.000',
-    'Số khác',
+    _otherAmountKey,
   ];
   String? selectedAmount;
   final TextEditingController _customAmountController = TextEditingController();
@@ -674,7 +675,7 @@ class _TopUpScreenState extends State<TopUpScreen>
                     ),
                   ),
                   const SizedBox(height: 15),
-                  if (selectedAmount == 'Số khác') ...[
+                  if (selectedAmount == _otherAmountKey) ...[
                     _buildAnimatedSection(
                       fade: _amountFade,
                       slide: _amountSlide,
@@ -754,7 +755,7 @@ class _TopUpScreenState extends State<TopUpScreen>
                       itemCount: amounts.length,
                       itemBuilder: (context, index) {
                         final String amount = amounts[index];
-                        final bool isCustomAmount = amount == 'Số khác';
+                        final bool isCustomAmount = amount == _otherAmountKey;
                         final String displayAmount = isCustomAmount
                             ? _t('Số khác', 'Other')
                             : amount;
@@ -764,7 +765,7 @@ class _TopUpScreenState extends State<TopUpScreen>
                           onTap: () {
                             setState(() {
                               selectedAmount = amount;
-                              if (amount != 'Số khác') {
+                              if (amount != _otherAmountKey) {
                                 _customAmountError = null;
                               }
                             });
@@ -896,7 +897,7 @@ class _TopUpScreenState extends State<TopUpScreen>
 
                     String amountToConfirm = selectedAmount!;
 
-                    if (selectedAmount == 'Số khác') {
+                    if (selectedAmount == _otherAmountKey) {
                       final String rawValue = _customAmountController.text
                           .trim();
                       if (rawValue.isEmpty) {

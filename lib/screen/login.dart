@@ -5,6 +5,7 @@ import 'dart:ui';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../data/user_firestore_service.dart';
+import 'forget_password.dart';
 import 'main_tab_shell.dart';
 import 'register.dart';
 
@@ -145,32 +146,50 @@ class _LoginScreenState extends State<LoginScreen> {
       UserCredential credential;
 
       if (authEmailRaw.isEmpty) {
-        // Legacy account: xác thực bằng mật khẩu đang lưu trong Firestore rồi migrate.
-        if (storedLegacyPassword != inputPass) {
-          if (!mounted) return;
-          closeLoadingDialog();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                _t(
-                  'Tài khoản hoặc mật khẩu không chính xác!',
-                  'Incorrect account or password!',
-                ),
-              ),
-              backgroundColor: Colors.red,
-            ),
-          );
-          return;
-        }
-
+        // Always prefer Firebase Auth sign-in first to use the latest password.
         try {
-          credential = await FirebaseAuth.instance
-              .createUserWithEmailAndPassword(
-                email: generatedEmail,
-                password: inputPass,
-              );
+          credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+            email: generatedEmail,
+            password: inputPass,
+          );
+          final String uid = credential.user!.uid;
+          await FirebaseFirestore.instance.collection('users').doc(uid).set({
+            ...data,
+            'fullname': (data['fullname'] ?? data['fullName'] ?? '').toString(),
+            'fullName': (data['fullName'] ?? data['fullname'] ?? '').toString(),
+            'authEmail': generatedEmail,
+            'email': (data['email'] ?? generatedEmail).toString(),
+            'authUid': uid,
+            'lastLoginAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+
+          await legacyDoc.reference.set({
+            'authEmail': generatedEmail,
+            'authUid': uid,
+            'lastLoginAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+
+          await UserFirestoreService.instance.syncCurrentUserData(
+            docIdOverride: uid,
+          );
         } on FirebaseAuthException catch (e) {
           if (isConfigurationNotFound(e)) {
+            if (storedLegacyPassword != inputPass) {
+              if (!mounted) return;
+              closeLoadingDialog();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    _t(
+                      'Tài khoản hoặc mật khẩu không chính xác!',
+                      'Incorrect account or password!',
+                    ),
+                  ),
+                  backgroundColor: Colors.red,
+                ),
+              );
+              return;
+            }
             UserFirestoreService.instance.setFallbackDocId(legacyDoc.id);
             await legacyDoc.reference.set({
               'lastLoginAt': FieldValue.serverTimestamp(),
@@ -186,35 +205,101 @@ class _LoginScreenState extends State<LoginScreen> {
             );
             return;
           }
-          if (e.code == 'email-already-in-use') {
-            credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
-              email: generatedEmail,
-              password: inputPass,
-            );
-          } else {
+
+          final bool shouldFallbackToLegacy =
+              e.code == 'user-not-found' || e.code == 'invalid-email';
+
+          if (!shouldFallbackToLegacy) {
             rethrow;
           }
+
+          // Legacy fallback: authenticate with stored Firestore password then migrate.
+          if (storedLegacyPassword != inputPass) {
+            if (!mounted) return;
+            closeLoadingDialog();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  _t(
+                    'Tài khoản hoặc mật khẩu không chính xác!',
+                    'Incorrect account or password!',
+                  ),
+                ),
+                backgroundColor: Colors.red,
+              ),
+            );
+            return;
+          }
+
+          try {
+            credential = await FirebaseAuth.instance
+                .createUserWithEmailAndPassword(
+                  email: generatedEmail,
+                  password: inputPass,
+                );
+          } on FirebaseAuthException catch (createError) {
+            if (isConfigurationNotFound(createError)) {
+              if (storedLegacyPassword != inputPass) {
+                if (!mounted) return;
+                closeLoadingDialog();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      _t(
+                        'Tài khoản hoặc mật khẩu không chính xác!',
+                        'Incorrect account or password!',
+                      ),
+                    ),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+              UserFirestoreService.instance.setFallbackDocId(legacyDoc.id);
+              await legacyDoc.reference.set({
+                'lastLoginAt': FieldValue.serverTimestamp(),
+              }, SetOptions(merge: true));
+              await UserFirestoreService.instance.syncCurrentUserData(
+                docIdOverride: legacyDoc.id,
+              );
+              if (!mounted) return;
+              closeLoadingDialog();
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const MainTabShell()),
+              );
+              return;
+            }
+            if (createError.code == 'email-already-in-use') {
+              credential = await FirebaseAuth.instance
+                  .signInWithEmailAndPassword(
+                    email: generatedEmail,
+                    password: inputPass,
+                  );
+            } else {
+              rethrow;
+            }
+          }
+
+          final String uid = credential.user!.uid;
+          await FirebaseFirestore.instance.collection('users').doc(uid).set({
+            ...data,
+            'fullname': (data['fullname'] ?? data['fullName'] ?? '').toString(),
+            'fullName': (data['fullName'] ?? data['fullname'] ?? '').toString(),
+            'authEmail': generatedEmail,
+            'email': (data['email'] ?? generatedEmail).toString(),
+            'authUid': uid,
+            'migratedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+
+          await legacyDoc.reference.set({
+            'authEmail': generatedEmail,
+            'authUid': uid,
+          }, SetOptions(merge: true));
+          await UserFirestoreService.instance.syncCurrentUserData(
+            docIdOverride: uid,
+          );
         }
-
-        final String uid = credential.user!.uid;
-        await FirebaseFirestore.instance.collection('users').doc(uid).set({
-          ...data,
-          'fullname': (data['fullname'] ?? data['fullName'] ?? '').toString(),
-          'fullName': (data['fullName'] ?? data['fullname'] ?? '').toString(),
-          'authEmail': generatedEmail,
-          'email': (data['email'] ?? generatedEmail).toString(),
-          'authUid': uid,
-          'migratedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-
-        // Đánh dấu lại bản ghi cũ để lần sau không bị thiếu auth info.
-        await legacyDoc.reference.set({
-          'authEmail': generatedEmail,
-          'authUid': uid,
-        }, SetOptions(merge: true));
-        await UserFirestoreService.instance.syncCurrentUserData(
-          docIdOverride: uid,
-        );
       } else {
         try {
           credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
@@ -223,6 +308,22 @@ class _LoginScreenState extends State<LoginScreen> {
           );
         } on FirebaseAuthException catch (e) {
           if (isConfigurationNotFound(e)) {
+            if (storedLegacyPassword != inputPass) {
+              if (!mounted) return;
+              closeLoadingDialog();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    _t(
+                      'Tài khoản hoặc mật khẩu không chính xác!',
+                      'Incorrect account or password!',
+                    ),
+                  ),
+                  backgroundColor: Colors.red,
+                ),
+              );
+              return;
+            }
             UserFirestoreService.instance.setFallbackDocId(legacyDoc.id);
             await legacyDoc.reference.set({
               'lastLoginAt': FieldValue.serverTimestamp(),
@@ -263,6 +364,29 @@ class _LoginScreenState extends State<LoginScreen> {
       );
     } on FirebaseAuthException catch (e) {
       if (isConfigurationNotFound(e) && foundLegacyDoc != null) {
+        final Map<String, dynamic> fallbackData = foundLegacyDoc.data();
+        final String fallbackStoredPassword = (fallbackData['password'] ?? '')
+            .toString()
+            .trim();
+        final String inputPassword = _passwordController.text.trim();
+
+        if (fallbackStoredPassword != inputPassword) {
+          if (!mounted) return;
+          closeLoadingDialog();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                _t(
+                  'Tài khoản hoặc mật khẩu không chính xác!',
+                  'Incorrect account or password!',
+                ),
+              ),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+
         UserFirestoreService.instance.setFallbackDocId(foundLegacyDoc.id);
         await foundLegacyDoc.reference.set({
           'lastLoginAt': FieldValue.serverTimestamp(),
@@ -474,16 +598,34 @@ class _LoginScreenState extends State<LoginScreen> {
                               const SizedBox(height: 12),
                               Align(
                                 alignment: Alignment.centerRight,
-                                child: Text(
-                                  _t('Quên mật khẩu ?', 'Forgot password?'),
-                                  style: GoogleFonts.poppins(
-                                    color: const Color.fromARGB(
-                                      255,
-                                      68,
-                                      67,
-                                      67,
+                                child: InkWell(
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            const ForgotPasswordScreen(),
+                                      ),
+                                    );
+                                  },
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 2,
+                                      vertical: 2,
                                     ),
-                                    fontSize: 14,
+                                    child: Text(
+                                      _t('Quên mật khẩu ?', 'Forgot password?'),
+                                      style: GoogleFonts.poppins(
+                                        color: const Color.fromARGB(
+                                          255,
+                                          68,
+                                          67,
+                                          67,
+                                        ),
+                                        fontSize: 14,
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),

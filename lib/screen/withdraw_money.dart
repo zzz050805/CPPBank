@@ -1,9 +1,18 @@
+import 'dart:async';
+import 'dart:math';
+
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
+import 'package:pin_code_fields/pin_code_fields.dart';
 
+import '../core/local_notification_service.dart';
 import '../data/user_firestore_service.dart';
+import '../l10n/app_text.dart';
+import 'withdraw_receipt_screen.dart';
 
 class WithdrawATMPage extends StatefulWidget {
   const WithdrawATMPage({super.key});
@@ -12,17 +21,32 @@ class WithdrawATMPage extends StatefulWidget {
   State<WithdrawATMPage> createState() => _WithdrawATMPageState();
 }
 
+class _WithdrawReceiptData {
+  const _WithdrawReceiptData({
+    required this.code,
+    required this.amount,
+    required this.createdAt,
+    required this.expiresAt,
+  });
+
+  final String code;
+  final int amount;
+  final DateTime createdAt;
+  final DateTime expiresAt;
+}
+
+class _WithdrawFlowException implements Exception {
+  const _WithdrawFlowException(this.message);
+
+  final String message;
+}
+
 class _WithdrawATMPageState extends State<WithdrawATMPage> {
   // ==================== NOTE: CAU HINH RANG BUOC (TUY CHINH O DAY) ====================
   static const int _minWithdrawAmount = 50000;
+  // Hạn mức rút tối đa mỗi giao dịch: 100 triệu.
   static const int _maxWithdrawAmount = 100000000;
   static const int _withdrawStep = 50000;
-
-  static const String _msgInsufficientBalance = 'Số dư của bạn không đủ';
-  static const String _msgInvalidStep =
-      'Số tiền rút phải là bội số của 50.000đ';
-  static const String _msgOutOfRange =
-      'Số tiền rút không nằm trong hạn mức cho phép';
   // ================================================================================
 
   final TextEditingController _amountController = TextEditingController();
@@ -54,6 +78,21 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
     _amountController.dispose();
     super.dispose();
   }
+
+  String _t(String vi, String en) => AppText.tr(context, vi, en);
+
+  String get _msgInsufficientBalance =>
+      _t('Số dư không đủ', 'Insufficient balance');
+
+  String get _msgInvalidStep => _t(
+    'Số tiền rút phải là bội số của 50.000đ',
+    'Withdrawal amount must be a multiple of 50,000 VND',
+  );
+
+  String get _msgOutOfRange => _t(
+    'Số tiền rút không nằm trong hạn mức cho phép',
+    'Withdrawal amount is outside the allowed limit',
+  );
 
   String _formatCurrency(int amount) {
     return NumberFormat.currency(
@@ -123,7 +162,23 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
 
   double _readBalance(dynamic rawBalance) {
     if (rawBalance is num) return rawBalance.toDouble();
-    if (rawBalance is String) return double.tryParse(rawBalance) ?? 0;
+    if (rawBalance is String) {
+      final String trimmed = rawBalance.trim();
+      if (trimmed.isEmpty) {
+        return 0;
+      }
+
+      final double? direct = double.tryParse(trimmed.replaceAll(',', '.'));
+      if (direct != null) {
+        return direct;
+      }
+
+      final String normalized = trimmed.replaceAll(RegExp(r'[^0-9-]'), '');
+      if (normalized.isEmpty || normalized == '-') {
+        return 0;
+      }
+      return num.tryParse(normalized)?.toDouble() ?? 0;
+    }
     return 0;
   }
 
@@ -135,6 +190,263 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
   String _formatIntAmount(int value) {
     final NumberFormat formatter = NumberFormat('#,###', 'vi_VN');
     return formatter.format(value).replaceAll(',', '.');
+  }
+
+  String _resolveUid() {
+    final String? fromService = UserFirestoreService.instance.currentUserDocId;
+    if (fromService != null && fromService.isNotEmpty) {
+      return fromService;
+    }
+
+    final String? fromAuth = FirebaseAuth.instance.currentUser?.uid;
+    if (fromAuth != null && fromAuth.isNotEmpty) {
+      return fromAuth;
+    }
+
+    return '';
+  }
+
+  String _defaultPinFromId(dynamic idNumberRaw) {
+    final String digits = (idNumberRaw ?? '').toString().replaceAll(
+      RegExp(r'\D'),
+      '',
+    );
+    if (digits.isEmpty) {
+      return '';
+    }
+    if (digits.length >= 6) {
+      return digits.substring(digits.length - 6);
+    }
+    return digits.padLeft(6, '0');
+  }
+
+  Future<String> _loadExpectedPin(String uid) async {
+    final DocumentSnapshot<Map<String, dynamic>> userSnapshot =
+        await FirebaseFirestore.instance.collection('users').doc(uid).get();
+
+    final Map<String, dynamic> userData =
+        userSnapshot.data() ?? <String, dynamic>{};
+    final String savedPin = (userData['smartOtpPin'] ?? '').toString().trim();
+    if (savedPin.isNotEmpty) {
+      return savedPin;
+    }
+
+    return _defaultPinFromId(userData['idNumber'] ?? userData['cccd']);
+  }
+
+  String _generateWithdrawCode() {
+    final Random random = Random.secure();
+    final StringBuffer buffer = StringBuffer();
+
+    for (int i = 0; i < 10; i++) {
+      final int digit = random.nextInt(10);
+      buffer.write(digit);
+    }
+
+    return 'CCP$buffer';
+  }
+
+  Future<_WithdrawReceiptData> _handleWithdraw({
+    required String uid,
+    required int amount,
+  }) async {
+    try {
+      final FirebaseFirestore firestore = FirebaseFirestore.instance;
+      final DocumentReference<Map<String, dynamic>> userRef = firestore
+          .collection('users')
+          .doc(uid);
+
+      final DateTime createdAt = DateTime.now();
+      final DateTime expiresAt = createdAt.add(const Duration(minutes: 15));
+      final String withdrawCode = _generateWithdrawCode();
+      final DocumentReference<Map<String, dynamic>> withdrawRef = userRef
+          .collection('withdraw')
+          .doc();
+      final DocumentReference<Map<String, dynamic>> notificationRef = userRef
+          .collection('notifications')
+          .doc();
+
+      await firestore.runTransaction((transaction) async {
+        final DocumentSnapshot<Map<String, dynamic>> userSnap =
+            await transaction.get(userRef);
+        if (!userSnap.exists) {
+          throw _WithdrawFlowException(
+            _t('Không tìm thấy tài khoản người dùng', 'User account not found'),
+          );
+        }
+
+        final Map<String, dynamic> userData =
+            userSnap.data() ?? <String, dynamic>{};
+        final bool hasVipCard = _parseHasVipCard(userData['hasVipCard']);
+        final DocumentReference<Map<String, dynamic>> standardCardRef = userRef
+            .collection('cards')
+            .doc('standard');
+        final DocumentReference<Map<String, dynamic>> vipCardRef = userRef
+            .collection('cards')
+            .doc('vip');
+
+        final DocumentSnapshot<Map<String, dynamic>> standardCardSnap =
+            await transaction.get(standardCardRef);
+        final DocumentSnapshot<Map<String, dynamic>> vipCardSnap =
+            await transaction.get(vipCardRef);
+
+        num standardBalance = _readBalance(standardCardSnap.data()?['balance']);
+        num vipBalance = _readBalance(vipCardSnap.data()?['balance']);
+        final num cardsBalance = hasVipCard
+            ? (standardBalance + vipBalance)
+            : standardBalance;
+        final num userBalance = _readBalance(userData['balance']);
+
+        final bool hasAnyCardBalance = cardsBalance > 0;
+        final num currentBalance = hasAnyCardBalance
+            ? cardsBalance
+            : userBalance;
+
+        if (currentBalance < amount) {
+          throw _WithdrawFlowException(_msgInsufficientBalance);
+        }
+
+        num newBalance;
+        if (hasAnyCardBalance) {
+          if (standardBalance >= amount) {
+            standardBalance -= amount;
+          } else {
+            final num remaining = amount - standardBalance;
+            standardBalance = 0;
+            if (!hasVipCard || vipBalance < remaining) {
+              throw _WithdrawFlowException(_msgInsufficientBalance);
+            }
+            vipBalance -= remaining;
+          }
+
+          newBalance = hasVipCard
+              ? (standardBalance + vipBalance)
+              : standardBalance;
+
+          transaction.set(standardCardRef, <String, dynamic>{
+            'balance': standardBalance,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+
+          if (hasVipCard) {
+            transaction.set(vipCardRef, <String, dynamic>{
+              'balance': vipBalance,
+              'updatedAt': FieldValue.serverTimestamp(),
+            }, SetOptions(merge: true));
+          }
+        } else {
+          newBalance = userBalance - amount;
+        }
+
+        transaction.set(userRef, <String, dynamic>{
+          'balance': newBalance,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+
+        transaction.set(withdrawRef, <String, dynamic>{
+          'uid': uid,
+          'amount': amount,
+          'amountText': _formatIntAmount(amount),
+          'currency': 'VND',
+          'type': 'withdraw',
+          'withdrawCode': withdrawCode,
+          'timestamp': FieldValue.serverTimestamp(),
+          'createdAt': FieldValue.serverTimestamp(),
+          'status': 'pending',
+          'expiresAt': Timestamp.fromDate(expiresAt),
+        });
+
+        transaction.set(notificationRef, <String, dynamic>{
+          'title': _t('Rút tiền mặt', 'Cash withdrawal'),
+          'body': _t(
+            'Mã $withdrawCode - ${_formatIntAmount(amount)} VND',
+            'Code $withdrawCode - ${_formatIntAmount(amount)} VND',
+          ),
+          'timestamp': FieldValue.serverTimestamp(),
+          'type': 'withdraw',
+          'isRead': false,
+          'relatedId': withdrawRef.id,
+          'amount': amount,
+        });
+      });
+
+      await LocalNotificationService.instance.showLocalNotification(
+        title: _t('Giao dịch thành công', 'Transaction successful'),
+        body: _t(
+          'Rút tiền mặt ${_formatIntAmount(amount)} VND - mã $withdrawCode',
+          'Cash withdrawal ${_formatIntAmount(amount)} VND - code $withdrawCode',
+        ),
+      );
+
+      return _WithdrawReceiptData(
+        code: withdrawCode,
+        amount: amount,
+        createdAt: createdAt,
+        expiresAt: expiresAt,
+      );
+    } on _WithdrawFlowException catch (e) {
+      if (e.message == _msgInsufficientBalance && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_msgInsufficientBalance),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      rethrow;
+    } on FirebaseException catch (e) {
+      final String code = e.code.toLowerCase();
+      if (code == 'unavailable' ||
+          code == 'network-request-failed' ||
+          code == 'deadline-exceeded') {
+        debugPrint('Withdraw network error: ${e.code} - ${e.message}');
+      } else {
+        debugPrint('Withdraw Firebase error: ${e.code} - ${e.message}');
+      }
+      throw _WithdrawFlowException(
+        e.message ??
+            _t(
+              'Đã xảy ra lỗi kết nối khi xử lý rút tiền',
+              'A connection error occurred while processing the withdrawal',
+            ),
+      );
+    } catch (e) {
+      debugPrint('Withdraw unexpected error: $e');
+      rethrow;
+    }
+  }
+
+  Future<_WithdrawReceiptData> _verifyPinAndCreateReceipt({
+    required int amount,
+    required String enteredPin,
+  }) async {
+    final String uid = _resolveUid();
+    if (uid.isEmpty) {
+      throw _WithdrawFlowException(
+        _t(
+          'Không tìm thấy phiên đăng nhập hợp lệ',
+          'No valid login session found',
+        ),
+      );
+    }
+
+    final String expectedPin = await _loadExpectedPin(uid);
+    if (expectedPin.isEmpty) {
+      throw _WithdrawFlowException(
+        _t(
+          'Tài khoản chưa cài đặt Smart OTP PIN, vui lòng thiết lập trước khi rút tiền',
+          'Smart OTP PIN is not set up. Please configure it before withdrawing',
+        ),
+      );
+    }
+
+    if (expectedPin != enteredPin) {
+      throw _WithdrawFlowException(
+        _t('Mã PIN không chính xác', 'Incorrect PIN code'),
+      );
+    }
+
+    return _handleWithdraw(uid: uid, amount: amount);
   }
 
   Widget _buildAvailableBalanceValue() {
@@ -224,47 +536,96 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
   }
 
   Widget _buildBalanceNumber(double totalBalance) {
-    return Text(
-      _formatBalanceAmount(totalBalance),
-      style: const TextStyle(
-        color: Colors.white,
-        fontSize: 28,
-        fontWeight: FontWeight.w800,
-      ),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          _formatBalanceAmount(totalBalance),
+          style: GoogleFonts.poppins(
+            color: Colors.white,
+            fontSize: 29,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.2,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.14),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Text(
+            'VND',
+            style: GoogleFonts.poppins(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.6,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: bgColor,
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            _buildHeader(context),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
-                children: [
-                  const SizedBox(height: 20),
-                  _buildAmountInput(),
-                  const SizedBox(height: 16),
-                  _buildQuickSelectGrid(),
-                  const SizedBox(height: 20),
-                  Text(
-                    'Số tiền tối thiểu bạn có thể rút là ${_formatIntAmount(_minWithdrawAmount)}đ • Tối đa ${_formatIntAmount(_maxWithdrawAmount)}đ/lần',
-                    style: TextStyle(color: Colors.grey, fontSize: 12),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 24),
-                  _buildSubmitButton(),
-                  const SizedBox(height: 20),
-                  _buildSecurityBadge(),
-                  const SizedBox(height: 40),
-                ],
+    final ThemeData poppinsTheme = Theme.of(context).copyWith(
+      textTheme: GoogleFonts.poppinsTextTheme(Theme.of(context).textTheme),
+    );
+
+    return Theme(
+      data: poppinsTheme,
+      child: Scaffold(
+        backgroundColor: bgColor,
+        body: SingleChildScrollView(
+          child: Column(
+            children: [
+              _buildHeader(context),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Column(
+                  children: [
+                    const SizedBox(height: 20),
+                    _buildAmountInput(),
+                    const SizedBox(height: 16),
+                    _buildQuickSelectGrid(),
+                    const SizedBox(height: 16),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEFF3FF),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFD6E0FF)),
+                      ),
+                      child: Text(
+                        _t(
+                          'Hạn mức rút: ${_formatIntAmount(_minWithdrawAmount)}đ - ${_formatIntAmount(_maxWithdrawAmount)}đ / lần',
+                          'Withdrawal limit: ${_formatIntAmount(_minWithdrawAmount)} VND - ${_formatIntAmount(_maxWithdrawAmount)} VND / transaction',
+                        ),
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.poppins(
+                          color: const Color(0xFF405086),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    _buildSubmitButton(),
+                    const SizedBox(height: 20),
+                    _buildSecurityBadge(),
+                    const SizedBox(height: 40),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -276,7 +637,11 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
       width: double.infinity,
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [brandColor, brandColor.withOpacity(0.8)],
+          colors: [
+            const Color(0xFF2239E2),
+            brandColor,
+            const Color(0xFF031A90),
+          ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -295,7 +660,7 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
                     child: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.15),
+                        color: Colors.white.withValues(alpha: 0.15),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
@@ -305,12 +670,12 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  const Text(
-                    "Rút tiền ",
-                    style: TextStyle(
+                  Text(
+                    _t('Rút tiền', 'Withdraw'),
+                    style: GoogleFonts.poppins(
                       color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
+                      fontSize: 21,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ],
@@ -323,9 +688,16 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
+              gradient: LinearGradient(
+                colors: [
+                  Colors.white.withValues(alpha: 0.18),
+                  Colors.white.withValues(alpha: 0.1),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
               borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: Colors.white.withOpacity(0.2)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
             ),
             child: Column(
               children: [
@@ -334,29 +706,30 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.15),
+                        color: Colors.white.withValues(alpha: 0.16),
                         borderRadius: BorderRadius.circular(15),
                       ),
                       child: const Icon(Icons.credit_card, color: Colors.white),
                     ),
                     const SizedBox(width: 12),
-                    const Column(
+                    Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          "TÀI KHOẢN NGUỒN",
-                          style: TextStyle(
-                            color: Colors.white60,
+                          _t('TÀI KHOẢN NGUỒN', 'SOURCE ACCOUNT'),
+                          style: GoogleFonts.poppins(
+                            color: Colors.white.withValues(alpha: 0.75),
                             fontSize: 10,
                             letterSpacing: 1,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                         Text(
-                          "•••• •••• •••• ",
-                          style: TextStyle(
+                          '•••• •••• ••••',
+                          style: GoogleFonts.poppins(
                             color: Colors.white,
                             fontSize: 16,
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w700,
                             letterSpacing: 2,
                           ),
                         ),
@@ -366,7 +739,7 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
                 ),
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 15),
-                  child: Divider(color: Colors.white.withOpacity(0.1)),
+                  child: Divider(color: Colors.white.withValues(alpha: 0.13)),
                 ),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -375,30 +748,22 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          "SỐ DƯ KHẢ DỤNG",
-                          style: TextStyle(color: Colors.white60, fontSize: 10),
+                        Text(
+                          _t('SỐ DƯ KHẢ DỤNG', 'AVAILABLE BALANCE'),
+                          style: GoogleFonts.poppins(
+                            color: Colors.white.withValues(alpha: 0.76),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.8,
+                          ),
                         ),
                         const SizedBox(height: 4),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.baseline,
-                          textBaseline: TextBaseline.alphabetic,
-                          children: [
-                            _buildAvailableBalanceValue(),
-                            const Text(
-                              "đ",
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                              ),
-                            ),
-                          ],
-                        ),
+                        _buildAvailableBalanceValue(),
                       ],
                     ),
                     Icon(
                       Icons.payments_outlined,
-                      color: Colors.white.withOpacity(0.3),
+                      color: Colors.white.withValues(alpha: 0.34),
                       size: 40,
                     ),
                   ],
@@ -420,7 +785,7 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -429,9 +794,12 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            "Nhập số tiền muốn rút",
-            style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w500),
+          Text(
+            _t('Nhập số tiền muốn rút', 'Enter withdrawal amount'),
+            style: GoogleFonts.poppins(
+              color: const Color(0xFF727C96),
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const SizedBox(height: 8),
           TextField(
@@ -461,9 +829,17 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
                 );
               }),
             ],
-            style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w800),
+            style: GoogleFonts.poppins(
+              fontSize: 32,
+              fontWeight: FontWeight.w800,
+              color: const Color(0xFF1E2745),
+            ),
             decoration: InputDecoration(
-              hintText: "0",
+              hintText: '0',
+              hintStyle: GoogleFonts.poppins(
+                color: const Color(0xFFB2B8CA),
+                fontWeight: FontWeight.w600,
+              ),
               errorText: _amountErrorText,
               suffixIcon: Container(
                 padding: const EdgeInsets.symmetric(
@@ -474,11 +850,12 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
                   color: Colors.grey.shade100,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Text(
-                  "VNĐ",
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey,
+                child: Text(
+                  _t('VNĐ', 'VND'),
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF7F879E),
+                    fontSize: 12,
                   ),
                 ),
               ),
@@ -488,7 +865,7 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
               ),
               enabledBorder: UnderlineInputBorder(
                 borderSide: BorderSide(
-                  color: brandColor.withOpacity(0.2),
+                  color: brandColor.withValues(alpha: 0.2),
                   width: 2,
                 ),
               ),
@@ -512,7 +889,7 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -521,9 +898,12 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            "Chọn nhanh mệnh giá",
-            style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w500),
+          Text(
+            _t('Chọn nhanh mệnh giá', 'Quick amount selection'),
+            style: GoogleFonts.poppins(
+              color: const Color(0xFF727C96),
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const SizedBox(height: 16),
           GridView.builder(
@@ -549,7 +929,7 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
                     boxShadow: isSelected
                         ? [
                             BoxShadow(
-                              color: brandColor.withOpacity(0.3),
+                              color: brandColor.withValues(alpha: 0.3),
                               blurRadius: 8,
                               offset: const Offset(0, 4),
                             ),
@@ -559,10 +939,10 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
                   alignment: Alignment.center,
                   child: Text(
                     _formatCurrency(val),
-                    style: TextStyle(
+                    style: GoogleFonts.poppins(
                       color: isSelected ? Colors.white : Colors.black87,
                       fontSize: 13,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
@@ -580,7 +960,7 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
       width: double.infinity,
       height: 56,
       child: ElevatedButton(
-        onPressed: _isValid ? () {} : null,
+        onPressed: _isValid ? _onSubmitWithdraw : null,
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFF2B1CA3),
           foregroundColor: Colors.white,
@@ -589,18 +969,255 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
             borderRadius: BorderRadius.circular(16),
           ),
           elevation: _isValid ? 8 : 0,
-          shadowColor: const Color(0xFF2B1CA3).withOpacity(0.5),
+          shadowColor: const Color(0xFF2B1CA3).withValues(alpha: 0.5),
         ),
-        child: const Row(
+        child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.file_download_outlined),
-            SizedBox(width: 10),
+            const Icon(Icons.file_download_outlined),
+            const SizedBox(width: 10),
             Text(
-              "Rút tiền",
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              _t('Rút tiền', 'Withdraw'),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Future<_WithdrawReceiptData?> _showPinVerificationSheet(int amount) async {
+    final TextEditingController pinController = TextEditingController();
+    bool isSubmitting = false;
+    String? errorMessage;
+
+    final _WithdrawReceiptData?
+    result = await showModalBottomSheet<_WithdrawReceiptData>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final EdgeInsets inset = MediaQuery.of(context).viewInsets;
+            return Padding(
+              padding: EdgeInsets.fromLTRB(20, 18, 20, 20 + inset.bottom),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _t('Xác thực mã PIN', 'PIN verification'),
+                    style: GoogleFonts.poppins(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF1E2745),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    _t(
+                      'Nhập mã PIN 6 số để xác nhận rút ${_formatIntAmount(amount)}đ',
+                      'Enter your 6-digit PIN to confirm a withdrawal of ${_formatIntAmount(amount)} VND',
+                    ),
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: const Color(0xFF6F7894),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  PinCodeTextField(
+                    appContext: context,
+                    controller: pinController,
+                    length: 6,
+                    autoDisposeControllers: false,
+                    keyboardType: TextInputType.number,
+                    animationType: AnimationType.fade,
+                    enableActiveFill: true,
+                    obscuringCharacter: '●',
+                    obscureText: true,
+                    textStyle: GoogleFonts.poppins(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF1D2744),
+                    ),
+                    pinTheme: PinTheme(
+                      shape: PinCodeFieldShape.box,
+                      borderRadius: BorderRadius.circular(12),
+                      fieldHeight: 54,
+                      fieldWidth: 45,
+                      activeColor: brandColor,
+                      selectedColor: brandColor,
+                      inactiveColor: const Color(0xFFD7DDEE),
+                      activeFillColor: const Color(0xFFF3F6FF),
+                      selectedFillColor: const Color(0xFFF3F6FF),
+                      inactiveFillColor: const Color(0xFFF8FAFF),
+                    ),
+                    onChanged: (_) {
+                      if (errorMessage != null) {
+                        setModalState(() {
+                          errorMessage = null;
+                        });
+                      }
+                    },
+                  ),
+                  if (errorMessage != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        errorMessage!,
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: Colors.red,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: isSubmitting
+                              ? null
+                              : () => Navigator.pop(sheetContext),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: brandColor,
+                            side: const BorderSide(color: Color(0xFF000DC0)),
+                            minimumSize: const Size.fromHeight(46),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: Text(
+                            _t('Huỷ', 'Cancel'),
+                            style: GoogleFonts.poppins(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: isSubmitting
+                              ? null
+                              : () async {
+                                  bool didCloseSheet = false;
+                                  final String enteredPin = pinController.text
+                                      .trim();
+                                  if (enteredPin.length != 6) {
+                                    setModalState(() {
+                                      errorMessage = _t(
+                                        'Vui lòng nhập đủ 6 số PIN',
+                                        'Please enter all 6 PIN digits',
+                                      );
+                                    });
+                                    return;
+                                  }
+
+                                  setModalState(() {
+                                    isSubmitting = true;
+                                  });
+
+                                  try {
+                                    final _WithdrawReceiptData receipt =
+                                        await _verifyPinAndCreateReceipt(
+                                          amount: amount,
+                                          enteredPin: enteredPin,
+                                        );
+                                    if (sheetContext.mounted) {
+                                      didCloseSheet = true;
+                                      Navigator.pop(sheetContext, receipt);
+                                    }
+                                  } on _WithdrawFlowException catch (e) {
+                                    if (sheetContext.mounted) {
+                                      setModalState(() {
+                                        errorMessage = e.message;
+                                      });
+                                    }
+                                  } catch (_) {
+                                    if (sheetContext.mounted) {
+                                      setModalState(() {
+                                        errorMessage = _t(
+                                          'Đã xảy ra lỗi, vui lòng thử lại',
+                                          'An error occurred, please try again',
+                                        );
+                                      });
+                                    }
+                                  } finally {
+                                    if (sheetContext.mounted &&
+                                        !didCloseSheet) {
+                                      setModalState(() {
+                                        isSubmitting = false;
+                                      });
+                                    }
+                                  }
+                                },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: brandColor,
+                            foregroundColor: Colors.white,
+                            minimumSize: const Size.fromHeight(46),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: isSubmitting
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : Text(
+                                  _t('Xác nhận PIN', 'Confirm PIN'),
+                                  style: GoogleFonts.poppins(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    pinController.dispose();
+    return result;
+  }
+
+  Future<void> _onSubmitWithdraw() async {
+    final String digits = _amountController.text.replaceAll(RegExp(r'\D'), '');
+    final int amount = digits.isEmpty ? 0 : int.parse(digits);
+    if (!_isValid || amount <= 0) {
+      return;
+    }
+
+    final _WithdrawReceiptData? receipt = await _showPinVerificationSheet(
+      amount,
+    );
+
+    if (!mounted || receipt == null) {
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => WithdrawReceiptScreen(
+          amount: receipt.amount,
+          withdrawCode: receipt.code,
+          createdAt: receipt.createdAt,
+          expiresAt: receipt.expiresAt,
         ),
       ),
     );
@@ -610,11 +1227,18 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Icon(Icons.shield, size: 14, color: Colors.grey.withOpacity(0.5)),
+        Icon(Icons.shield, size: 14, color: Colors.grey.withValues(alpha: 0.5)),
         const SizedBox(width: 6),
         Text(
-          "Giao dịch được bảo mật bởi SSL 256-bit",
-          style: TextStyle(color: Colors.grey.withOpacity(0.5), fontSize: 11),
+          _t(
+            'Giao dịch được bảo mật bởi SSL 256-bit',
+            'Transactions are secured by 256-bit SSL',
+          ),
+          style: GoogleFonts.poppins(
+            color: Colors.grey.withValues(alpha: 0.5),
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+          ),
         ),
       ],
     );

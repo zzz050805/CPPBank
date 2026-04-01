@@ -10,6 +10,7 @@ import 'user_info_screen.dart';
 import 'search_screen.dart';
 import 'home_screen.dart';
 import 'chat_placeholder_screen.dart';
+import 'enter_new_password.dart';
 import 'login.dart';
 import 'smart_otp_screen.dart';
 
@@ -314,6 +315,16 @@ class _SettingScreenState extends State<SettingScreen> {
                         _buildSettingItem(
                           Icons.lock_outline,
                           _t("Đổi mật khẩu", "Change password"),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              GentlePageRoute<void>(
+                                page: const ResetPasswordPage(
+                                  requireCurrentPassword: true,
+                                ),
+                              ),
+                            );
+                          },
                         ),
                       ]),
 

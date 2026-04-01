@@ -44,7 +44,9 @@ class _RouteResult {
 }
 
 class BranchMapScreen extends StatefulWidget {
-  const BranchMapScreen({super.key});
+  const BranchMapScreen({super.key, this.autoSelectNearest = false});
+
+  final bool autoSelectNearest;
 
   @override
   State<BranchMapScreen> createState() => _BranchMapScreenState();
@@ -82,6 +84,7 @@ class _BranchMapScreenState extends State<BranchMapScreen>
   DateTime? _lastBranchRouteFetchAt;
   bool _isRefreshingBranchRouteDistances = false;
   late List<BranchInfo> _displayBranches;
+  bool _hasAutoSelectedNearest = false;
 
   final List<BranchInfo> _allBranches = const [
     BranchInfo(
@@ -373,6 +376,12 @@ class _BranchMapScreenState extends State<BranchMapScreen>
     _displayBranches = _sortBranchesByDistance(_allBranches);
 
     _initUserLocationTracking();
+
+    if (widget.autoSelectNearest && _userLocation != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _tryAutoSelectNearestBranch();
+      });
+    }
   }
 
   @override
@@ -662,6 +671,26 @@ class _BranchMapScreenState extends State<BranchMapScreen>
       _hasCenteredOnUser = true;
       _animatedMove(userPosition, userLocationZoomLevel);
     }
+
+    _tryAutoSelectNearestBranch();
+  }
+
+  void _tryAutoSelectNearestBranch() {
+    if (!widget.autoSelectNearest || _hasAutoSelectedNearest) {
+      return;
+    }
+
+    if (_displayBranches.isEmpty || _userLocation == null) {
+      return;
+    }
+
+    final List<BranchInfo> sorted = _sortBranchesByDistance(_displayBranches);
+    if (sorted.isEmpty) {
+      return;
+    }
+
+    _hasAutoSelectedNearest = true;
+    _focusBranch(sorted.first);
   }
 
   Future<void> _moveToMyLocation() async {

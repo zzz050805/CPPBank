@@ -46,3 +46,11 @@ app.*.map.json
 lib/api_config.dart
 .env
 assets/app.env
+
+android/build/
+android/.gradle/
+android/app/build/
+android/.kotlin/
+ios/Pods/
+ios/.symlinks/
+*.log

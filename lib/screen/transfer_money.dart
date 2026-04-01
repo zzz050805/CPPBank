@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 
 import '../data/user_firestore_service.dart';
 import '../l10n/app_text.dart';
@@ -155,6 +156,7 @@ class _ContactListScreenState extends State<ContactListScreen>
     with SingleTickerProviderStateMixin {
   static const Color primaryBlue = Color(0xFF000DC0);
   static const Color pageBackground = Color(0xFFF6F8FF);
+  final NumberFormat _vndFormat = NumberFormat('#,###', 'en_US');
 
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
@@ -164,6 +166,34 @@ class _ContactListScreenState extends State<ContactListScreen>
   late final Animation<Offset> _slideAnimation;
 
   String _t(String vi, String en) => AppText.tr(context, vi, en);
+
+  double _toDouble(dynamic value) {
+    if (value is num) {
+      return value.toDouble();
+    }
+    if (value is String) {
+      final String digits = value.replaceAll(RegExp(r'\D'), '');
+      if (digits.isEmpty) {
+        return 0;
+      }
+      return double.tryParse(digits) ?? 0;
+    }
+    return 0;
+  }
+
+  double _extractTransferAmount(Map<String, dynamic> data) {
+    final dynamic rawAmount =
+        data['amount'] ?? data['transferAmount'] ?? data['amountVnd'];
+    if (rawAmount != null) {
+      return _toDouble(rawAmount);
+    }
+
+    return _toDouble(data['amountText']);
+  }
+
+  String _formatAmountVnd(double amount) {
+    return '${_vndFormat.format(amount.round())} VND';
+  }
 
   String? get _userId =>
       UserFirestoreService.instance.currentUserDocId ??
@@ -298,57 +328,80 @@ class _ContactListScreenState extends State<ContactListScreen>
               final Map<String, dynamic> data = docs[index].data();
               final String name = (data['accountName'] ?? '').toString();
               final String bank = (data['bankName'] ?? '').toString();
+              final String bankId = (data['bankId'] ?? '').toString();
+              final String accountNumber = (data['accountNumber'] ?? '')
+                  .toString();
               final String initials = (data['initials'] ?? '').toString();
               final String displayInitials = initials.trim().isNotEmpty
                   ? initials.trim().toUpperCase()
                   : _deriveInitials(name);
 
-              return Container(
-                width: 118,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
+              return Material(
+                color: Colors.transparent,
+                child: InkWell(
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFE6EAF5)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    CircleAvatar(
-                      radius: 18,
-                      backgroundColor: const Color(0xFFECF0FF),
-                      child: Text(
-                        displayInitials,
-                        style: GoogleFonts.poppins(
-                          color: primaryBlue,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => TransferScreen(
+                          bankName: bank,
+                          bankId: bankId,
+                          accountNumber: accountNumber,
+                          accountName: name,
+                          isAlreadySaved: true,
                         ),
                       ),
+                    );
+                  },
+                  child: Container(
+                    width: 118,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE6EAF5)),
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.poppins(
-                        fontSize: 11,
-                        height: 1.2,
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFF2A2D3E),
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        CircleAvatar(
+                          radius: 18,
+                          backgroundColor: const Color(0xFFECF0FF),
+                          child: Text(
+                            displayInitials,
+                            style: GoogleFonts.poppins(
+                              color: primaryBlue,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.poppins(
+                            fontSize: 11,
+                            height: 1.2,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF2A2D3E),
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          bank,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.poppins(
+                            fontSize: 10,
+                            color: const Color(0xFF8C93A7),
+                          ),
+                        ),
+                      ],
                     ),
-                    const Spacer(),
-                    Text(
-                      bank,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.poppins(
-                        fontSize: 10,
-                        color: const Color(0xFF8C93A7),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               );
             },
@@ -391,6 +444,7 @@ class _ContactListScreenState extends State<ContactListScreen>
             final String name = (data['accountName'] ?? '').toString();
             final String accountNumber = (data['accountNumber'] ?? '')
                 .toString();
+            final double amount = _extractTransferAmount(data);
 
             return Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -436,9 +490,27 @@ class _ContactListScreenState extends State<ContactListScreen>
                       ],
                     ),
                   ),
-                  const Icon(
-                    Icons.chevron_right_rounded,
-                    color: Color(0xFFA0A7BA),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        amount > 0
+                            ? _formatAmountVnd(amount)
+                            : _t('Chưa có số tiền', 'No amount'),
+                        style: GoogleFonts.poppins(
+                          color: amount > 0
+                              ? const Color(0xFF000DC0)
+                              : const Color(0xFF8B92A6),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      const Icon(
+                        Icons.chevron_right_rounded,
+                        color: Color(0xFFA0A7BA),
+                      ),
+                    ],
                   ),
                 ],
               ),

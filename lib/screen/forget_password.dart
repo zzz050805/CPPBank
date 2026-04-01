@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../l10n/app_text.dart';
+import 'OTP_screen.dart';
+import 'enter_new_password.dart';
 import 'login.dart';
 
 void main() {
@@ -45,6 +47,29 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   void dispose() {
     _phoneController.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleSend() async {
+    final String phone = _phoneController.text.trim();
+    if (phone.length != 10) {
+      return;
+    }
+
+    final bool? verified = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => OtpScreen(phoneNumber: phone, isVerifySmsOnly: true),
+      ),
+    );
+
+    if (!mounted || verified != true) {
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => ResetPasswordPage(phoneNumber: phone)),
+    );
   }
 
   @override
@@ -177,20 +202,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     width: double.infinity,
                     height: 55,
                     child: ElevatedButton(
-                      onPressed: _isPhoneValid
-                          ? () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    _t(
-                                      'Đã hủy liên kết với trang OTP.',
-                                      'OTP screen is currently disabled.',
-                                    ),
-                                  ),
-                                ),
-                              );
-                            }
-                          : null,
+                      onPressed: _isPhoneValid ? _handleSend : null,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _isPhoneValid
                             ? primaryColor

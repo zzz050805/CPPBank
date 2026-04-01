@@ -28,6 +28,7 @@ dependencies:
   fl_chart: ^0.70.0
   pin_code_fields: ^8.0.1
   flutter_dotenv: ^6.0.0
+  flutter_local_notifications: ^19.4.1
   google_maps_flutter: ^2.16.0
   geolocator: ^14.0.2
   crypto: ^3.0.7

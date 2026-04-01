@@ -8,6 +8,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 import '../data/user_firestore_service.dart';
 import '../l10n/app_text.dart';
 import '../widget/ccp_app_bar.dart';
@@ -31,7 +32,20 @@ class MyApp extends StatelessWidget {
 }
 
 class TransferScreen extends StatefulWidget {
-  const TransferScreen({super.key});
+  const TransferScreen({
+    super.key,
+    this.bankName,
+    this.bankId,
+    this.accountNumber,
+    this.accountName,
+    this.isAlreadySaved = false,
+  });
+
+  final String? bankName;
+  final String? bankId;
+  final String? accountNumber;
+  final String? accountName;
+  final bool isAlreadySaved;
 
   @override
   State<TransferScreen> createState() => _TransferScreenState();
@@ -63,6 +77,7 @@ class Bank {
 class _TransferScreenState extends State<TransferScreen> {
   static const Color primaryBlue = Color(0xFF000DC0);
   static const Color pageBackground = Color(0xFFF8F9FD);
+  final NumberFormat _amountInputFormatter = NumberFormat('#,###', 'en_US');
 
   List<Bank> _banks = <Bank>[];
   Bank? _selectedBank;
@@ -89,12 +104,71 @@ class _TransferScreenState extends State<TransferScreen> {
   double _vipBalance = 0;
   bool _hasUserSnapshot = false;
   bool _hasCardsSnapshot = false;
+  bool _isFormattingAmountInput = false;
 
   String _t(String vi, String en) => AppText.tr(context, vi, en);
+
+  void _applyIncomingPrefill() {
+    final String incomingAccount = widget.accountNumber?.trim() ?? '';
+    final String incomingName = widget.accountName?.trim() ?? '';
+
+    if (incomingAccount.isNotEmpty) {
+      _accountController.text = incomingAccount;
+    }
+
+    if (incomingName.isNotEmpty) {
+      _recipientName = incomingName.toUpperCase();
+      _recipientLookupMessage = '';
+    }
+  }
+
+  String _normalizeBankKey(String value) {
+    return value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '');
+  }
+
+  Bank? _resolveIncomingBank(List<Bank> candidates) {
+    if (candidates.isEmpty) {
+      return null;
+    }
+
+    final String incomingBankId = (widget.bankId ?? '').trim().toLowerCase();
+    final String incomingBankName = (widget.bankName ?? '').trim();
+
+    if (incomingBankId.isNotEmpty) {
+      final String normalizedIncomingId = _normalizeBankKey(incomingBankId);
+      for (final Bank bank in candidates) {
+        final String bankBin = bank.bin.trim().toLowerCase();
+        final String bankShort = _normalizeBankKey(bank.shortName);
+        final String bankName = _normalizeBankKey(bank.name);
+        if (bankBin == incomingBankId ||
+            bankShort == normalizedIncomingId ||
+            bankName == normalizedIncomingId) {
+          return bank;
+        }
+      }
+    }
+
+    if (incomingBankName.isNotEmpty) {
+      final String normalizedIncomingName = _normalizeBankKey(incomingBankName);
+      for (final Bank bank in candidates) {
+        final String bankShort = _normalizeBankKey(bank.shortName);
+        final String bankName = _normalizeBankKey(bank.name);
+        if (bankShort == normalizedIncomingName ||
+            bankName == normalizedIncomingName ||
+            bankShort.contains(normalizedIncomingName) ||
+            bankName.contains(normalizedIncomingName)) {
+          return bank;
+        }
+      }
+    }
+
+    return null;
+  }
 
   @override
   void initState() {
     super.initState();
+    _applyIncomingPrefill();
     _bindBalanceStreams();
     _fetchBanks();
   }
@@ -147,9 +221,14 @@ class _TransferScreenState extends State<TransferScreen> {
             : Bank(name: '', shortName: '', logo: '', bin: ''),
       );
 
+      final Bank? incomingBank = _resolveIncomingBank(fetchedBanks);
+
       setState(() {
         _banks = fetchedBanks;
-        if (_selectedBank == null || _selectedBank!.name.trim().isEmpty) {
+        if (incomingBank != null) {
+          _selectedBank = incomingBank;
+        } else if (_selectedBank == null ||
+            _selectedBank!.name.trim().isEmpty) {
           if (preferredBank.name.trim().isNotEmpty) {
             _selectedBank = preferredBank;
           } else if (_banks.isNotEmpty) {
@@ -157,6 +236,12 @@ class _TransferScreenState extends State<TransferScreen> {
           }
         }
       });
+
+      final String prefilledAccount = _accountController.text.trim();
+      if (prefilledAccount.isNotEmpty &&
+          (widget.accountName ?? '').trim().isEmpty) {
+        _lookupAccountAPI(prefilledAccount);
+      }
     } catch (_) {
       if (!mounted) {
         return;
@@ -180,10 +265,18 @@ class _TransferScreenState extends State<TransferScreen> {
         ),
       ];
 
+      final Bank? incomingBank = _resolveIncomingBank(fallback);
+
       setState(() {
         _banks = fallback;
-        _selectedBank ??= fallback.first;
+        _selectedBank = incomingBank ?? _selectedBank ?? fallback.first;
       });
+
+      final String prefilledAccount = _accountController.text.trim();
+      if (prefilledAccount.isNotEmpty &&
+          (widget.accountName ?? '').trim().isEmpty) {
+        _lookupAccountAPI(prefilledAccount);
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -313,7 +406,7 @@ class _TransferScreenState extends State<TransferScreen> {
             content: Text(
               _t(
                 'Lỗi cấu hình API (thiếu Key)',
-                'Lỗi cấu hình API (thiếu Key)',
+                'API configuration error (missing key)',
               ),
             ),
             behavior: SnackBarBehavior.floating,
@@ -570,7 +663,7 @@ class _TransferScreenState extends State<TransferScreen> {
   }
 
   void _validateAmount(String value) {
-    final double amount = double.tryParse(value) ?? 0;
+    final double amount = _parseAmount(value);
 
     setState(() {
       if (value.isEmpty) {
@@ -584,6 +677,50 @@ class _TransferScreenState extends State<TransferScreen> {
         _amountError = null;
       }
     });
+  }
+
+  String _extractDigits(String input) {
+    return input.replaceAll(RegExp(r'\D'), '');
+  }
+
+  String _formatAmountWithComma(String rawInput) {
+    final String digits = _extractDigits(rawInput);
+    if (digits.isEmpty) {
+      return '';
+    }
+
+    final int value = int.tryParse(digits) ?? 0;
+    if (value <= 0) {
+      return '';
+    }
+
+    return _amountInputFormatter.format(value);
+  }
+
+  double _parseAmount(String input) {
+    final String digits = _extractDigits(input);
+    if (digits.isEmpty) {
+      return 0;
+    }
+    return double.tryParse(digits) ?? 0;
+  }
+
+  void _onAmountChanged(String value) {
+    if (_isFormattingAmountInput) {
+      return;
+    }
+
+    final String formatted = _formatAmountWithComma(value);
+    if (formatted != value) {
+      _isFormattingAmountInput = true;
+      _amountController.value = TextEditingValue(
+        text: formatted,
+        selection: TextSelection.collapsed(offset: formatted.length),
+      );
+      _isFormattingAmountInput = false;
+    }
+
+    _validateAmount(formatted);
   }
 
   double _toDouble(dynamic value) {
@@ -619,6 +756,7 @@ class _TransferScreenState extends State<TransferScreen> {
     required String accountName,
     required String bankName,
     required String bankId,
+    required double amount,
   }) async {
     final String? uid = _resolveUid();
     if (uid == null || uid.isEmpty) {
@@ -650,10 +788,17 @@ class _TransferScreenState extends State<TransferScreen> {
         'timestamp': FieldValue.serverTimestamp(),
       };
 
+      final Map<String, dynamic> recentPayload = <String, dynamic>{
+        ...payload,
+        'amount': amount,
+        'amountText': _amountInputFormatter.format(amount.round()),
+        'currency': 'VND',
+      };
+
       // Always keep transfer history for Recent list.
       final DocumentReference<Map<String, dynamic>> recentDocRef =
           recentTransfersRef.doc();
-      transaction.set(recentDocRef, payload);
+      transaction.set(recentDocRef, recentPayload);
 
       // Save recipient only when user explicitly taps Save.
       if (_isSaveContactPressed && !savedDoc.exists) {
@@ -669,7 +814,7 @@ class _TransferScreenState extends State<TransferScreen> {
 
     final String accountNumber = _accountController.text.trim();
     final String amountRaw = _amountController.text.trim();
-    final double amount = double.tryParse(amountRaw) ?? 0;
+    final double amount = _parseAmount(amountRaw);
 
     if (accountNumber.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -729,6 +874,7 @@ class _TransferScreenState extends State<TransferScreen> {
         accountName: recipientName,
         bankName: recipientBankName,
         bankId: recipientBankId,
+        amount: amount,
       );
     } catch (_) {
       if (mounted) {
@@ -1019,7 +1165,7 @@ class _TransferScreenState extends State<TransferScreen> {
               ],
             ),
           ),
-          if (hasName) ...[
+          if (hasName && !widget.isAlreadySaved) ...[
             const SizedBox(width: 8),
             OutlinedButton(
               onPressed: _isSaveContactPressed
@@ -1063,11 +1209,12 @@ class _TransferScreenState extends State<TransferScreen> {
   }
 
   void _applyQuickAmount(int value) {
-    _amountController.text = value.toString();
+    final String formatted = _formatAmountWithComma(value.toString());
+    _amountController.text = formatted;
     _amountController.selection = TextSelection.fromPosition(
       TextPosition(offset: _amountController.text.length),
     );
-    _validateAmount(_amountController.text);
+    _validateAmount(formatted);
   }
 
   String _formatWithDot(int value) {
@@ -1400,7 +1547,7 @@ class _TransferScreenState extends State<TransferScreen> {
                           const SizedBox(height: 12),
                           TextField(
                             controller: _amountController,
-                            onChanged: _validateAmount,
+                            onChanged: _onAmountChanged,
                             keyboardType: TextInputType.number,
                             inputFormatters: [
                               FilteringTextInputFormatter.digitsOnly,
@@ -1470,8 +1617,10 @@ class _TransferScreenState extends State<TransferScreen> {
                             children: [50000, 100000, 500000, 1000000]
                                 .map((amount) {
                                   final bool selected =
-                                      _amountController.text ==
-                                      amount.toString();
+                                      _parseAmount(
+                                        _amountController.text,
+                                      ).round() ==
+                                      amount;
                                   return ChoiceChip(
                                     label: Text(
                                       _formatWithDot(amount),

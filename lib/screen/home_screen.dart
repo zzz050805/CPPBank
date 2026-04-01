@@ -1,8 +1,10 @@
 ﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:intl/intl.dart';
+import '../data/notification_firestore_service.dart';
 import '../data/user_firestore_service.dart';
 import '../l10n/app_text.dart';
 import '../widget/pressable_scale.dart';
@@ -15,6 +17,8 @@ import 'bill.dart';
 import 'QR.dart';
 import 'credit_card.dart';
 import 'chat_placeholder_screen.dart';
+import 'notification.dart';
+import 'withdraw_money.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, this.showBottomNav = true});
@@ -65,6 +69,111 @@ class _HomeScreenState extends State<HomeScreen> {
       return normalized == 'true' || normalized == '1' || normalized == 'yes';
     }
     return false;
+  }
+
+  String _resolveUid() {
+    final String? fromService = UserFirestoreService.instance.currentUserDocId;
+    if (fromService != null && fromService.isNotEmpty) {
+      return fromService;
+    }
+
+    final String? fromProfile =
+        UserFirestoreService.instance.latestProfile?.uid;
+    if (fromProfile != null && fromProfile.isNotEmpty) {
+      return fromProfile;
+    }
+
+    final String? fromAuth = FirebaseAuth.instance.currentUser?.uid;
+    if (fromAuth != null && fromAuth.isNotEmpty) {
+      return fromAuth;
+    }
+
+    return '';
+  }
+
+  num _readNumericValue(dynamic raw) {
+    if (raw is num) {
+      return raw;
+    }
+
+    if (raw is String) {
+      final String trimmed = raw.trim();
+      if (trimmed.isEmpty) {
+        return 0;
+      }
+      final num? direct = num.tryParse(trimmed);
+      if (direct != null) {
+        return direct;
+      }
+      final String digitsOnly = trimmed.replaceAll(RegExp(r'\D'), '');
+      if (digitsOnly.isEmpty) {
+        return 0;
+      }
+      return num.tryParse(digitsOnly) ?? 0;
+    }
+
+    return 0;
+  }
+
+  Widget _buildNotificationBell() {
+    final String uid = _resolveUid();
+
+    if (uid.isEmpty) {
+      return _buildNotificationBellWithCount(0);
+    }
+
+    return StreamBuilder<int>(
+      stream: NotificationFirestoreService.instance.unreadCountStream(uid),
+      builder: (context, snapshot) {
+        final int unreadCount = snapshot.data ?? 0;
+        return _buildNotificationBellWithCount(unreadCount);
+      },
+    );
+  }
+
+  Widget _buildNotificationBellWithCount(int unreadCount) {
+    final String badgeText = unreadCount > 99 ? '99+' : '$unreadCount';
+
+    return PressableScale(
+      onTap: () async {
+        final String uid = _resolveUid();
+        if (uid.isNotEmpty) {
+          await NotificationFirestoreService.instance.markAllAsRead(uid);
+        }
+        if (!mounted) {
+          return;
+        }
+        _pushPremium(const NotificationScreen());
+      },
+      borderRadius: BorderRadius.circular(30),
+      splashColor: Colors.white24,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          const Icon(Icons.notifications_none, color: Colors.white, size: 32),
+          if (unreadCount > 0)
+            Positioned(
+              right: -4,
+              top: -2,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                decoration: const BoxDecoration(
+                  color: Colors.red,
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  badgeText,
+                  style: GoogleFonts.poppins(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
   // --- DỮ LIỆU BANNER (Kiểm tra kỹ đuôi file máy bro nhé) ---
@@ -172,34 +281,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ],
                     ),
                     const Spacer(),
-                    Stack(
-                      children: [
-                        const Icon(
-                          Icons.notifications_none,
-                          color: Colors.white,
-                          size: 32,
-                        ),
-                        Positioned(
-                          right: 0,
-                          top: 0,
-                          child: Container(
-                            padding: const EdgeInsets.all(5),
-                            decoration: const BoxDecoration(
-                              color: Colors.red,
-                              shape: BoxShape.circle,
-                            ),
-                            child: Text(
-                              '2',
-                              style: GoogleFonts.poppins(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                    _buildNotificationBell(),
                   ],
                 ),
               ),
@@ -662,6 +744,7 @@ class _HomeScreenState extends State<HomeScreen> {
         icon: Icons.atm,
         color: Colors.blue,
         title: _t('Rút tiền', 'Withdraw'),
+        onTap: () => _pushPremium(const WithdrawATMPage()),
       ),
       _ActionItemData(
         icon: Icons.qr_code_scanner,
@@ -935,62 +1018,95 @@ class _HomeScreenState extends State<HomeScreen> {
               _circleImageItem(
                 'assets/images/shopee.png',
                 "Shopee",
-                "Liên kết ví CCP - Mua sắm Shopee thả ga",
-                "Trải nghiệm thanh toán 1 chạm siêu tốc, không cần nhập mã OTP cho các giao dịch dưới 2.000.000đ.\n• Ưu đãi độc quyền: Tặng ngay Voucher giảm 50K cho đơn hàng đầu tiên (áp dụng khi nhập mã CCP50).\n• Quyền lợi: Hoàn tiền 2% (tối đa 100K/tháng) cho mọi giao dịch thanh toán hóa đơn, nạp điện thoại qua ShopeePay bằng nguồn tiền CCPCredit. Miễn phí thường niên năm đầu tiên.",
+                _t(
+                  'Liên kết ví CCP - Mua sắm Shopee thả ga',
+                  'Link CCP wallet - Shop freely on Shopee',
+                ),
+                _t(
+                  'Trải nghiệm thanh toán 1 chạm siêu tốc, không cần nhập mã OTP cho các giao dịch dưới 2.000.000đ.\n• Ưu đãi độc quyền: Tặng ngay Voucher giảm 50K cho đơn hàng đầu tiên (áp dụng khi nhập mã CCP50).\n• Quyền lợi: Hoàn tiền 2% (tối đa 100K/tháng) cho mọi giao dịch thanh toán hóa đơn, nạp điện thoại qua ShopeePay bằng nguồn tiền CCPCredit. Miễn phí thường niên năm đầu tiên.',
+                  'Enjoy ultra-fast one-tap payments without OTP for transactions under 2,000,000 VND.\n• Exclusive offer: Get a 50K voucher on your first order (use code CCP50).\n• Benefits: 2% cashback (up to 100K/month) for bill payments and phone top-ups via ShopeePay using CCPCredit funds. First-year annual fee waived.',
+                ),
               ),
               _circleImageItem(
                 'assets/images/riot.png',
                 "Riot Games",
-                "Nạp thẻ Riot Games - Nhận VP & RP tức thì",
-                "Kênh nạp thẻ chính thức, không qua trung gian.\nĐảm bảo 100% an toàn cho valorant và LMHT.",
+                _t(
+                  'Nạp thẻ Riot Games - Nhận VP & RP tức thì',
+                  'Riot top-up - Get VP & RP instantly',
+                ),
+                _t(
+                  'Kênh nạp thẻ chính thức, không qua trung gian.\nĐảm bảo 100% an toàn cho valorant và LMHT.',
+                  'Official top-up channel with no middleman.\n100% safe for Valorant and League of Legends.',
+                ),
               ),
               _circleImageItem(
                 'assets/images/netflix.png',
                 "Netflix",
                 "Premium Family",
-                "Đăng ký Premium, quản lý gia hạn gói gia đình dễ dàng.",
+                _t(
+                  'Đăng ký Premium, quản lý gia hạn gói gia đình dễ dàng.',
+                  'Subscribe to Premium and manage family-plan renewals easily.',
+                ),
               ),
               _circleImageItem(
                 'assets/images/itunes.png',
                 "Apple Music",
-                "Trải nghiệm 3 tháng free",
-                "Nghe nhạc chất lượng cao, miễn phí 3 tháng đầu.",
+                _t('Trải nghiệm 3 tháng free', 'Try 3 months free'),
+                _t(
+                  'Nghe nhạc chất lượng cao, miễn phí 3 tháng đầu.',
+                  'Enjoy high-quality music with the first 3 months free.',
+                ),
               ),
               _circleImageItem(
                 'assets/images/chatgpt.png',
                 "Chat GPT",
-                "Nâng cấp Plus",
-                "Tận hưởng sức mạnh của AI, các tính năng vượt trội.",
+                _t('Nâng cấp Plus', 'Upgrade to Plus'),
+                _t(
+                  'Tận hưởng sức mạnh của AI, các tính năng vượt trội.',
+                  'Unlock the full AI experience with advanced features.',
+                ),
               ),
               _circleImageItem(
                 'assets/images/steam.png',
                 "Steam",
-                "Winter Sale - Giảm 70%",
-                "Săn game khủng, thanh toán siêu tốc.",
+                _t('Winter Sale - Giảm 70%', 'Winter Sale - Up to 70% off'),
+                _t(
+                  'Săn game khủng, thanh toán siêu tốc.',
+                  'Grab top games with ultra-fast checkout.',
+                ),
               ),
               _circleImageItem(
                 'assets/images/spotify.png',
                 "Spotify",
                 "Spotify Family",
-                "Nghe nhạc không quảng cáo, gói gia đình siêu tiết kiệm.",
+                _t(
+                  'Nghe nhạc không quảng cáo, gói gia đình siêu tiết kiệm.',
+                  'Ad-free listening with a cost-saving family plan.',
+                ),
               ),
               _circleImageItem(
                 'assets/images/xanhsm.jpg',
                 "Xanh SM",
                 "Xanh SM",
-                "Đặt xe điện, ưu đãi 25%.",
+                _t('Đặt xe điện, ưu đãi 25%.', 'Book EV rides with 25% off.'),
               ),
               _circleImageItem(
                 'assets/images/grab.png',
                 "Grab",
                 "GrabCar 20%",
-                "Di chuyển muôn nơi, giảm 20%.",
+                _t(
+                  'Di chuyển muôn nơi, giảm 20%.',
+                  'Travel anywhere with 20% off.',
+                ),
               ),
               _circleImageItem(
                 'assets/images/gemini.png',
                 "Gemini",
                 "AI Gemini",
-                "Trợ lý AI Gemini Advanced.",
+                _t(
+                  'Trợ lý AI Gemini Advanced.',
+                  'Gemini Advanced AI assistant.',
+                ),
               ),
             ],
           ),
@@ -1147,7 +1263,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   onPressed: () => Navigator.pop(context),
                   child: Text(
-                    "Tiếp tục →",
+                    _t('Tiếp tục →', 'Continue →'),
                     style: GoogleFonts.poppins(
                       color: Colors.white,
                       fontSize: 16,
@@ -1245,6 +1361,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildTransactionHistory() {
+    final String uid = _resolveUid();
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Column(
@@ -1258,34 +1376,102 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           const SizedBox(height: 10),
-          _transactionItem(
-            Icons.atm,
-            _t('Rút tiền', 'Withdraw'),
-            "25/04/2026",
-            "- 150.000.000",
-            Colors.red,
-          ),
-          _transactionItem(
-            Icons.water_drop,
-            _t('Thanh toán hóa đơn nước', 'Water bill payment'),
-            "18/04/2026",
-            "- 1.342.545",
-            Colors.red,
-          ),
-          _transactionItem(
-            Icons.electric_bolt,
-            _t('Thanh toán hóa đơn điện', 'Electric bill payment'),
-            "05/04/2026",
-            "- 854.000",
-            Colors.red,
-          ),
-          _transactionItem(
-            Icons.account_balance_wallet,
-            _t('Nạp tiền', 'Top up'),
-            "22/03/2026",
-            "+ 1.500.000",
-            Colors.green,
-          ),
+          if (uid.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Text(
+                _t('Bạn chưa đăng nhập.', 'You are not logged in.'),
+                style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey),
+              ),
+            )
+          else
+            StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(uid)
+                  .collection('phone_recharge')
+                  .orderBy('createdAt', descending: true)
+                  .limit(4)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 14),
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                }
+
+                if (snapshot.hasError) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    child: Text(
+                      _t(
+                        'Không tải được lịch sử giao dịch.',
+                        'Unable to load transaction history.',
+                      ),
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: Colors.red,
+                      ),
+                    ),
+                  );
+                }
+
+                final List<QueryDocumentSnapshot<Map<String, dynamic>>> docs =
+                    snapshot.data?.docs ??
+                    <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+
+                if (docs.isEmpty) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    child: Text(
+                      _t('Chưa có giao dịch nào.', 'No transactions yet.'),
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  );
+                }
+
+                return Column(
+                  children: docs.map((doc) {
+                    final Map<String, dynamic> data = doc.data();
+                    final num amountValue = _readNumericValue(data['amount']);
+                    final String provider = (data['provider'] ?? '')
+                        .toString()
+                        .trim();
+                    final String phoneNumber = (data['phoneNumber'] ?? '')
+                        .toString()
+                        .trim();
+                    final Timestamp? createdAtTs =
+                        data['createdAt'] is Timestamp
+                        ? data['createdAt'] as Timestamp
+                        : null;
+                    final String dateText = createdAtTs != null
+                        ? DateFormat('dd/MM/yyyy').format(createdAtTs.toDate())
+                        : '--/--/----';
+
+                    final String title = provider.isNotEmpty
+                        ? '${_t('Nạp ĐT', 'Top-up')} $provider'
+                        : _t('Nạp điện thoại', 'Phone top-up');
+                    final String subtitle = phoneNumber.isNotEmpty
+                        ? '$phoneNumber • $dateText'
+                        : dateText;
+                    final String amount =
+                        '- ${_formatCurrency(amountValue.toDouble())}';
+
+                    return _transactionItem(
+                      Icons.phone_android,
+                      title,
+                      subtitle,
+                      amount,
+                      Colors.red,
+                    );
+                  }).toList(),
+                );
+              },
+            ),
         ],
       ),
     );

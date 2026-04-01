@@ -1,33 +1,40 @@
 import 'package:flutter/material.dart';
-import 'dart:convert';
-import 'package:crypto/crypto.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../data/user_firestore_service.dart';
 import '../l10n/app_text.dart';
+import 'login.dart';
 
 class ResetPasswordPage extends StatefulWidget {
   const ResetPasswordPage({
     super.key,
     this.phoneNumber,
     this.personalInfo = const [],
+    this.requireCurrentPassword = false,
   });
 
   final String? phoneNumber;
   final List<String> personalInfo;
+  final bool requireCurrentPassword;
 
   @override
   State<ResetPasswordPage> createState() => _ResetPasswordPageState();
 }
 
 class _ResetPasswordPageState extends State<ResetPasswordPage> {
-  // Controller để lấy giá trị từ TextField
+  final TextEditingController _oldPasswordController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController =
       TextEditingController();
 
-  // State để ẩn/hiện mật khẩu
+  bool _showOld = false;
   bool _showNew = false;
   bool _showConfirm = false;
+  bool _isSubmitting = false;
 
   String _t(String vi, String en) => AppText.tr(context, vi, en);
+  String? _oldPasswordError;
   String? _passwordError;
   String? _confirmPasswordError;
 
@@ -36,35 +43,47 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
   bool _hasDigit = false;
   bool _hasSpecial = false;
   bool _notMatchPersonalInfo = true;
+  bool _differentFromOld = true;
+
+  bool get _contextRulePassed =>
+      widget.requireCurrentPassword ? _differentFromOld : _notMatchPersonalInfo;
 
   bool get _isPasswordValid =>
       _hasMinLength &&
       _hasUppercase &&
       _hasDigit &&
       _hasSpecial &&
-      _notMatchPersonalInfo;
+      _contextRulePassed;
 
   bool get _isConfirmValid =>
       _confirmPasswordController.text.isNotEmpty &&
       _passwordController.text == _confirmPasswordController.text;
 
-  bool get _canSubmit => _isPasswordValid && _isConfirmValid;
+  bool get _canSubmit =>
+      _isPasswordValid &&
+      _isConfirmValid &&
+      (!widget.requireCurrentPassword ||
+          _oldPasswordController.text.trim().isNotEmpty) &&
+      !_isSubmitting;
 
   @override
   void initState() {
     super.initState();
+    _oldPasswordController.addListener(_validateForm);
     _passwordController.addListener(_validateForm);
     _confirmPasswordController.addListener(_validateForm);
   }
 
   @override
   void dispose() {
+    _oldPasswordController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
   }
 
   void _validateForm() {
+    final String oldPassword = _oldPasswordController.text.trim();
     final String password = _passwordController.text.trim();
     final String confirm = _confirmPasswordController.text.trim();
 
@@ -75,14 +94,34 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
       r'[!@#\$%^&*(),.?":{}|<>]',
     ).hasMatch(password);
     final bool notMatchPersonalInfo = !_containsPersonalInfo(password);
+    final bool differentFromOld =
+        oldPassword.isEmpty || oldPassword != password;
+
+    String? oldPasswordError;
+    if (widget.requireCurrentPassword && oldPassword.isEmpty) {
+      oldPasswordError = _t(
+        'Vui lòng nhập mật khẩu cũ',
+        'Please enter old password',
+      );
+    }
 
     String? passwordError;
     if (password.isNotEmpty) {
       if (!hasMinLength || !hasUppercase || !hasDigit || !hasSpecial) {
-        passwordError =
-            'Mật khẩu phải có ít nhất 8 ký tự, gồm chữ hoa, số và ký tự đặc biệt.';
-      } else if (!notMatchPersonalInfo) {
-        passwordError = 'Mật khẩu không được trùng thông tin cá nhân.';
+        passwordError = _t(
+          'Mật khẩu phải có ít nhất 8 ký tự, gồm chữ hoa, số và ký tự đặc biệt.',
+          'Password must be at least 8 chars with uppercase, number and special char.',
+        );
+      } else if (widget.requireCurrentPassword && !differentFromOld) {
+        passwordError = _t(
+          'Mật khẩu mới không được trùng mật khẩu cũ.',
+          'New password must be different from old password.',
+        );
+      } else if (!widget.requireCurrentPassword && !notMatchPersonalInfo) {
+        passwordError = _t(
+          'Mật khẩu không được trùng thông tin cá nhân.',
+          'Password must not match personal information.',
+        );
       }
     }
 
@@ -93,11 +132,13 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
 
     if (!mounted) return;
     setState(() {
+      _oldPasswordError = oldPasswordError;
       _hasMinLength = hasMinLength;
       _hasUppercase = hasUppercase;
       _hasDigit = hasDigit;
       _hasSpecial = hasSpecial;
       _notMatchPersonalInfo = notMatchPersonalInfo;
+      _differentFromOld = differentFromOld;
       _passwordError = passwordError;
       _confirmPasswordError = confirmError;
     });
@@ -130,44 +171,479 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
     return false;
   }
 
-  String _hashPassword(String value) {
-    return sha256.convert(utf8.encode(value)).toString();
+  Future<String?> _resolveCurrentUserEmail(User user) async {
+    final String? directEmail = user.email;
+    if (directEmail != null && directEmail.isNotEmpty) {
+      return directEmail;
+    }
+
+    final FirebaseFirestore firestore = FirebaseFirestore.instance;
+    final DocumentSnapshot<Map<String, dynamic>> mainDoc = await firestore
+        .collection('users')
+        .doc(user.uid)
+        .get();
+    final String authEmail = (mainDoc.data()?['authEmail'] ?? '').toString();
+    if (authEmail.trim().isNotEmpty) {
+      return authEmail.trim();
+    }
+
+    final String? fallbackDocId =
+        UserFirestoreService.instance.currentUserDocId;
+    if (fallbackDocId != null &&
+        fallbackDocId.isNotEmpty &&
+        fallbackDocId != user.uid) {
+      final DocumentSnapshot<Map<String, dynamic>> fallbackDoc = await firestore
+          .collection('users')
+          .doc(fallbackDocId)
+          .get();
+      final String fallbackAuthEmail = (fallbackDoc.data()?['authEmail'] ?? '')
+          .toString();
+      if (fallbackAuthEmail.trim().isNotEmpty) {
+        return fallbackAuthEmail.trim();
+      }
+    }
+
+    return null;
   }
 
-  void _handleSubmit() {
+  bool _isConfigurationNotFound(FirebaseAuthException e) {
+    final String code = e.code.toLowerCase();
+    final String message = (e.message ?? '').toLowerCase();
+    return code.contains('configuration-not-found') ||
+        code.contains('configuration_not_found') ||
+        message.contains('configuration-not-found') ||
+        message.contains('configuration_not_found');
+  }
+
+  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>> _findUsersByPhone(
+    String rawPhone,
+  ) async {
+    final FirebaseFirestore firestore = FirebaseFirestore.instance;
+    final String raw = rawPhone.trim();
+    final String normalized = raw.replaceAll(RegExp(r'\D'), '');
+
+    final List<QueryDocumentSnapshot<Map<String, dynamic>>> results = [];
+    final Set<String> addedPaths = <String>{};
+
+    Future<void> addByPhone(String value) async {
+      if (value.isEmpty) {
+        return;
+      }
+      final QuerySnapshot<Map<String, dynamic>> query = await firestore
+          .collection('users')
+          .where('phoneNumber', isEqualTo: value)
+          .get();
+      for (final doc in query.docs) {
+        if (addedPaths.add(doc.reference.path)) {
+          results.add(doc);
+        }
+      }
+    }
+
+    await addByPhone(raw);
+    if (normalized.isNotEmpty && normalized != raw) {
+      await addByPhone(normalized);
+    }
+
+    return results;
+  }
+
+  Future<void> _syncPasswordToLinkedUserDocs({
+    required String newPassword,
+    String? authUid,
+    String? authEmail,
+    String? phoneNumber,
+  }) async {
+    final FirebaseFirestore firestore = FirebaseFirestore.instance;
+    final Map<String, DocumentReference<Map<String, dynamic>>> refs = {};
+
+    void addRef(DocumentReference<Map<String, dynamic>> ref) {
+      refs[ref.path] = ref;
+    }
+
+    final String uid = (authUid ?? '').trim();
+    final String email = (authEmail ?? '').trim();
+    final String phone = (phoneNumber ?? '').trim();
+
+    if (uid.isNotEmpty) {
+      addRef(firestore.collection('users').doc(uid));
+      final QuerySnapshot<Map<String, dynamic>> byUid = await firestore
+          .collection('users')
+          .where('authUid', isEqualTo: uid)
+          .get();
+      for (final doc in byUid.docs) {
+        addRef(doc.reference);
+      }
+    }
+
+    if (email.isNotEmpty) {
+      final QuerySnapshot<Map<String, dynamic>> byEmail = await firestore
+          .collection('users')
+          .where('authEmail', isEqualTo: email)
+          .get();
+      for (final doc in byEmail.docs) {
+        addRef(doc.reference);
+      }
+    }
+
+    if (phone.isNotEmpty) {
+      final List<QueryDocumentSnapshot<Map<String, dynamic>>> byPhone =
+          await _findUsersByPhone(phone);
+      for (final doc in byPhone) {
+        addRef(doc.reference);
+      }
+    }
+
+    if (refs.isEmpty) {
+      throw FirebaseException(
+        plugin: 'cloud_firestore',
+        code: 'not-found',
+        message: _t(
+          'Không tìm thấy hồ sơ người dùng để cập nhật mật khẩu.',
+          'No user profile found to sync password.',
+        ),
+      );
+    }
+
+    final Map<String, dynamic> payload = <String, dynamic>{
+      'password': newPassword,
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+    if (uid.isNotEmpty) {
+      payload['authUid'] = uid;
+    }
+    if (email.isNotEmpty) {
+      payload['authEmail'] = email;
+    }
+
+    for (final ref in refs.values) {
+      await ref.set(payload, SetOptions(merge: true));
+    }
+  }
+
+  Future<void> _handleSecureChangePassword() async {
     _validateForm();
-    if (!_canSubmit) return;
+    if (!_canSubmit) {
+      return;
+    }
 
-    final String hashedPassword = _hashPassword(
-      _passwordController.text.trim(),
-    );
+    final User? user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _t(
+              'Không tìm thấy phiên đăng nhập. Vui lòng đăng nhập lại.',
+              'No active session found. Please login again.',
+            ),
+          ),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Đổi mật khẩu thành công. Mật khẩu đã được mã hóa.'),
-        backgroundColor: Color(0xFF2E7D32),
-      ),
-    );
+    final String oldPassword = _oldPasswordController.text.trim();
+    final String newPassword = _passwordController.text.trim();
 
-    // TODO: Gửi hashedPassword lên API/Firebase để cập nhật mật khẩu.
-    debugPrint('hashedPassword: $hashedPassword');
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    try {
+      final String? email = await _resolveCurrentUserEmail(user);
+      if (email == null || email.isEmpty) {
+        throw FirebaseAuthException(
+          code: 'missing-email',
+          message: _t(
+            'Không thể xác định email tài khoản để xác thực lại.',
+            'Cannot resolve account email for re-authentication.',
+          ),
+        );
+      }
+
+      final AuthCredential credential = EmailAuthProvider.credential(
+        email: email,
+        password: oldPassword,
+      );
+
+      await user.reauthenticateWithCredential(credential);
+      await user.updatePassword(newPassword);
+
+      String linkedPhone = '';
+      final DocumentSnapshot<Map<String, dynamic>> currentUserDoc =
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .get();
+      linkedPhone = (currentUserDoc.data()?['phoneNumber'] ?? '').toString();
+
+      await _syncPasswordToLinkedUserDocs(
+        newPassword: newPassword,
+        authUid: user.uid,
+        authEmail: email,
+        phoneNumber: linkedPhone,
+      );
+
+      await FirebaseAuth.instance.signOut();
+
+      if (!mounted) {
+        return;
+      }
+
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) {
+        return;
+      }
+      String message;
+      if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
+        message = _t('Mật khẩu cũ không đúng.', 'Old password is incorrect.');
+      } else if (e.code == 'weak-password') {
+        message = _t(
+          'Mật khẩu mới quá yếu, vui lòng đặt mật khẩu mạnh hơn.',
+          'New password is too weak.',
+        );
+      } else {
+        message =
+            e.message ??
+            _t('Đổi mật khẩu thất bại.', 'Failed to change password.');
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.red,
+        ),
+      );
+    } on FirebaseException catch (e) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            e.message ??
+                _t(
+                  'Không thể đồng bộ dữ liệu Firestore.',
+                  'Firestore sync failed.',
+                ),
+          ),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.red,
+        ),
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _t(
+              'Đã xảy ra lỗi không xác định. Vui lòng thử lại.',
+              'Unexpected error occurred. Please try again.',
+            ),
+          ),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _handleForgotPasswordReset() async {
+    _validateForm();
+    if (!_canSubmit) {
+      return;
+    }
+
+    final String phone = (widget.phoneNumber ?? '').trim();
+    final String newPassword = _passwordController.text.trim();
+
+    if (phone.isEmpty) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _t(
+              'Thiếu số điện thoại để đặt lại mật khẩu.',
+              'Phone number is required to reset password.',
+            ),
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    try {
+      final List<QueryDocumentSnapshot<Map<String, dynamic>>> usersByPhone =
+          await _findUsersByPhone(phone);
+      if (usersByPhone.isEmpty) {
+        throw FirebaseException(
+          plugin: 'cloud_firestore',
+          code: 'not-found',
+          message: _t(
+            'Không tìm thấy tài khoản cho số điện thoại này.',
+            'No account found for this phone number.',
+          ),
+        );
+      }
+
+      final Map<String, dynamic> primaryData = usersByPhone.first.data();
+      String authEmail = (primaryData['authEmail'] ?? '').toString().trim();
+      String authUid = (primaryData['authUid'] ?? '').toString().trim();
+      final String currentPassword = (primaryData['password'] ?? '')
+          .toString()
+          .trim();
+
+      if (authEmail.isNotEmpty && currentPassword.isNotEmpty) {
+        try {
+          final UserCredential credential = await FirebaseAuth.instance
+              .signInWithEmailAndPassword(
+                email: authEmail,
+                password: currentPassword,
+              );
+          await credential.user?.updatePassword(newPassword);
+          authUid = credential.user?.uid ?? authUid;
+          authEmail = credential.user?.email ?? authEmail;
+          await FirebaseAuth.instance.signOut();
+        } on FirebaseAuthException catch (e) {
+          if (!_isConfigurationNotFound(e)) {
+            rethrow;
+          }
+        }
+      }
+
+      await _syncPasswordToLinkedUserDocs(
+        newPassword: newPassword,
+        authUid: authUid,
+        authEmail: authEmail,
+        phoneNumber: phone,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _t('Đổi mật khẩu thành công.', 'Password changed successfully.'),
+          ),
+          backgroundColor: const Color(0xFF2E7D32),
+        ),
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 600), () {
+        if (!mounted) {
+          return;
+        }
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+          (route) => false,
+        );
+      });
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) {
+        return;
+      }
+      String message;
+      if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
+        message = _t(
+          'Không thể xác thực tài khoản để đổi mật khẩu. Vui lòng thử lại.',
+          'Cannot re-authenticate account for password reset. Please try again.',
+        );
+      } else {
+        message =
+            e.message ??
+            _t('Đổi mật khẩu thất bại.', 'Failed to change password.');
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: Colors.red),
+      );
+    } on FirebaseException catch (e) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            e.message ??
+                _t(
+                  'Không thể cập nhật mật khẩu trong Firestore.',
+                  'Failed to update password in Firestore.',
+                ),
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _t(
+              'Đã xảy ra lỗi không xác định. Vui lòng thử lại.',
+              'Unexpected error occurred. Please try again.',
+            ),
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _handleSubmit() async {
+    if (widget.requireCurrentPassword) {
+      await _handleSecureChangePassword();
+      return;
+    }
+    await _handleForgotPasswordReset();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white, // Tương đương bg-background
+      backgroundColor: const Color(0xFFF8F9FE),
       body: SafeArea(
         child: Center(
           child: Container(
-            constraints: const BoxConstraints(
-              maxWidth: 400,
-            ), // Giới hạn chiều rộng
+            constraints: const BoxConstraints(maxWidth: 420),
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // --- Header ---
                 Row(
                   children: [
                     IconButton(
@@ -178,17 +654,18 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      _t('Quên mật khẩu', 'Forgot password'),
-                      style: TextStyle(
+                      widget.requireCurrentPassword
+                          ? _t('Đổi mật khẩu', 'Change password')
+                          : _t('Quên mật khẩu', 'Forgot password'),
+                      style: GoogleFonts.poppins(
                         fontSize: 20,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 32),
 
-                // --- Form Card ---
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
@@ -205,7 +682,16 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                   ),
                   child: Column(
                     children: [
-                      // Nhập mật khẩu mới
+                      if (widget.requireCurrentPassword) ...[
+                        _buildPasswordField(
+                          label: _t('Mật khẩu cũ', 'Old password'),
+                          controller: _oldPasswordController,
+                          isHidden: !_showOld,
+                          onToggle: () => setState(() => _showOld = !_showOld),
+                          errorText: _oldPasswordError,
+                        ),
+                        const SizedBox(height: 20),
+                      ],
                       _buildPasswordField(
                         label: _t('Nhập mật khẩu mới', 'Enter new password'),
                         controller: _passwordController,
@@ -222,11 +708,14 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                         _hasSpecial,
                       ),
                       _buildRuleItem(
-                        'Không trùng thông tin cá nhân',
-                        _notMatchPersonalInfo,
+                        widget.requireCurrentPassword
+                            ? 'Không trùng mật khẩu cũ'
+                            : 'Không trùng thông tin cá nhân',
+                        widget.requireCurrentPassword
+                            ? _differentFromOld
+                            : _notMatchPersonalInfo,
                       ),
                       const SizedBox(height: 20),
-                      // Nhập lại mật khẩu mới
                       _buildPasswordField(
                         label: _t(
                           'Nhập lại mật khẩu mới',
@@ -244,7 +733,6 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
 
                 const SizedBox(height: 32),
 
-                // --- Submit Button ---
                 SizedBox(
                   width: double.infinity,
                   height: 48,
@@ -274,13 +762,27 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                       ),
                       elevation: WidgetStateProperty.all<double>(0),
                     ),
-                    child: Text(
-                      _t('Đổi mật khẩu', 'Change password'),
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    child: _isSubmitting
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Text(
+                            widget.requireCurrentPassword
+                                ? _t(
+                                    'Xác nhận đổi mật khẩu',
+                                    'Confirm password change',
+                                  )
+                                : _t('Đổi mật khẩu', 'Change password'),
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                   ),
                 ),
               ],
@@ -304,7 +806,11 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
       children: [
         Text(
           label,
-          style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+          style: GoogleFonts.poppins(
+            fontSize: 14,
+            color: Colors.grey.shade700,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         const SizedBox(height: 6),
         TextField(
@@ -327,7 +833,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
               icon: Icon(
                 isHidden ? Icons.visibility_off : Icons.visibility,
                 size: 20,
-                color: Colors.grey,
+                color: Colors.grey.shade600,
               ),
               onPressed: onToggle,
             ),
