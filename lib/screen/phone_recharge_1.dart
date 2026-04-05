@@ -3,9 +3,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../core/local_notification_service.dart';
+import '../core/app_translations.dart';
 import '../data/user_firestore_service.dart';
 import '../l10n/app_text.dart';
+import '../services/notification_service.dart';
+import '../widget/pin_popup.dart';
 
 class ConfirmTopUpScreen extends StatefulWidget {
   final String selectedAmount;
@@ -302,12 +304,10 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
         throw Exception('Không lưu được hóa đơn nạp tiền');
       }
 
-      await LocalNotificationService.instance.showLocalNotification(
-        title: _t('Giao dịch thành công', 'Transaction successful'),
-        body: _t(
-          'Nạp ĐT ${widget.selectedProvider.trim()} - ${widget.selectedPhoneNumber.trim()}: $amount VND',
-          'Top-up ${widget.selectedProvider.trim()} - ${widget.selectedPhoneNumber.trim()}: $amount VND',
-        ),
+      await NotificationService().showNotification(
+        title: AppTranslations.getText(context, 'success_title'),
+        body:
+            '${AppTranslations.getText(context, 'top_up_for')} ${widget.selectedProvider.trim()} - $amount VND',
       );
 
       if (!mounted) {
@@ -648,7 +648,18 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
                     width: double.infinity,
                     height: 54,
                     child: ElevatedButton(
-                      onPressed: _isSubmitting ? null : _handleConfirmRecharge,
+                      onPressed: _isSubmitting
+                          ? null
+                          : () {
+                              showModalBottomSheet(
+                                context: context,
+                                isScrollControlled: true,
+                                backgroundColor: Colors.transparent,
+                                builder: (_) => PinPopupWidget(
+                                  onSuccess: _handleConfirmRecharge,
+                                ),
+                              );
+                            },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: primaryColor,
                         shape: RoundedRectangleBorder(

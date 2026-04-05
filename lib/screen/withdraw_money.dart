@@ -7,11 +7,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:pin_code_fields/pin_code_fields.dart';
 
-import '../core/local_notification_service.dart';
+import '../core/app_translations.dart';
 import '../data/user_firestore_service.dart';
 import '../l10n/app_text.dart';
+import '../services/notification_service.dart';
+import '../widget/pin_popup.dart';
 import 'withdraw_receipt_screen.dart';
 
 class WithdrawATMPage extends StatefulWidget {
@@ -206,34 +207,6 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
     return '';
   }
 
-  String _defaultPinFromId(dynamic idNumberRaw) {
-    final String digits = (idNumberRaw ?? '').toString().replaceAll(
-      RegExp(r'\D'),
-      '',
-    );
-    if (digits.isEmpty) {
-      return '';
-    }
-    if (digits.length >= 6) {
-      return digits.substring(digits.length - 6);
-    }
-    return digits.padLeft(6, '0');
-  }
-
-  Future<String> _loadExpectedPin(String uid) async {
-    final DocumentSnapshot<Map<String, dynamic>> userSnapshot =
-        await FirebaseFirestore.instance.collection('users').doc(uid).get();
-
-    final Map<String, dynamic> userData =
-        userSnapshot.data() ?? <String, dynamic>{};
-    final String savedPin = (userData['smartOtpPin'] ?? '').toString().trim();
-    if (savedPin.isNotEmpty) {
-      return savedPin;
-    }
-
-    return _defaultPinFromId(userData['idNumber'] ?? userData['cccd']);
-  }
-
   String _generateWithdrawCode() {
     final Random random = Random.secure();
     final StringBuffer buffer = StringBuffer();
@@ -259,6 +232,39 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
       final DateTime createdAt = DateTime.now();
       final DateTime expiresAt = createdAt.add(const Duration(minutes: 15));
       final String withdrawCode = _generateWithdrawCode();
+      final String amountText = _formatIntAmount(amount);
+      final String notificationTitleRaw = AppTranslations.getText(
+        context,
+        'withdraw_notification_title',
+      );
+      final String notificationTitle =
+          notificationTitleRaw == 'withdraw_notification_title'
+          ? _t('Rút tiền mặt', 'Cash withdrawal')
+          : notificationTitleRaw;
+      final String notificationBodyRaw = AppTranslations.getTextWithParams(
+        context,
+        'withdraw_notification_body',
+        <String, String>{'code': withdrawCode, 'amount': amountText},
+      );
+      final String notificationBody =
+          notificationBodyRaw == 'withdraw_notification_body'
+          ? 'Mã $withdrawCode - $amountText VND'
+          : notificationBodyRaw;
+      final String successTitleRaw = AppTranslations.getText(
+        context,
+        'withdraw_success_title',
+      );
+      final String successTitle = successTitleRaw == 'withdraw_success_title'
+          ? 'Rút tiền thành công'
+          : successTitleRaw;
+      final String successBodyRaw = AppTranslations.getTextWithParams(
+        context,
+        'withdraw_success_body',
+        <String, String>{'amount': amountText},
+      );
+      final String successBody = successBodyRaw == 'withdraw_success_body'
+          ? 'Rút tiền mặt $amountText VND tại điểm giao dịch'
+          : successBodyRaw;
       final DocumentReference<Map<String, dynamic>> withdrawRef = userRef
           .collection('withdraw')
           .doc();
@@ -346,7 +352,7 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
         transaction.set(withdrawRef, <String, dynamic>{
           'uid': uid,
           'amount': amount,
-          'amountText': _formatIntAmount(amount),
+          'amountText': amountText,
           'currency': 'VND',
           'type': 'withdraw',
           'withdrawCode': withdrawCode,
@@ -357,11 +363,8 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
         });
 
         transaction.set(notificationRef, <String, dynamic>{
-          'title': _t('Rút tiền mặt', 'Cash withdrawal'),
-          'body': _t(
-            'Mã $withdrawCode - ${_formatIntAmount(amount)} VND',
-            'Code $withdrawCode - ${_formatIntAmount(amount)} VND',
-          ),
+          'title': notificationTitle,
+          'body': notificationBody,
           'timestamp': FieldValue.serverTimestamp(),
           'type': 'withdraw',
           'isRead': false,
@@ -370,12 +373,9 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
         });
       });
 
-      await LocalNotificationService.instance.showLocalNotification(
-        title: _t('Giao dịch thành công', 'Transaction successful'),
-        body: _t(
-          'Rút tiền mặt ${_formatIntAmount(amount)} VND - mã $withdrawCode',
-          'Cash withdrawal ${_formatIntAmount(amount)} VND - code $withdrawCode',
-        ),
+      await NotificationService().showNotification(
+        title: successTitle,
+        body: successBody,
       );
 
       return _WithdrawReceiptData(
@@ -414,39 +414,6 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
       debugPrint('Withdraw unexpected error: $e');
       rethrow;
     }
-  }
-
-  Future<_WithdrawReceiptData> _verifyPinAndCreateReceipt({
-    required int amount,
-    required String enteredPin,
-  }) async {
-    final String uid = _resolveUid();
-    if (uid.isEmpty) {
-      throw _WithdrawFlowException(
-        _t(
-          'Không tìm thấy phiên đăng nhập hợp lệ',
-          'No valid login session found',
-        ),
-      );
-    }
-
-    final String expectedPin = await _loadExpectedPin(uid);
-    if (expectedPin.isEmpty) {
-      throw _WithdrawFlowException(
-        _t(
-          'Tài khoản chưa cài đặt Smart OTP PIN, vui lòng thiết lập trước khi rút tiền',
-          'Smart OTP PIN is not set up. Please configure it before withdrawing',
-        ),
-      );
-    }
-
-    if (expectedPin != enteredPin) {
-      throw _WithdrawFlowException(
-        _t('Mã PIN không chính xác', 'Incorrect PIN code'),
-      );
-    }
-
-    return _handleWithdraw(uid: uid, amount: amount);
   }
 
   Widget _buildAvailableBalanceValue() {
@@ -986,215 +953,6 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
     );
   }
 
-  Future<_WithdrawReceiptData?> _showPinVerificationSheet(int amount) async {
-    final TextEditingController pinController = TextEditingController();
-    bool isSubmitting = false;
-    String? errorMessage;
-
-    final _WithdrawReceiptData?
-    result = await showModalBottomSheet<_WithdrawReceiptData>(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-      ),
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            final EdgeInsets inset = MediaQuery.of(context).viewInsets;
-            return Padding(
-              padding: EdgeInsets.fromLTRB(20, 18, 20, 20 + inset.bottom),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _t('Xác thực mã PIN', 'PIN verification'),
-                    style: GoogleFonts.poppins(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF1E2745),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    _t(
-                      'Nhập mã PIN 6 số để xác nhận rút ${_formatIntAmount(amount)}đ',
-                      'Enter your 6-digit PIN to confirm a withdrawal of ${_formatIntAmount(amount)} VND',
-                    ),
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      color: const Color(0xFF6F7894),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  PinCodeTextField(
-                    appContext: context,
-                    controller: pinController,
-                    length: 6,
-                    autoDisposeControllers: false,
-                    keyboardType: TextInputType.number,
-                    animationType: AnimationType.fade,
-                    enableActiveFill: true,
-                    obscuringCharacter: '●',
-                    obscureText: true,
-                    textStyle: GoogleFonts.poppins(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF1D2744),
-                    ),
-                    pinTheme: PinTheme(
-                      shape: PinCodeFieldShape.box,
-                      borderRadius: BorderRadius.circular(12),
-                      fieldHeight: 54,
-                      fieldWidth: 45,
-                      activeColor: brandColor,
-                      selectedColor: brandColor,
-                      inactiveColor: const Color(0xFFD7DDEE),
-                      activeFillColor: const Color(0xFFF3F6FF),
-                      selectedFillColor: const Color(0xFFF3F6FF),
-                      inactiveFillColor: const Color(0xFFF8FAFF),
-                    ),
-                    onChanged: (_) {
-                      if (errorMessage != null) {
-                        setModalState(() {
-                          errorMessage = null;
-                        });
-                      }
-                    },
-                  ),
-                  if (errorMessage != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Text(
-                        errorMessage!,
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          color: Colors.red,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: isSubmitting
-                              ? null
-                              : () => Navigator.pop(sheetContext),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: brandColor,
-                            side: const BorderSide(color: Color(0xFF000DC0)),
-                            minimumSize: const Size.fromHeight(46),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: Text(
-                            _t('Huỷ', 'Cancel'),
-                            style: GoogleFonts.poppins(
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: isSubmitting
-                              ? null
-                              : () async {
-                                  bool didCloseSheet = false;
-                                  final String enteredPin = pinController.text
-                                      .trim();
-                                  if (enteredPin.length != 6) {
-                                    setModalState(() {
-                                      errorMessage = _t(
-                                        'Vui lòng nhập đủ 6 số PIN',
-                                        'Please enter all 6 PIN digits',
-                                      );
-                                    });
-                                    return;
-                                  }
-
-                                  setModalState(() {
-                                    isSubmitting = true;
-                                  });
-
-                                  try {
-                                    final _WithdrawReceiptData receipt =
-                                        await _verifyPinAndCreateReceipt(
-                                          amount: amount,
-                                          enteredPin: enteredPin,
-                                        );
-                                    if (sheetContext.mounted) {
-                                      didCloseSheet = true;
-                                      Navigator.pop(sheetContext, receipt);
-                                    }
-                                  } on _WithdrawFlowException catch (e) {
-                                    if (sheetContext.mounted) {
-                                      setModalState(() {
-                                        errorMessage = e.message;
-                                      });
-                                    }
-                                  } catch (_) {
-                                    if (sheetContext.mounted) {
-                                      setModalState(() {
-                                        errorMessage = _t(
-                                          'Đã xảy ra lỗi, vui lòng thử lại',
-                                          'An error occurred, please try again',
-                                        );
-                                      });
-                                    }
-                                  } finally {
-                                    if (sheetContext.mounted &&
-                                        !didCloseSheet) {
-                                      setModalState(() {
-                                        isSubmitting = false;
-                                      });
-                                    }
-                                  }
-                                },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: brandColor,
-                            foregroundColor: Colors.white,
-                            minimumSize: const Size.fromHeight(46),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: isSubmitting
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2.2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : Text(
-                                  _t('Xác nhận PIN', 'Confirm PIN'),
-                                  style: GoogleFonts.poppins(
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-
-    pinController.dispose();
-    return result;
-  }
-
   Future<void> _onSubmitWithdraw() async {
     final String digits = _amountController.text.replaceAll(RegExp(r'\D'), '');
     final int amount = digits.isEmpty ? 0 : int.parse(digits);
@@ -1202,23 +960,76 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
       return;
     }
 
-    final _WithdrawReceiptData? receipt = await _showPinVerificationSheet(
-      amount,
-    );
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => PinPopupWidget(
+        onSuccess: () async {
+          final String uid = _resolveUid();
+          if (uid.isEmpty) {
+            if (!mounted) {
+              return;
+            }
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  _t(
+                    'Không tìm thấy phiên đăng nhập hợp lệ',
+                    'No valid login session found',
+                  ),
+                ),
+                backgroundColor: Colors.red,
+              ),
+            );
+            return;
+          }
 
-    if (!mounted || receipt == null) {
-      return;
-    }
+          try {
+            final _WithdrawReceiptData receipt = await _handleWithdraw(
+              uid: uid,
+              amount: amount,
+            );
 
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => WithdrawReceiptScreen(
-          amount: receipt.amount,
-          withdrawCode: receipt.code,
-          createdAt: receipt.createdAt,
-          expiresAt: receipt.expiresAt,
-        ),
+            if (!mounted) {
+              return;
+            }
+
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => WithdrawReceiptScreen(
+                  amount: receipt.amount,
+                  withdrawCode: receipt.code,
+                  createdAt: receipt.createdAt,
+                  expiresAt: receipt.expiresAt,
+                ),
+              ),
+            );
+          } on _WithdrawFlowException catch (e) {
+            if (!mounted) {
+              return;
+            }
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+            );
+          } catch (_) {
+            if (!mounted) {
+              return;
+            }
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  _t(
+                    'Đã xảy ra lỗi, vui lòng thử lại',
+                    'An error occurred, please try again',
+                  ),
+                ),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        },
       ),
     );
   }

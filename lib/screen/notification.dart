@@ -30,7 +30,9 @@ class TransactionNotificationModel {
 }
 
 class NotificationScreen extends StatefulWidget {
-  const NotificationScreen({super.key});
+  const NotificationScreen({super.key, this.initialTabIndex = 0});
+
+  final int initialTabIndex;
 
   @override
   State<NotificationScreen> createState() => _NotificationScreenState();
@@ -53,6 +55,13 @@ class _NotificationScreenState extends State<NotificationScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialTabIndex <= 0) {
+      _selectedTabIndex = 0;
+    } else if (widget.initialTabIndex >= 2) {
+      _selectedTabIndex = 2;
+    } else {
+      _selectedTabIndex = widget.initialTabIndex;
+    }
     unawaited(markAllAsRead());
   }
 
@@ -427,7 +436,8 @@ class _NotificationScreenState extends State<NotificationScreen> {
                 type == 'phone_recharge' ||
                 type == 'withdraw' ||
                 type == 'transfer' ||
-                type == 'bill_payment';
+                type == 'bill_payment' ||
+                type == 'transaction';
             final bool isSystem =
                 type == 'system' || type == 'announcement' || type.isEmpty;
 

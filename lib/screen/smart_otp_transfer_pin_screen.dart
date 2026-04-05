@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:pin_code_fields/pin_code_fields.dart';
 
+import '../core/app_translations.dart';
 import '../data/user_firestore_service.dart';
 import '../l10n/app_text.dart';
+import '../services/notification_service.dart';
 import '../widget/ccp_app_bar.dart';
 import 'tranfer_bill.dart';
 
@@ -225,6 +227,7 @@ class _SmartOtpTransferPinScreenState extends State<SmartOtpTransferPinScreen> {
 
   Future<void> _verifyAndContinue(String expectedPin) async {
     final String enteredPin = _pinController.text.trim();
+    final String languageCode = Localizations.localeOf(context).languageCode;
 
     if (enteredPin.length != 6) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -275,6 +278,32 @@ class _SmartOtpTransferPinScreenState extends State<SmartOtpTransferPinScreen> {
 
     try {
       await _executeTransferTransaction();
+
+      final int amount = _normalizedAmount().round();
+      final String receiverName = widget.accountName;
+      final String notificationTitleRaw = AppTranslations.getTextByCode(
+        languageCode,
+        'transfer_success_title',
+      );
+      final String notificationTitle =
+          notificationTitleRaw == 'transfer_success_title'
+          ? 'Chuyển khoản thành công'
+          : notificationTitleRaw;
+      final String notificationBodyRaw =
+          AppTranslations.getTextByCodeWithParams(
+            languageCode,
+            'transfer_success_body',
+            <String, String>{'amount': '$amount', 'receiver': receiverName},
+          );
+      final String notificationBody =
+          notificationBodyRaw == 'transfer_success_body'
+          ? 'Đã chuyển $amount VND đến $receiverName'
+          : notificationBodyRaw;
+
+      await NotificationService().showNotification(
+        title: notificationTitle,
+        body: notificationBody,
+      );
 
       await Future<void>.delayed(const Duration(milliseconds: 300));
       if (!mounted) {

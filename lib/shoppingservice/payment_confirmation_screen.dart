@@ -1,0 +1,1149 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
+
+import '../app_preferences.dart';
+import '../core/app_translations.dart';
+import '../data/user_firestore_service.dart';
+import '../screen/home_screen.dart';
+import '../services/notification_service.dart';
+import '../widget/pin_popup.dart';
+import 'service_model.dart';
+
+class PaymentConfirmationScreen extends StatefulWidget {
+  const PaymentConfirmationScreen({
+    super.key,
+    required this.service,
+    required this.selectedAmount,
+  });
+
+  final ServiceModel service;
+  final int selectedAmount;
+
+  @override
+  State<PaymentConfirmationScreen> createState() =>
+      _PaymentConfirmationScreenState();
+}
+
+class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
+  static const Color _primaryBlue = Color(0xFF000DC0);
+  static const Color _lightBlue = Color(0xFFEAF0FF);
+  static const Color _silverGray = Color(0xFF98A2B3);
+
+  late final Map<String, TextEditingController> _controllers;
+  late final Map<String, FocusNode> _focusNodes;
+  late final Map<String, String?> _fieldErrors;
+  TextEditingController? _emailController;
+
+  bool _isProcessing = false;
+  bool _isButtonEnabled = false;
+  bool _isEmailValid = true;
+  String _sourceAccount = '****';
+
+  List<ServiceAccountField> get _accountFields => widget.service.accountFields;
+
+  String get _languageCode => AppPreferences.instance.locale.languageCode;
+
+  String _formatAmount(int value) {
+    final String locale = _languageCode == 'en' ? 'en_US' : 'vi_VN';
+    return NumberFormat.currency(
+      locale: locale,
+      symbol: 'đ',
+      decimalDigits: 0,
+    ).format(value);
+  }
+
+  String _buildPackageLabel() {
+    final String topUp = AppTranslations.getTextByCode(_languageCode, 'top_up');
+    final String serviceName = widget.service.localizedName(_languageCode);
+    return '$topUp ${_formatAmount(widget.selectedAmount)} $serviceName';
+  }
+
+  bool _isValidEmail(String email) {
+    final RegExp emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    return emailRegex.hasMatch(email.trim());
+  }
+
+  bool _isEmailType(ServiceAccountField field) {
+    return field.type == ServiceAccountInputType.email ||
+        field.type == ServiceAccountInputType.icloud;
+  }
+
+  void _onEmailChanged() {
+    final String email = _emailController?.text.trim() ?? '';
+    final bool nextIsValid = email.isEmpty ? true : _isValidEmail(email);
+    if (_isEmailValid == nextIsValid) {
+      return;
+    }
+    setState(() {
+      _isEmailValid = nextIsValid;
+    });
+  }
+
+  String _resolveUid() {
+    final String? fromService = UserFirestoreService.instance.currentUserDocId;
+    if (fromService != null && fromService.isNotEmpty) {
+      return fromService;
+    }
+
+    final String? fromProfile =
+        UserFirestoreService.instance.latestProfile?.uid;
+    if (fromProfile != null && fromProfile.isNotEmpty) {
+      return fromProfile;
+    }
+
+    final String? uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null && uid.isNotEmpty) {
+      return uid;
+    }
+    return '';
+  }
+
+  String _maskAccount(String raw) {
+    final String digits = raw.replaceAll(RegExp(r'\D'), '');
+    if (digits.length < 4) {
+      return raw.isEmpty ? '****' : raw;
+    }
+    return '**** ${digits.substring(digits.length - 4)}';
+  }
+
+  TextEditingController _controllerOf(ServiceAccountField field) {
+    return _controllers[field.id]!;
+  }
+
+  String? _errorOf(ServiceAccountField field) {
+    return _fieldErrors[field.id];
+  }
+
+  TextInputType _keyboardTypeFor(ServiceAccountField field) {
+    switch (field.type) {
+      case ServiceAccountInputType.phone:
+      case ServiceAccountInputType.steamId:
+        return TextInputType.number;
+      case ServiceAccountInputType.email:
+      case ServiceAccountInputType.icloud:
+        return TextInputType.emailAddress;
+      case ServiceAccountInputType.riotTag:
+      case ServiceAccountInputType.userId:
+        return TextInputType.text;
+    }
+  }
+
+  List<TextInputFormatter>? _formattersFor(ServiceAccountField field) {
+    final List<TextInputFormatter> formatters = <TextInputFormatter>[];
+    if (field.digitsOnly) {
+      formatters.add(FilteringTextInputFormatter.digitsOnly);
+    }
+    if (field.maxLength != null) {
+      formatters.add(LengthLimitingTextInputFormatter(field.maxLength));
+    }
+    if (formatters.isEmpty) {
+      return null;
+    }
+    return formatters;
+  }
+
+  String? _validateField(ServiceAccountField field, String raw) {
+    final String value = raw.trim();
+
+    if (value.isEmpty) {
+      return null;
+    }
+
+    if (_isEmailType(field)) {
+      if (!_isValidEmail(value)) {
+        return AppTranslations.getTextByCode(_languageCode, 'invalid_email');
+      }
+      if (field.type == ServiceAccountInputType.icloud &&
+          !value.toLowerCase().endsWith('@icloud.com')) {
+        return AppTranslations.getTextByCode(
+          _languageCode,
+          'invalid_icloud_email',
+        );
+      }
+    }
+
+    final String? regexPattern = field.regexPattern;
+    if (regexPattern == null || regexPattern.isEmpty) {
+      return null;
+    }
+
+    final bool valid = RegExp(regexPattern).hasMatch(value);
+    if (valid) {
+      return null;
+    }
+
+    return field.localizedErrorText(_languageCode) ??
+        AppTranslations.getTextByCode(_languageCode, 'invalid_input');
+  }
+
+  String _fieldValue(ServiceAccountField field) {
+    return _controllerOf(field).text.trim();
+  }
+
+  bool _isFormValid() {
+    if (_accountFields.isEmpty) {
+      return false;
+    }
+
+    if (!_isEmailValid) {
+      return false;
+    }
+
+    for (final ServiceAccountField field in _accountFields) {
+      final String value = _fieldValue(field);
+      if (value.isEmpty) {
+        return false;
+      }
+      final String? error = _validateField(field, value);
+      if (error != null) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  void _onFormChanged() {
+    bool shouldRebuild = false;
+
+    bool nextIsEmailValid = true;
+    for (final ServiceAccountField field in _accountFields) {
+      if (!_isEmailType(field)) {
+        continue;
+      }
+      final String value = _fieldValue(field);
+      if (value.isNotEmpty && !_isValidEmail(value)) {
+        nextIsEmailValid = false;
+        break;
+      }
+    }
+    if (_isEmailValid != nextIsEmailValid) {
+      _isEmailValid = nextIsEmailValid;
+      shouldRebuild = true;
+    }
+
+    for (final ServiceAccountField field in _accountFields) {
+      final String? nextError = _validateField(field, _fieldValue(field));
+      if (_fieldErrors[field.id] != nextError) {
+        _fieldErrors[field.id] = nextError;
+        shouldRebuild = true;
+      }
+    }
+
+    final bool nextEnabled = _isFormValid();
+    if (_isButtonEnabled != nextEnabled) {
+      _isButtonEnabled = nextEnabled;
+      shouldRebuild = true;
+    }
+
+    if (shouldRebuild && mounted) {
+      setState(() {});
+    }
+  }
+
+  Future<void> _loadSourceAccount() async {
+    final String uid = _resolveUid();
+    if (uid.isEmpty) {
+      return;
+    }
+
+    try {
+      final FirebaseFirestore firestore = FirebaseFirestore.instance;
+      final DocumentSnapshot<Map<String, dynamic>> userDoc = await firestore
+          .collection('users')
+          .doc(uid)
+          .get();
+
+      final Map<String, dynamic> userData =
+          userDoc.data() ?? <String, dynamic>{};
+      final String userAccount = (userData['accountNumber'] ?? '').toString();
+
+      if (userAccount.trim().isNotEmpty) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _sourceAccount = _maskAccount(userAccount);
+        });
+        return;
+      }
+
+      final DocumentSnapshot<Map<String, dynamic>> cardDoc = await firestore
+          .collection('users')
+          .doc(uid)
+          .collection('cards')
+          .doc('standard')
+          .get();
+      final String cardNumber = (cardDoc.data()?['cardNumber'] ?? '')
+          .toString()
+          .trim();
+
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _sourceAccount = cardNumber.isEmpty ? _maskAccount(uid) : cardNumber;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _sourceAccount = '****';
+      });
+    }
+  }
+
+  Map<String, String> _buildTargetAccountFields() {
+    final Map<String, String> result = <String, String>{};
+    for (final ServiceAccountField field in _accountFields) {
+      result[field.id] = _fieldValue(field);
+    }
+    return result;
+  }
+
+  String _buildTargetAccountSummary(Map<String, String> fields) {
+    final List<String> parts = <String>[];
+    for (final ServiceAccountField field in _accountFields) {
+      final String value = fields[field.id] ?? '';
+      if (value.isEmpty) {
+        continue;
+      }
+      parts.add('${field.localizedLabel(_languageCode)}: $value');
+    }
+    return parts.join(' | ');
+  }
+
+  String _formatNotificationAmount(int value) {
+    final String locale = _languageCode == 'en' ? 'en_US' : 'vi_VN';
+    return NumberFormat('#,###', locale).format(value);
+  }
+
+  String _resolvePaymentErrorMessage(Object error) {
+    if (error is FirebaseException) {
+      switch (error.code) {
+        case 'permission-denied':
+          return _languageCode == 'en'
+              ? 'You do not have permission to complete this payment.'
+              : 'Ban khong co quyen thuc hien thanh toan nay.';
+        case 'unavailable':
+        case 'deadline-exceeded':
+        case 'network-request-failed':
+          return _languageCode == 'en'
+              ? 'Network issue detected. Please try again.'
+              : 'Mang dang loi. Vui long thu lai.';
+        default:
+          final String message = (error.message ?? '').trim();
+          if (message.isNotEmpty) {
+            return message;
+          }
+      }
+    }
+
+    if (error is Exception) {
+      final String text = error
+          .toString()
+          .replaceFirst('Exception: ', '')
+          .trim();
+      if (text.isNotEmpty) {
+        return text;
+      }
+    }
+
+    return AppTranslations.getText(context, 'payment_failed');
+  }
+
+  Future<_ShoppingReceiptData> _processShoppingTransaction() async {
+    final String uid = _resolveUid();
+    if (uid.isEmpty) {
+      throw Exception(
+        AppTranslations.getTextByCode(_languageCode, 'no_valid_login_session'),
+      );
+    }
+
+    if (!_isFormValid()) {
+      throw Exception(
+        AppTranslations.getTextByCode(
+          _languageCode,
+          'invalid_recipient_account',
+        ),
+      );
+    }
+
+    final Map<String, String> targetAccountFields = _buildTargetAccountFields();
+    final String targetAccount = _buildTargetAccountSummary(
+      targetAccountFields,
+    );
+
+    final FirebaseFirestore firestore = FirebaseFirestore.instance;
+    final DateTime now = DateTime.now();
+    final String transactionCode =
+        'SHOP${now.microsecondsSinceEpoch.toString().substring(7)}';
+    final String serviceName = widget.service.localizedName(_languageCode);
+    final String packageName = _buildPackageLabel();
+    final String amountText = _formatAmount(widget.selectedAmount);
+    final String amountForNotification = _formatNotificationAmount(
+      widget.selectedAmount,
+    );
+    final String notificationTitleRaw = AppTranslations.getTextByCode(
+      _languageCode,
+      'transaction_success',
+    );
+    final String notificationTitle =
+        notificationTitleRaw == 'transaction_success'
+        ? 'Giao dịch thành công'
+        : notificationTitleRaw;
+    final String notificationBodyRaw = AppTranslations.getTextByCodeWithParams(
+      _languageCode,
+      'shopping_payment_body',
+      <String, String>{'service': serviceName, 'amount': amountForNotification},
+    );
+    final String notificationBody =
+        notificationBodyRaw == 'shopping_payment_body'
+        ? 'Thanh toán dịch vụ $serviceName - $amountForNotification VND'
+        : notificationBodyRaw;
+
+    final DocumentReference<Map<String, dynamic>> userRef = firestore
+        .collection('users')
+        .doc(uid);
+    final DocumentReference<Map<String, dynamic>> shoppingRef = userRef
+        .collection('Shopping')
+        .doc();
+    final DocumentReference<Map<String, dynamic>> notificationRef = userRef
+        .collection('notifications')
+        .doc();
+
+    await firestore.runTransaction((Transaction transaction) async {
+      final DocumentSnapshot<Map<String, dynamic>> userDoc = await transaction
+          .get(userRef);
+      if (!userDoc.exists) {
+        throw Exception(
+          AppTranslations.getTextByCode(
+            _languageCode,
+            'no_valid_login_session',
+          ),
+        );
+      }
+
+      transaction.set(userRef, <String, dynamic>{
+        'balance': FieldValue.increment(-widget.selectedAmount),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      transaction.set(shoppingRef, <String, dynamic>{
+        'uid': uid,
+        'serviceId': widget.service.id,
+        'serviceName': serviceName,
+        'amount': widget.selectedAmount,
+        'targetAccount': targetAccount,
+        'timestamp': FieldValue.serverTimestamp(),
+        'title': AppTranslations.getTextByCode(
+          _languageCode,
+          'shopping_payment_title',
+        ),
+        'type': 'shopping',
+        'isNegative': true,
+        'amountText': amountText,
+        'packageName': packageName,
+        'targetAccountFields': targetAccountFields,
+        'transactionCode': transactionCode,
+        'fee': 0,
+        'status': 'success',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      transaction.set(notificationRef, <String, dynamic>{
+        'title': notificationTitle,
+        'body': notificationBody,
+        'timestamp': FieldValue.serverTimestamp(),
+        'type': 'transaction',
+        'isRead': false,
+        'relatedId': shoppingRef.id,
+        'amount': widget.selectedAmount,
+      });
+    });
+
+    return _ShoppingReceiptData(
+      transactionCode: transactionCode,
+      serviceName: serviceName,
+      packageName: packageName,
+      targetAccount: targetAccount,
+      targetAccountFields: targetAccountFields,
+      amount: widget.selectedAmount,
+      sourceAccount: _sourceAccount,
+      createdAt: now,
+      logoPath: widget.service.logoPath,
+    );
+  }
+
+  Future<void> _handlePaymentSuccess() async {
+    if (_isProcessing) {
+      return;
+    }
+
+    setState(() {
+      _isProcessing = true;
+    });
+
+    try {
+      final _ShoppingReceiptData receipt = await _processShoppingTransaction();
+
+      if (!mounted) {
+        return;
+      }
+
+      try {
+        final String amount = _formatNotificationAmount(widget.selectedAmount);
+        final String serviceName = widget.service.localizedName(_languageCode);
+        final String notificationTitleRaw = AppTranslations.getTextByCode(
+          _languageCode,
+          'transaction_success',
+        );
+        final String notificationTitle =
+            notificationTitleRaw == 'transaction_success'
+            ? 'Giao dịch thành công'
+            : notificationTitleRaw;
+        final String notificationBodyRaw =
+            AppTranslations.getTextByCodeWithParams(
+              _languageCode,
+              'shopping_payment_body',
+              <String, String>{'service': serviceName, 'amount': amount},
+            );
+        final String notificationBody =
+            notificationBodyRaw == 'shopping_payment_body'
+            ? 'Thanh toán dịch vụ $serviceName - $amount VND'
+            : notificationBodyRaw;
+
+        await NotificationService().showNotification(
+          title: notificationTitle,
+          body: notificationBody,
+        );
+      } catch (notificationError) {
+        // Payment already succeeded; notification delivery should not fail UX.
+        debugPrint(
+          'Notification error after successful payment: $notificationError',
+        );
+      }
+
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ShoppingPaymentReceiptScreen(receipt: receipt),
+        ),
+        (Route<dynamic> route) => false,
+      );
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(_resolvePaymentErrorMessage(e)),
+        ),
+      );
+    } finally {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isProcessing = false;
+      });
+    }
+  }
+
+  Widget _detailRow(String label, Widget value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          SizedBox(
+            width: 110,
+            child: Text(
+              label,
+              style: GoogleFonts.poppins(
+                fontSize: 13,
+                color: _silverGray,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(child: value),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildServiceValue() {
+    return Row(
+      children: <Widget>[
+        Container(
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: _silverGray.withOpacity(0.25)),
+          ),
+          child: ClipOval(
+            child: Image.asset(
+              widget.service.logoPath,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) {
+                return const Icon(
+                  Icons.image_outlined,
+                  size: 14,
+                  color: _silverGray,
+                );
+              },
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            widget.service.localizedName(_languageCode),
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: _primaryBlue,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAccountField(ServiceAccountField field, int index) {
+    final TextEditingController controller = _controllerOf(field);
+    final bool isLast = index == _accountFields.length - 1;
+    final TextInputType keyboardType = _keyboardTypeFor(field);
+    final List<TextInputFormatter>? inputFormatters = _formattersFor(field);
+    final String? errorText = _errorOf(field);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            field.localizedLabel(_languageCode),
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: _primaryBlue,
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: controller,
+            focusNode: _focusNodes[field.id],
+            keyboardType: keyboardType,
+            inputFormatters: inputFormatters,
+            textInputAction: isLast
+                ? TextInputAction.done
+                : TextInputAction.next,
+            onSubmitted: (_) {
+              if (isLast) {
+                FocusScope.of(context).unfocus();
+              } else {
+                FocusScope.of(
+                  context,
+                ).requestFocus(_focusNodes[_accountFields[index + 1].id]);
+              }
+            },
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: _primaryBlue,
+            ),
+            decoration: InputDecoration(
+              hintText: field.localizedHint(_languageCode),
+              hintStyle: GoogleFonts.poppins(fontSize: 13, color: _silverGray),
+              filled: true,
+              fillColor: const Color(0xFFF6F8FC),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 14,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(color: _silverGray.withOpacity(0.24)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(color: _silverGray.withOpacity(0.24)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: _primaryBlue, width: 1.4),
+              ),
+            ),
+          ),
+          if (errorText != null) ...<Widget>[
+            const SizedBox(height: 6),
+            Text(
+              errorText,
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                color: Colors.red.shade700,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+
+    _controllers = <String, TextEditingController>{
+      for (final ServiceAccountField field in _accountFields)
+        field.id: TextEditingController(),
+    };
+
+    _focusNodes = <String, FocusNode>{
+      for (final ServiceAccountField field in _accountFields)
+        field.id: FocusNode(),
+    };
+
+    _fieldErrors = <String, String?>{
+      for (final ServiceAccountField field in _accountFields) field.id: null,
+    };
+
+    for (final TextEditingController controller in _controllers.values) {
+      controller.addListener(_onFormChanged);
+    }
+
+    for (final ServiceAccountField field in _accountFields) {
+      if (_isEmailType(field)) {
+        _emailController = _controllers[field.id];
+        break;
+      }
+    }
+    _emailController?.addListener(_onEmailChanged);
+
+    _loadSourceAccount();
+    _onFormChanged();
+  }
+
+  @override
+  void dispose() {
+    _emailController?.removeListener(_onEmailChanged);
+
+    for (final TextEditingController controller in _controllers.values) {
+      controller
+        ..removeListener(_onFormChanged)
+        ..dispose();
+    }
+    for (final FocusNode node in _focusNodes.values) {
+      node.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final String totalText = _formatAmount(widget.selectedAmount);
+    final String feeText = _languageCode == 'en' ? '0 VND' : '0đ';
+
+    return Scaffold(
+      backgroundColor: _lightBlue,
+      appBar: AppBar(
+        backgroundColor: _lightBlue,
+        elevation: 0,
+        centerTitle: true,
+        foregroundColor: _primaryBlue,
+        title: Text(
+          AppTranslations.getText(context, 'confirm_payment'),
+          style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w700),
+        ),
+      ),
+      body: SafeArea(
+        child: Column(
+          children: <Widget>[
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    for (int i = 0; i < _accountFields.length; i++)
+                      _buildAccountField(_accountFields[i], i),
+                    const SizedBox(height: 2),
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: _silverGray.withOpacity(0.20),
+                        ),
+                        boxShadow: <BoxShadow>[
+                          BoxShadow(
+                            color: _primaryBlue.withOpacity(0.07),
+                            blurRadius: 24,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        children: <Widget>[
+                          Text(
+                            AppTranslations.getText(context, 'payment_review'),
+                            style: GoogleFonts.poppins(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: _primaryBlue,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            totalText,
+                            style: GoogleFonts.poppins(
+                              fontSize: 28,
+                              fontWeight: FontWeight.w800,
+                              color: _primaryBlue,
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          Divider(color: _silverGray.withOpacity(0.28)),
+                          _detailRow(
+                            AppTranslations.getText(context, 'from'),
+                            Text(
+                              _sourceAccount,
+                              style: GoogleFonts.poppins(
+                                fontSize: 14,
+                                color: _primaryBlue,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          Divider(color: _silverGray.withOpacity(0.22)),
+                          _detailRow(
+                            AppTranslations.getText(context, 'service'),
+                            _buildServiceValue(),
+                          ),
+                          Divider(color: _silverGray.withOpacity(0.22)),
+                          _detailRow(
+                            AppTranslations.getText(context, 'package'),
+                            Text(
+                              _buildPackageLabel(),
+                              style: GoogleFonts.poppins(
+                                fontSize: 14,
+                                color: _primaryBlue,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          Divider(color: _silverGray.withOpacity(0.22)),
+                          _detailRow(
+                            AppTranslations.getText(context, 'fee'),
+                            Text(
+                              feeText,
+                              style: GoogleFonts.poppins(
+                                fontSize: 14,
+                                color: _silverGray,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          Divider(color: _silverGray.withOpacity(0.22)),
+                          _detailRow(
+                            AppTranslations.getText(context, 'total'),
+                            Text(
+                              totalText,
+                              style: GoogleFonts.poppins(
+                                fontSize: 18,
+                                color: _primaryBlue,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            SafeArea(
+              top: false,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                color: _lightBlue,
+                child: SizedBox(
+                  height: 52,
+                  child: ElevatedButton(
+                    onPressed: (_isProcessing || !_isButtonEnabled)
+                        ? null
+                        : () {
+                            showModalBottomSheet<void>(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (_) {
+                                return PinPopupWidget(
+                                  onSuccess: _handlePaymentSuccess,
+                                );
+                              },
+                            );
+                          },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _isButtonEnabled
+                          ? _primaryBlue
+                          : _silverGray.withOpacity(0.65),
+                      disabledBackgroundColor: _silverGray.withOpacity(0.65),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: _isProcessing
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Text(
+                            AppTranslations.getText(context, 'confirm_and_pay'),
+                            style: GoogleFonts.poppins(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ShoppingReceiptData {
+  const _ShoppingReceiptData({
+    required this.transactionCode,
+    required this.serviceName,
+    required this.packageName,
+    required this.targetAccount,
+    required this.targetAccountFields,
+    required this.amount,
+    required this.sourceAccount,
+    required this.createdAt,
+    required this.logoPath,
+  });
+
+  final String transactionCode;
+  final String serviceName;
+  final String packageName;
+  final String targetAccount;
+  final Map<String, String> targetAccountFields;
+  final int amount;
+  final String sourceAccount;
+  final DateTime createdAt;
+  final String logoPath;
+}
+
+class ShoppingPaymentReceiptScreen extends StatelessWidget {
+  const ShoppingPaymentReceiptScreen({super.key, required this.receipt});
+
+  final _ShoppingReceiptData receipt;
+
+  static const Color _primaryBlue = Color(0xFF000DC0);
+  static const Color _lightBlue = Color(0xFFEAF0FF);
+  static const Color _silverGray = Color(0xFF98A2B3);
+
+  String _formatAmount(BuildContext context, int value) {
+    final String code = AppTranslations.currentLanguageCode(context);
+    final String locale = code == 'en' ? 'en_US' : 'vi_VN';
+    return NumberFormat.currency(
+      locale: locale,
+      symbol: 'đ',
+      decimalDigits: 0,
+    ).format(value);
+  }
+
+  Widget _row(String label, String value, {bool strong = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: Text(
+              label,
+              style: GoogleFonts.poppins(
+                fontSize: 13,
+                color: _silverGray,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: GoogleFonts.poppins(
+                fontSize: strong ? 18 : 14,
+                color: _primaryBlue,
+                fontWeight: strong ? FontWeight.w800 : FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _lightBlue,
+      appBar: AppBar(
+        backgroundColor: _lightBlue,
+        elevation: 0,
+        centerTitle: true,
+        automaticallyImplyLeading: false,
+        title: Text(
+          AppTranslations.getText(context, 'transaction_receipt'),
+          style: GoogleFonts.poppins(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: _primaryBlue,
+          ),
+        ),
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+          child: Column(
+            children: <Widget>[
+              Container(
+                width: 82,
+                height: 82,
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.check_circle_rounded,
+                  size: 56,
+                  color: _primaryBlue,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                AppTranslations.getText(context, 'payment_successful'),
+                style: GoogleFonts.poppins(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w700,
+                  color: _primaryBlue,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: _silverGray.withOpacity(0.20)),
+                  boxShadow: <BoxShadow>[
+                    BoxShadow(
+                      color: _primaryBlue.withOpacity(0.07),
+                      blurRadius: 24,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: <Widget>[
+                    _row(
+                      AppTranslations.getText(context, 'transaction_id'),
+                      receipt.transactionCode,
+                    ),
+                    Divider(color: _silverGray.withOpacity(0.20)),
+                    _row(
+                      AppTranslations.getText(context, 'service'),
+                      receipt.serviceName,
+                    ),
+                    Divider(color: _silverGray.withOpacity(0.20)),
+                    _row(
+                      AppTranslations.getText(context, 'package'),
+                      receipt.packageName,
+                    ),
+                    Divider(color: _silverGray.withOpacity(0.20)),
+                    _row(
+                      AppTranslations.getText(context, 'recipient_account'),
+                      receipt.targetAccount,
+                    ),
+                    Divider(color: _silverGray.withOpacity(0.20)),
+                    _row(
+                      AppTranslations.getText(context, 'from'),
+                      receipt.sourceAccount,
+                    ),
+                    Divider(color: _silverGray.withOpacity(0.20)),
+                    _row(
+                      AppTranslations.getText(context, 'time'),
+                      DateFormat(
+                        'HH:mm:ss dd/MM/yyyy',
+                      ).format(receipt.createdAt),
+                    ),
+                    Divider(color: _silverGray.withOpacity(0.20)),
+                    _row(
+                      AppTranslations.getText(context, 'total'),
+                      _formatAmount(context, receipt.amount),
+                      strong: true,
+                    ),
+                  ],
+                ),
+              ),
+              const Spacer(),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(builder: (_) => const HomeScreen()),
+                      (Route<dynamic> route) => false,
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _primaryBlue,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  child: Text(
+                    AppTranslations.getText(context, 'back_to_home'),
+                    style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

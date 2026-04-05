@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../data/user_firestore_service.dart';
 import '../l10n/app_text.dart';
+import '../widget/pin_popup.dart';
 import '../widget/ccp_app_bar.dart';
 import 'smart_otp_transfer_pin_screen.dart';
 
@@ -358,19 +359,28 @@ class ConfirmTransferScreen extends StatelessWidget {
                     return;
                   }
 
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => SmartOtpTransferPinScreen(
-                        uid: uid,
-                        accountNumber: displayRecipientAccount,
-                        accountName: displayRecipientName,
-                        bankName: displayRecipientBank,
-                        bankId: resolvedBankId,
-                        initials: _recipientInitials(),
-                        amountText: amountText,
-                        transferContent: displayContent,
-                      ),
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) => PinPopupWidget(
+                      onSuccess: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => SmartOtpTransferPinScreen(
+                              uid: uid,
+                              accountNumber: displayRecipientAccount,
+                              accountName: displayRecipientName,
+                              bankName: displayRecipientBank,
+                              bankId: resolvedBankId,
+                              initials: _recipientInitials(),
+                              amountText: amountText,
+                              transferContent: displayContent,
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   );
                 },

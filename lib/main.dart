@@ -5,10 +5,10 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'app_preferences.dart';
-import 'core/local_notification_service.dart';
 import 'data/user_firestore_service.dart';
 import 'data/firebase_helper.dart';
 import 'effect/app_transitions.dart';
+import 'services/notification_service.dart';
 import 'screen/welcome.dart';
 
 void main() async {
@@ -53,7 +53,7 @@ void main() async {
 
   // 6. Khởi tạo local notification để hiển thị popup kiểu SMS.
   try {
-    await LocalNotificationService.instance.initialize();
+    await NotificationService().init();
   } catch (e) {
     debugPrint('❌ Local notification init failed: $e');
   }

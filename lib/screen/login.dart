@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:ui';
@@ -510,10 +510,7 @@ class _LoginScreenState extends State<LoginScreen> {
             const SizedBox(height: 20),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20.0),
-              child: Row(children: [
-                  
-                ],
-              ),
+              child: Row(children: []),
             ),
             const SizedBox(height: 80),
             Expanded(
@@ -578,9 +575,10 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                                 controller: _cccdController,
                                 errorText: _cccdError,
-                                keyboardType: TextInputType.text,
+                                keyboardType: TextInputType.number,
                                 textInputAction: TextInputAction.next,
                                 inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
                                   LengthLimitingTextInputFormatter(20),
                                 ],
                               ),

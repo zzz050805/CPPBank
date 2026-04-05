@@ -188,8 +188,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   const SizedBox(height: 20),
                   Text(
                     _t(
-                      'Chúng tôi đã gửi mã xác minh đến số điện thoại của bạn.',
-                      'We have sent a verification code to your phone number.',
+                      'Chúng tôi sẽ gửi mã xác minh đến số điện thoại của bạn.',
+                      'We will send a verification code to your phone number.',
                     ),
                     style: GoogleFonts.poppins(
                       color: Colors.black87,

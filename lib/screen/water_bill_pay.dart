@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../data/user_firestore_service.dart';
 import '../l10n/app_text.dart';
+import '../widget/pin_popup.dart';
 import '../widget/ccp_app_bar.dart';
 import 'main_tab_shell.dart';
 import 'water_bill_otp.dart';
@@ -618,14 +619,23 @@ class _WaterBillPayScreenState extends State<WaterBillPayScreen>
                   height: 55,
                   child: ElevatedButton(
                     onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => WaterBillOtpScreen(
-                            totalAmount: widget.totalAmount,
-                            customerName: widget.customerName,
-                            customerCode: widget.customerCode,
-                          ),
+                      showModalBottomSheet(
+                        context: context,
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
+                        builder: (_) => PinPopupWidget(
+                          onSuccess: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => WaterBillOtpScreen(
+                                  totalAmount: widget.totalAmount,
+                                  customerName: widget.customerName,
+                                  customerCode: widget.customerCode,
+                                ),
+                              ),
+                            );
+                          },
                         ),
                       );
                     },

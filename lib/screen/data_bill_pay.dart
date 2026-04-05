@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../data/user_firestore_service.dart';
 import '../l10n/app_text.dart';
+import '../widget/pin_popup.dart';
 import '../widget/ccp_app_bar.dart';
 import 'data_bill_otp.dart';
 import 'main_tab_shell.dart';
@@ -47,11 +48,6 @@ class _DataBillConfirmScreenState extends State<DataBillConfirmScreen> {
       MaterialPageRoute(builder: (_) => const MainTabShell(initialIndex: 0)),
       (Route<dynamic> route) => false,
     );
-  }
-
-  String _maskedPhone() {
-    if (widget.phoneNumber.length < 4) return widget.phoneNumber;
-    return '${widget.phoneNumber.substring(0, 3)} *** ${widget.phoneNumber.substring(6)}';
   }
 
   String _formatBalanceLine(double amount) {
@@ -389,14 +385,23 @@ class _DataBillConfirmScreenState extends State<DataBillConfirmScreen> {
                 height: 54,
                 child: ElevatedButton(
                   onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => DataBillOtpScreen(
-                          phoneNumber: widget.phoneNumber,
-                          planName: widget.planName,
-                          totalText: _totalText(widget.planPriceText),
-                        ),
+                    showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (_) => PinPopupWidget(
+                        onSuccess: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => DataBillOtpScreen(
+                                phoneNumber: widget.phoneNumber,
+                                planName: widget.planName,
+                                totalText: _totalText(widget.planPriceText),
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     );
                   },
