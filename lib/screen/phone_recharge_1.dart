@@ -280,16 +280,14 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
         });
 
         transaction.set(notificationRef, <String, dynamic>{
-          'title': _t(
-            'Nạp ĐT ${widget.selectedProvider.trim()}',
-            'Top-up ${widget.selectedProvider.trim()}',
-          ),
-          'body': _t(
-            'SĐT ${widget.selectedPhoneNumber.trim()} - $amount VND',
-            'Phone ${widget.selectedPhoneNumber.trim()} - $amount VND',
-          ),
           'timestamp': FieldValue.serverTimestamp(),
+          'createdAt': FieldValue.serverTimestamp(),
           'type': 'phone_recharge',
+          'isNegative': true,
+          'serviceName': widget.selectedProvider.trim(),
+          'targetAccount': widget.selectedPhoneNumber.trim(),
+          'transactionCode': rechargeRef.id,
+          'status': 'success',
           'isRead': false,
           'relatedId': rechargeRef.id,
           'amount': amount,

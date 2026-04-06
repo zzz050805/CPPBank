@@ -73,10 +73,16 @@ class AppTranslations {
       'vi': 'Thanh toán thành công!',
       'en': 'Payment Successful!',
     },
+    'payment_success_screen_title': <String, String>{
+      'vi': 'Giao dịch thành công',
+      'en': 'Payment Successful',
+    },
     'success_title': <String, String>{
       'vi': 'Thành công',
       'en': 'Payment Successful',
     },
+    'success': <String, String>{'vi': 'Thành công', 'en': 'Success'},
+    'close': <String, String>{'vi': 'Đóng', 'en': 'Close'},
     'transaction_success': <String, String>{
       'vi': 'Giao dịch thành công',
       'en': 'Transaction successful',
@@ -84,6 +90,14 @@ class AppTranslations {
     'shopping_payment_body': <String, String>{
       'vi': 'Thanh toán dịch vụ {service} - {amount} VND',
       'en': 'Successfully paid for {service} - {amount} VND',
+    },
+    'shopping_notification_title': <String, String>{
+      'vi': 'Thanh toán thành công gói {service}',
+      'en': 'Payment successful for {service}',
+    },
+    'payment_success_for_service': <String, String>{
+      'vi': 'Bạn đã thanh toán thành công gói {service}.',
+      'en': 'You have successfully paid for the {service} package.',
     },
     'transfer_success_title': <String, String>{
       'vi': 'Chuyển khoản thành công',
@@ -111,6 +125,7 @@ class AppTranslations {
     },
     'banner_fallback_label': <String, String>{'vi': 'Biểu ngữ', 'en': 'Banner'},
     'paid_for': <String, String>{'vi': 'Đã thanh toán cho', 'en': 'Paid for'},
+    'for_service': <String, String>{'vi': 'cho dịch vụ', 'en': 'for service'},
     'top_up_for': <String, String>{'vi': 'Đã nạp tiền cho', 'en': 'Top-up for'},
     'transferred_to': <String, String>{
       'vi': 'Đã chuyển tiền đến',
@@ -124,11 +139,31 @@ class AppTranslations {
       'vi': 'Hóa đơn giao dịch',
       'en': 'Transaction Receipt',
     },
+    'transaction_details': <String, String>{
+      'vi': 'Chi tiết giao dịch',
+      'en': 'Transaction details',
+    },
     'transaction_id': <String, String>{
       'vi': 'Mã giao dịch',
       'en': 'Transaction ID',
     },
+    'destination_account_or_phone': <String, String>{
+      'vi': 'Tài khoản đích / SĐT',
+      'en': 'Destination account / Phone',
+    },
     'from': <String, String>{'vi': 'Chuyển từ', 'en': 'From'},
+    'source_account': <String, String>{
+      'vi': 'Nguồn tiền',
+      'en': 'Source account',
+    },
+    'main_account': <String, String>{
+      'vi': 'Tài khoản chính',
+      'en': 'Main account',
+    },
+    'payment_source_account': <String, String>{
+      'vi': 'Tài khoản thanh toán',
+      'en': 'Payment account',
+    },
     'service': <String, String>{'vi': 'Dịch vụ', 'en': 'Service'},
     'package': <String, String>{'vi': 'Gói cước', 'en': 'Package'},
     'recipient_account': <String, String>{
@@ -138,6 +173,7 @@ class AppTranslations {
     'fee': <String, String>{'vi': 'Phí', 'en': 'Fee'},
     'total': <String, String>{'vi': 'Tổng cộng', 'en': 'Total'},
     'time': <String, String>{'vi': 'Thời gian', 'en': 'Time'},
+    'unknown': <String, String>{'vi': 'Không xác định', 'en': 'Unknown'},
     'back_to_home': <String, String>{
       'vi': 'Về trang chủ',
       'en': 'Back to Home',

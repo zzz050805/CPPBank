@@ -14,6 +14,7 @@ import '../shoppingservice/service_model.dart';
 import '../shoppingservice/shopping_store_screen.dart';
 import '../widget/pressable_scale.dart';
 import '../widget/shimmer_box.dart';
+import '../widget/transaction_detail_popup.dart';
 import 'search_screen.dart';
 import 'setting_screen.dart';
 import 'transfer_money.dart';
@@ -461,128 +462,235 @@ class _HomeScreenState extends State<HomeScreen> {
         .collection('users')
         .doc(uid);
 
-    final List<List<QueryDocumentSnapshot<Map<String, dynamic>>>> collections =
-        await Future.wait<List<QueryDocumentSnapshot<Map<String, dynamic>>>>([
-          _safeCollectionDocs(userRef, 'phone_recharge'),
-          _safeCollectionDocs(userRef, 'withdraw'),
-          _safeCollectionDocs(userRef, 'transfer'),
-          _safeCollectionDocs(userRef, 'bill_payment'),
-        ]);
+    const List<_HomeTransactionSource> sources = <_HomeTransactionSource>[
+      _HomeTransactionSource(
+        collectionName: 'transfer',
+        activityType: 'transfer',
+      ),
+      _HomeTransactionSource(
+        collectionName: 'transfers',
+        activityType: 'transfer',
+      ),
+      _HomeTransactionSource(
+        collectionName: 'recent_transfers',
+        activityType: 'transfer',
+      ),
+      _HomeTransactionSource(
+        collectionName: 'withdraw',
+        activityType: 'withdraw',
+      ),
+      _HomeTransactionSource(
+        collectionName: 'withdrawals',
+        activityType: 'withdraw',
+      ),
+      _HomeTransactionSource(
+        collectionName: 'phone_recharge',
+        activityType: 'phone_recharge',
+      ),
+      _HomeTransactionSource(
+        collectionName: 'phone_recharges',
+        activityType: 'phone_recharge',
+      ),
+      _HomeTransactionSource(
+        collectionName: 'Shopping',
+        activityType: 'shopping',
+      ),
+      _HomeTransactionSource(
+        collectionName: 'shopping',
+        activityType: 'shopping',
+      ),
+    ];
+
+    final List<List<QueryDocumentSnapshot<Map<String, dynamic>>>> snapshots =
+        await Future.wait<List<QueryDocumentSnapshot<Map<String, dynamic>>>>(
+          sources
+              .map(
+                (_HomeTransactionSource source) =>
+                    _safeCollectionDocs(userRef, source.collectionName),
+              )
+              .toList(growable: false),
+        );
+
+    final List<Map<String, dynamic>> mergedDocs = <Map<String, dynamic>>[];
+    for (int index = 0; index < sources.length; index++) {
+      final _HomeTransactionSource source = sources[index];
+      for (final QueryDocumentSnapshot<Map<String, dynamic>> doc
+          in snapshots[index]) {
+        mergedDocs.add(<String, dynamic>{
+          'id': doc.id,
+          'activityType': source.activityType,
+          'sourceCollection': source.collectionName,
+          'data': doc.data(),
+        });
+      }
+    }
+
+    mergedDocs.sort((Map<String, dynamic> a, Map<String, dynamic> b) {
+      final Map<String, dynamic> dataA =
+          (a['data'] as Map<String, dynamic>?) ?? <String, dynamic>{};
+      final Map<String, dynamic> dataB =
+          (b['data'] as Map<String, dynamic>?) ?? <String, dynamic>{};
+
+      final DateTime timestampA = _readTimestamp(
+        dataA['createdAt'] ?? dataA['timestamp'] ?? dataA['updatedAt'],
+      );
+      final DateTime timestampB = _readTimestamp(
+        dataB['createdAt'] ?? dataB['timestamp'] ?? dataB['updatedAt'],
+      );
+
+      return timestampB.compareTo(timestampA);
+    });
 
     final List<_HomeTransactionModel> transactions = <_HomeTransactionModel>[];
 
-    for (final QueryDocumentSnapshot<Map<String, dynamic>> doc
-        in collections[0]) {
-      final Map<String, dynamic> data = doc.data();
-      final String provider = (data['provider'] ?? '').toString().trim();
-      final String phoneNumber = (data['phoneNumber'] ?? '').toString().trim();
+    for (final Map<String, dynamic> merged in mergedDocs.take(10)) {
+      final String id = (merged['id'] ?? '').toString();
+      final String activityType = (merged['activityType'] ?? '').toString();
+      final Map<String, dynamic> data =
+          (merged['data'] as Map<String, dynamic>?) ?? <String, dynamic>{};
 
-      transactions.add(
-        _HomeTransactionModel(
-          id: doc.id,
-          title: provider.isEmpty
-              ? _t('Nạp điện thoại', 'Phone top-up')
-              : '${_t('Nạp ĐT', 'Top-up')} $provider',
-          subtitle: phoneNumber.isEmpty
-              ? _t('Nạp tiền điện thoại', 'Phone top-up')
-              : '${_t('SĐT', 'Phone')}: $phoneNumber',
-          amount: _readNumericValue(data['amount']).toDouble(),
-          timestamp: _readTimestamp(data['createdAt'] ?? data['timestamp']),
-          type: 'phone_recharge',
-          isNegative: true,
-        ),
+      final DateTime timestamp = _readTimestamp(
+        data['createdAt'] ?? data['timestamp'] ?? data['updatedAt'],
       );
-    }
 
-    for (final QueryDocumentSnapshot<Map<String, dynamic>> doc
-        in collections[1]) {
-      final Map<String, dynamic> data = doc.data();
-      final String withdrawCode = _firstNonEmpty([
-        data['withdrawCode'],
-        data['code'],
-      ]);
+      String title = '';
+      String subtitle = '';
+      double amount = 0;
 
-      transactions.add(
-        _HomeTransactionModel(
-          id: doc.id,
-          title: _t('Rút tiền mặt', 'Cash withdrawal'),
-          subtitle: withdrawCode.isEmpty
+      switch (activityType) {
+        case 'phone_recharge':
+          final String provider = _firstNonEmpty([
+            data['provider'],
+            data['network'],
+            data['carrier'],
+            data['telco'],
+          ]);
+          final String phoneNumber = _firstNonEmpty([
+            data['phoneNumber'],
+            data['phone'],
+            data['targetPhone'],
+            data['targetAccount'],
+          ]);
+
+          title = provider.isEmpty
+              ? _t('Nạp ĐT', 'Top-up')
+              : '${_t('Nạp ĐT', 'Top-up')} $provider';
+          subtitle = phoneNumber.isEmpty
+              ? _t('SĐT không xác định', 'Unknown phone number')
+              : '${_t('SĐT', 'Phone')}: $phoneNumber';
+          amount = _extractFirstAmount(data, <String>[
+            'amount',
+            'amountVnd',
+            'totalAmount',
+            'amountText',
+          ]);
+          break;
+
+        case 'withdraw':
+          final String withdrawCode = _firstNonEmpty([
+            data['withdrawCode'],
+            data['code'],
+            data['transactionCode'],
+          ]);
+
+          title = _t('Rút tiền mặt', 'Cash withdrawal');
+          subtitle = withdrawCode.isEmpty
               ? _t('Rút tiền ATM', 'ATM withdrawal')
-              : withdrawCode,
-          amount: _readNumericValue(data['amount']).toDouble(),
-          timestamp: _readTimestamp(data['createdAt'] ?? data['timestamp']),
-          type: 'withdraw',
-          isNegative: true,
-        ),
-      );
-    }
+              : '${_t('Mã GD', 'Txn code')}: $withdrawCode';
+          amount = _extractFirstAmount(data, <String>[
+            'amount',
+            'amountVnd',
+            'totalAmount',
+            'amountText',
+          ]);
+          break;
 
-    for (final QueryDocumentSnapshot<Map<String, dynamic>> doc
-        in collections[2]) {
-      final Map<String, dynamic> data = doc.data();
-      final bool isNegative = _resolveTransferIsNegative(data, uid);
-      final String description = _firstNonEmpty([
-        data['accountName'],
-        data['recipientName'],
-        data['receiverName'],
-        data['accountNumber'],
-        data['toAccountNumber'],
-      ]);
+        case 'shopping':
+          final String serviceName = _firstNonEmpty([
+            data['serviceName'],
+            data['title'],
+            data['packageName'],
+            data['provider'],
+          ]);
+          final String targetAccount = _firstNonEmpty([
+            data['targetAccount'],
+            data['accountNumber'],
+            data['customerCode'],
+            data['playerId'],
+            data['phoneNumber'],
+          ]);
 
-      transactions.add(
-        _HomeTransactionModel(
-          id: doc.id,
-          title: isNegative
-              ? _t('Chuyển khoản', 'Transfer')
-              : _t('Nhận tiền', 'Money received'),
-          subtitle: description.isEmpty
-              ? _t('Giao dịch chuyển khoản', 'Transfer transaction')
-              : description,
-          amount: _readNumericValue(data['amount']).toDouble(),
-          timestamp: _readTimestamp(data['createdAt'] ?? data['timestamp']),
-          type: 'transfer',
-          isNegative: isNegative,
-        ),
-      );
-    }
-
-    for (final QueryDocumentSnapshot<Map<String, dynamic>> doc
-        in collections[3]) {
-      final Map<String, dynamic> data = doc.data();
-      final String serviceName = _firstNonEmpty([
-        data['serviceName'],
-        data['provider'],
-        data['billType'],
-      ]);
-      final String billCode = _firstNonEmpty([
-        data['billCode'],
-        data['customerCode'],
-        data['invoiceCode'],
-      ]);
-
-      transactions.add(
-        _HomeTransactionModel(
-          id: doc.id,
-          title: serviceName.isEmpty
-              ? _t('Thanh toán hóa đơn', 'Bill payment')
-              : '${_t('Thanh toán', 'Payment')} $serviceName',
-          subtitle: billCode.isEmpty
+          title = serviceName.isEmpty
               ? _t('Thanh toán dịch vụ', 'Service payment')
-              : billCode,
-          amount: _readNumericValue(data['amount']).toDouble(),
-          timestamp: _readTimestamp(data['createdAt'] ?? data['timestamp']),
-          type: 'bill_payment',
+              : '${_t('Thanh toán', 'Payment')} $serviceName';
+          subtitle = targetAccount.isEmpty
+              ? _t('TK đích không xác định', 'Unknown destination account')
+              : '${_t('TK đích', 'To')}: $targetAccount';
+          amount = _extractFirstAmount(data, <String>[
+            'amount',
+            'amountVnd',
+            'totalAmount',
+            'amountText',
+          ]);
+          break;
+
+        case 'transfer':
+        default:
+          final String recipientName = _firstNonEmpty([
+            data['accountName'],
+            data['recipientName'],
+            data['receiverName'],
+          ]);
+          final String destinationAccount = _firstNonEmpty([
+            data['toAccountNumber'],
+            data['accountNumber'],
+            data['receiverAccount'],
+            data['targetAccount'],
+          ]);
+
+          title = recipientName.isEmpty
+              ? _t('Chuyển khoản', 'Transfer')
+              : '${_t('Chuyển khoản đến', 'Transfer to')} $recipientName';
+          subtitle = destinationAccount.isEmpty
+              ? _t('TK đích không xác định', 'Unknown destination account')
+              : '${_t('TK đích', 'To')}: $destinationAccount';
+          amount = _extractFirstAmount(data, <String>[
+            'amount',
+            'transferAmount',
+            'amountVnd',
+            'amountText',
+          ]);
+          break;
+      }
+
+      if (amount <= 0) {
+        continue;
+      }
+
+      transactions.add(
+        _HomeTransactionModel(
+          id: id,
+          title: title,
+          subtitle: subtitle,
+          amount: amount,
+          timestamp: timestamp,
+          type: activityType,
           isNegative: true,
+          data: <String, dynamic>{
+            ...data,
+            'id': id,
+            'title': title,
+            'subtitle': subtitle,
+            'amount': amount,
+            'timestamp': timestamp,
+            'type': activityType,
+            'isNegative': true,
+          },
         ),
       );
     }
 
-    transactions.sort(
-      (_HomeTransactionModel a, _HomeTransactionModel b) =>
-          b.timestamp.compareTo(a.timestamp),
-    );
-
-    return transactions.take(5).toList();
+    return transactions.take(5).toList(growable: false);
   }
 
   Future<List<_HomeTransactionModel>> _recentTransactionsFuture(String uid) {
@@ -604,8 +712,8 @@ class _HomeScreenState extends State<HomeScreen> {
         return Icons.atm_rounded;
       case 'transfer':
         return Icons.swap_horiz_rounded;
-      case 'bill_payment':
-        return Icons.receipt_long_rounded;
+      case 'shopping':
+        return Icons.shopping_bag_rounded;
       case 'phone_recharge':
       default:
         return Icons.phone_android_rounded;
@@ -1473,7 +1581,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 4),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: List.generate(bannerImages.length, (index) {
@@ -2065,7 +2173,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 10),
           if (uid.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 10),
@@ -2125,26 +2232,31 @@ class _HomeScreenState extends State<HomeScreen> {
                 }
 
                 return ListView.builder(
+                  padding: EdgeInsets.zero,
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   itemCount: transactions.length,
                   itemBuilder: (context, index) {
                     final _HomeTransactionModel item = transactions[index];
+                    final Map<String, dynamic> transaction = item.data;
                     final String dateText = DateFormat(
                       'dd/MM/yyyy HH:mm',
                     ).format(item.timestamp);
-                    final String subtitle = item.subtitle.isEmpty
-                        ? dateText
-                        : '${item.subtitle} • $dateText';
-                    final String amount =
-                        '${item.isNegative ? '-' : '+'} ${_formatCurrency(item.amount)}';
+                    final String subtitle = dateText;
+                    final String amount = '- ${_formatCurrency(item.amount)}';
 
-                    return _transactionItem(
-                      _iconForTransactionType(item.type),
-                      item.title,
-                      subtitle,
-                      amount,
-                      item.isNegative ? Colors.red : const Color(0xFF16A34A),
+                    return InkWell(
+                      onTap: () {
+                        TransactionDetailPopup.show(context, transaction);
+                      },
+                      borderRadius: BorderRadius.circular(12),
+                      child: _transactionItem(
+                        _iconForTransactionType(item.type),
+                        item.title,
+                        subtitle,
+                        amount,
+                        Colors.red,
+                      ),
                     );
                   },
                 );
@@ -2322,6 +2434,7 @@ class _HomeTransactionModel {
     required this.timestamp,
     required this.type,
     required this.isNegative,
+    required this.data,
   });
 
   final String id;
@@ -2331,6 +2444,17 @@ class _HomeTransactionModel {
   final DateTime timestamp;
   final String type;
   final bool isNegative;
+  final Map<String, dynamic> data;
+}
+
+class _HomeTransactionSource {
+  const _HomeTransactionSource({
+    required this.collectionName,
+    required this.activityType,
+  });
+
+  final String collectionName;
+  final String activityType;
 }
 
 class _ActionItemData {

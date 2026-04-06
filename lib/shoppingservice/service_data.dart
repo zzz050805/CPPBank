@@ -196,6 +196,12 @@ final List<ServiceModel> shoppingServices = <ServiceModel>[
           'en': 'Enter your Spotify UserID',
         },
         type: ServiceAccountInputType.userId,
+        regexPattern: r'^[A-Za-z0-9._-]{3,32}$',
+        errorText: <String, String>{
+          'vi': 'UserID Spotify phai tu 3-32 ky tu (chu, so, ., _, -).',
+          'en':
+              'Spotify UserID must be 3-32 characters (letters, numbers, ., _, -).',
+        },
       ),
     ],
   ),

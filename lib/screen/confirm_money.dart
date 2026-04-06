@@ -1,12 +1,15 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import '../core/app_translations.dart';
 import '../data/user_firestore_service.dart';
 import '../l10n/app_text.dart';
+import '../services/notification_service.dart';
 import '../widget/pin_popup.dart';
 import '../widget/ccp_app_bar.dart';
-import 'smart_otp_transfer_pin_screen.dart';
+import 'tranfer_bill.dart';
 
 void main() => runApp(const MyApp());
 
@@ -83,20 +86,219 @@ class ConfirmTransferScreen extends StatelessWidget {
     return value;
   }
 
-  String _recipientInitials() {
-    final List<String> parts = _safeRecipientName()
-        .split(RegExp(r'\s+'))
-        .where((part) => part.isNotEmpty)
-        .toList(growable: false);
+  String _resolveUid() {
+    final String? fromService = UserFirestoreService.instance.currentUserDocId;
+    if (fromService != null && fromService.isNotEmpty) {
+      return fromService;
+    }
 
-    if (parts.isEmpty) {
-      return 'U';
+    final String? fromProfile =
+        UserFirestoreService.instance.latestProfile?.uid;
+    if (fromProfile != null && fromProfile.isNotEmpty) {
+      return fromProfile;
     }
-    if (parts.length == 1) {
-      return parts.first.substring(0, 1).toUpperCase();
+
+    final String? fromAuth = FirebaseAuth.instance.currentUser?.uid;
+    if (fromAuth != null && fromAuth.isNotEmpty) {
+      return fromAuth;
     }
-    return '${parts.first.substring(0, 1)}${parts.last.substring(0, 1)}'
-        .toUpperCase();
+
+    return '';
+  }
+
+  double _toDouble(dynamic value) {
+    if (value is num) {
+      return value.toDouble();
+    }
+    if (value is String) {
+      return double.tryParse(value) ?? 0;
+    }
+    return 0;
+  }
+
+  double _normalizedAmount(String rawAmount) {
+    final String digits = rawAmount.replaceAll(RegExp(r'\D'), '');
+    if (digits.isEmpty) {
+      return 0;
+    }
+    return double.tryParse(digits) ?? 0;
+  }
+
+  Future<void> _processConfirmedTransfer({
+    required BuildContext context,
+    required String amountText,
+    required String recipientAccount,
+    required String recipientName,
+    required String transferContent,
+  }) async {
+    final String uid = _resolveUid();
+    if (uid.isEmpty) {
+      throw _TransferConfirmationException(
+        _t(
+          context,
+          'Không tìm thấy phiên đăng nhập hợp lệ.',
+          'No valid signed-in session found.',
+        ),
+      );
+    }
+
+    final double amount = _normalizedAmount(amountText);
+    if (amount <= 0) {
+      throw _TransferConfirmationException(
+        _t(
+          context,
+          'Số tiền phải lớn hơn 0.',
+          'Amount must be greater than 0.',
+        ),
+      );
+    }
+
+    final FirebaseFirestore firestore = FirebaseFirestore.instance;
+    final DocumentReference<Map<String, dynamic>> userRef = firestore
+        .collection('users')
+        .doc(uid);
+    final DocumentReference<Map<String, dynamic>> standardCardRef = userRef
+        .collection('cards')
+        .doc('standard');
+    final DocumentReference<Map<String, dynamic>> vipCardRef = userRef
+        .collection('cards')
+        .doc('vip');
+    final DocumentReference<Map<String, dynamic>> notificationRef = userRef
+        .collection('notifications')
+        .doc();
+
+    final int roundedAmount = amount.round();
+    final String transferCode =
+        'TRF${DateTime.now().millisecondsSinceEpoch.toString().substring(6)}';
+    final String languageCode = AppTranslations.currentLanguageCode(context);
+    final String notificationTitleRaw = AppTranslations.getTextByCode(
+      languageCode,
+      'transfer_success_title',
+    );
+    final String notificationTitle =
+        notificationTitleRaw == 'transfer_success_title'
+        ? 'Chuyển khoản thành công'
+        : notificationTitleRaw;
+    final String notificationBodyRaw = AppTranslations.getTextByCodeWithParams(
+      languageCode,
+      'transfer_success_body',
+      <String, String>{'amount': '$roundedAmount', 'receiver': recipientName},
+    );
+    final String notificationBody =
+        notificationBodyRaw == 'transfer_success_body'
+        ? 'Đã chuyển $roundedAmount VND đến $recipientName'
+        : notificationBodyRaw;
+
+    await firestore.runTransaction((Transaction transaction) async {
+      final DocumentSnapshot<Map<String, dynamic>> userSnap = await transaction
+          .get(userRef);
+
+      if (!userSnap.exists) {
+        throw _TransferConfirmationException(
+          _t(
+            context,
+            'Không tìm thấy thông tin tài khoản.',
+            'Account information not found.',
+          ),
+        );
+      }
+
+      final Map<String, dynamic> userData =
+          userSnap.data() ?? <String, dynamic>{};
+      final bool hasVipCard = userData['hasVipCard'] == true;
+
+      final DocumentSnapshot<Map<String, dynamic>> standardCardSnap =
+          await transaction.get(standardCardRef);
+      final DocumentSnapshot<Map<String, dynamic>> vipCardSnap =
+          await transaction.get(vipCardRef);
+
+      double standardBalance = _toDouble(standardCardSnap.data()?['balance']);
+      double vipBalance = _toDouble(vipCardSnap.data()?['balance']);
+      final double userBalance = _toDouble(userData['balance']);
+      final double cardsBalance = hasVipCard
+          ? (standardBalance + vipBalance)
+          : standardBalance;
+      final bool hasAnyCardBalance = cardsBalance > 0;
+      final double currentBalance = hasAnyCardBalance
+          ? cardsBalance
+          : userBalance;
+
+      if (currentBalance < amount) {
+        throw _TransferConfirmationException(
+          _t(context, 'Số dư không đủ.', 'Insufficient balance.'),
+        );
+      }
+
+      double newBalance;
+
+      if (hasAnyCardBalance) {
+        if (standardBalance >= amount) {
+          standardBalance -= amount;
+        } else {
+          final double remaining = amount - standardBalance;
+          standardBalance = 0;
+          if (!hasVipCard || vipBalance < remaining) {
+            throw _TransferConfirmationException(
+              _t(context, 'Số dư không đủ.', 'Insufficient balance.'),
+            );
+          }
+          vipBalance -= remaining;
+        }
+
+        newBalance = hasVipCard
+            ? (standardBalance + vipBalance)
+            : standardBalance;
+
+        transaction.set(standardCardRef, <String, dynamic>{
+          'balance': standardBalance,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+
+        if (hasVipCard) {
+          transaction.set(vipCardRef, <String, dynamic>{
+            'balance': vipBalance,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+        }
+      } else {
+        newBalance = userBalance - amount;
+      }
+
+      transaction.set(userRef, <String, dynamic>{
+        'balance': newBalance,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      transaction.set(notificationRef, <String, dynamic>{
+        'timestamp': FieldValue.serverTimestamp(),
+        'createdAt': FieldValue.serverTimestamp(),
+        'type': 'transfer',
+        'isRead': false,
+        'isNegative': true,
+        'relatedId': transferCode,
+        'amount': roundedAmount,
+        'targetAccount': recipientAccount,
+        'receiverName': recipientName,
+        'recipientName': recipientName,
+        'serviceName': recipientName,
+        'transactionCode': transferCode,
+        'transferContent': transferContent,
+      });
+    });
+
+    await NotificationService().showNotification(
+      title: notificationTitle,
+      body: notificationBody,
+    );
+
+    if (!context.mounted) {
+      return;
+    }
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const SuccessTransactionScreen()),
+    );
   }
 
   @override
@@ -108,10 +310,6 @@ class ConfirmTransferScreen extends StatelessWidget {
     final String displayRecipientAccount = _safeRecipientAccount();
     final String displayRecipientName = _safeRecipientName();
     final String displayRecipientBank = _safeRecipientBank();
-    final String resolvedBankId = recipientBankId.trim().isEmpty
-        ? displayRecipientBank.toLowerCase().replaceAll(RegExp(r'\s+'), '_')
-        : recipientBankId.trim();
-
     return Scaffold(
       backgroundColor: pageBackground,
       appBar: CCPAppBar(
@@ -339,17 +537,15 @@ class ConfirmTransferScreen extends StatelessWidget {
               height: 54,
               child: ElevatedButton(
                 onPressed: () {
-                  final String? uid =
-                      UserFirestoreService.instance.currentUserDocId ??
-                      FirebaseAuth.instance.currentUser?.uid;
-                  if (uid == null || uid.isEmpty) {
+                  final String uid = _resolveUid();
+                  if (uid.isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
                           _t(
                             context,
-                            'Không tìm thấy tài khoản để xác thực Smart OTP.',
-                            'Account not found for Smart OTP verification.',
+                            'Không tìm thấy tài khoản để xác thực giao dịch.',
+                            'Account not found for transaction verification.',
                           ),
                         ),
                         behavior: SnackBarBehavior.floating,
@@ -364,22 +560,44 @@ class ConfirmTransferScreen extends StatelessWidget {
                     isScrollControlled: true,
                     backgroundColor: Colors.transparent,
                     builder: (_) => PinPopupWidget(
-                      onSuccess: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => SmartOtpTransferPinScreen(
-                              uid: uid,
-                              accountNumber: displayRecipientAccount,
-                              accountName: displayRecipientName,
-                              bankName: displayRecipientBank,
-                              bankId: resolvedBankId,
-                              initials: _recipientInitials(),
-                              amountText: amountText,
-                              transferContent: displayContent,
+                      onSuccess: () async {
+                        try {
+                          await _processConfirmedTransfer(
+                            context: context,
+                            amountText: amountText,
+                            recipientAccount: displayRecipientAccount,
+                            recipientName: displayRecipientName,
+                            transferContent: displayContent,
+                          );
+                        } on _TransferConfirmationException catch (e) {
+                          if (!context.mounted) {
+                            return;
+                          }
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(e.message),
+                              behavior: SnackBarBehavior.floating,
+                              backgroundColor: Colors.red,
                             ),
-                          ),
-                        );
+                          );
+                        } catch (_) {
+                          if (!context.mounted) {
+                            return;
+                          }
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                _t(
+                                  context,
+                                  'Đã xảy ra lỗi không xác định, vui lòng thử lại.',
+                                  'An unexpected error occurred. Please try again.',
+                                ),
+                              ),
+                              behavior: SnackBarBehavior.floating,
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
                       },
                     ),
                   );
@@ -474,4 +692,10 @@ class ConfirmTransferScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+class _TransferConfirmationException implements Exception {
+  const _TransferConfirmationException(this.message);
+
+  final String message;
 }

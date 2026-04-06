@@ -3,11 +3,14 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
+import '../core/app_translations.dart';
 import '../data/notification_firestore_service.dart';
 import '../data/user_firestore_service.dart';
 import '../l10n/app_text.dart';
+import '../widget/transaction_detail_popup.dart';
 
 class TransactionNotificationModel {
   const TransactionNotificationModel({
@@ -18,6 +21,7 @@ class TransactionNotificationModel {
     required this.timestamp,
     required this.type,
     required this.isNegative,
+    required this.data,
   });
 
   final String id;
@@ -26,6 +30,25 @@ class TransactionNotificationModel {
   final num amount;
   final DateTime timestamp;
   final String type;
+  final bool isNegative;
+  final Map<String, dynamic> data;
+}
+
+class _NotificationMessageData {
+  const _NotificationMessageData({
+    required this.title,
+    required this.body,
+    required this.type,
+    required this.amount,
+    required this.isTransaction,
+    required this.isNegative,
+  });
+
+  final String title;
+  final String body;
+  final String type;
+  final num amount;
+  final bool isTransaction;
   final bool isNegative;
 }
 
@@ -183,6 +206,13 @@ class _NotificationScreenState extends State<NotificationScreen> {
           timestamp: _readTimestamp(data['createdAt'] ?? data['timestamp']),
           type: 'phone_recharge',
           isNegative: true,
+          data: <String, dynamic>{
+            ...data,
+            'id': doc.id,
+            'title': title,
+            'type': 'phone_recharge',
+            'targetAccount': description,
+          },
         ),
       );
     }
@@ -205,6 +235,14 @@ class _NotificationScreenState extends State<NotificationScreen> {
           timestamp: _readTimestamp(data['createdAt'] ?? data['timestamp']),
           type: 'withdraw',
           isNegative: true,
+          data: <String, dynamic>{
+            ...data,
+            'id': doc.id,
+            'title': _t('Rút tiền mặt', 'Cash withdrawal'),
+            'type': 'withdraw',
+            'targetAccount': withdrawCode,
+            'transactionCode': withdrawCode,
+          },
         ),
       );
     }
@@ -233,6 +271,14 @@ class _NotificationScreenState extends State<NotificationScreen> {
           timestamp: _readTimestamp(data['timestamp']),
           type: 'transfer',
           isNegative: true,
+          data: <String, dynamic>{
+            ...data,
+            'id': doc.id,
+            'title': _t('Chuyển khoản', 'Transfer'),
+            'type': 'transfer',
+            'targetAccount': accountNumber,
+            'serviceName': recipientName,
+          },
         ),
       );
     }
@@ -254,98 +300,244 @@ class _NotificationScreenState extends State<NotificationScreen> {
     return _dateTimeFormat.format(timestamp);
   }
 
-  String _extractProviderFromTitle(String rawTitle) {
-    final RegExpMatch? viMatch = RegExp(
-      r'^\s*Nạp\s*ĐT\s+(.+)$',
-      caseSensitive: false,
-    ).firstMatch(rawTitle);
-    if (viMatch != null) {
-      return (viMatch.group(1) ?? '').trim();
-    }
-
-    final RegExpMatch? enMatch = RegExp(
-      r'^\s*Top-up\s+(.+)$',
-      caseSensitive: false,
-    ).firstMatch(rawTitle);
-    if (enMatch != null) {
-      return (enMatch.group(1) ?? '').trim();
-    }
-
-    return '';
-  }
-
   String _extractPhoneFromBody(String rawBody) {
     final RegExpMatch? phoneMatch = RegExp(r'(\d{8,15})').firstMatch(rawBody);
     return (phoneMatch?.group(1) ?? '').trim();
   }
 
-  String _localizedNotificationTitle({
-    required String type,
-    required String rawTitle,
-    required Map<String, dynamic> data,
-  }) {
-    final String normalizedType = type.trim().toLowerCase();
-
-    if (normalizedType == 'phone_recharge') {
-      final String providerFromData = (data['provider'] ?? '')
-          .toString()
-          .trim();
-      final String providerFromTitle = _extractProviderFromTitle(rawTitle);
-      final String provider = providerFromData.isNotEmpty
-          ? providerFromData
-          : providerFromTitle;
-
-      return provider.isEmpty
-          ? _t('Nạp tiền điện thoại', 'Phone top-up')
-          : '${_t('Nạp ĐT', 'Top-up')} $provider';
+  String _firstNonEmpty(List<dynamic> values) {
+    for (final dynamic value in values) {
+      final String text = (value ?? '').toString().trim();
+      if (text.isNotEmpty) {
+        return text;
+      }
     }
-
-    if (normalizedType == 'withdraw') {
-      return _t('Rút tiền mặt', 'Cash withdrawal');
-    }
-
-    if (normalizedType == 'transfer') {
-      return _t('Chuyển khoản', 'Transfer');
-    }
-
-    return rawTitle.isEmpty
-        ? _t('Thông báo mới', 'New notification')
-        : rawTitle;
+    return '';
   }
 
-  String _localizedNotificationBody({
+  bool _isTransactionType(String normalizedType) {
+    return normalizedType == 'phone_recharge' ||
+        normalizedType == 'withdraw' ||
+        normalizedType == 'transfer' ||
+        normalizedType == 'bill_payment' ||
+        normalizedType == 'shopping' ||
+        normalizedType == 'transaction';
+  }
+
+  String _readLegacyTitle(Map<String, dynamic> data) {
+    final String raw = (data['title'] ?? '').toString().trim();
+    if (raw.isNotEmpty) {
+      return raw;
+    }
+    return _t('Thông báo mới', 'New notification');
+  }
+
+  String _readLegacyBody(Map<String, dynamic> data) {
+    final String raw = (data['body'] ?? '').toString().trim();
+    if (raw.isNotEmpty) {
+      return raw;
+    }
+    return _t('Không có mô tả', 'No description');
+  }
+
+  String _resolveNotificationType(Map<String, dynamic> data) {
+    return (data['type'] ?? '').toString().trim().toLowerCase();
+  }
+
+  _NotificationMessageData _buildNotificationMessageData(
+    Map<String, dynamic> data,
+  ) {
+    final String resolvedType = _resolveNotificationType(data);
+    final num amount = _readAmount(data['amount']);
+    final String amountText = amount > 0 ? _formatAmount(amount) : '0';
+    final String legacyTitle = _readLegacyTitle(data);
+    final String legacyBody = _readLegacyBody(data);
+
+    if (resolvedType.isEmpty) {
+      return _NotificationMessageData(
+        title: legacyTitle,
+        body: legacyBody,
+        type: '',
+        amount: amount,
+        isTransaction: amount > 0,
+        isNegative: data['isNegative'] == true || amount > 0,
+      );
+    }
+
+    if (resolvedType == 'shopping') {
+      final String serviceName = _firstNonEmpty(<dynamic>[
+        data['serviceName'],
+        data['provider'],
+        AppTranslations.getText(context, 'unknown'),
+      ]);
+      return _NotificationMessageData(
+        title: AppTranslations.getText(context, 'payment_successful'),
+        body:
+            '${AppTranslations.getText(context, 'paid_for')} $amountText VND ${AppTranslations.getText(context, 'for_service')} $serviceName',
+        type: resolvedType,
+        amount: amount,
+        isTransaction: true,
+        isNegative: true,
+      );
+    }
+
+    if (resolvedType == 'phone_recharge') {
+      final String target = _firstNonEmpty(<dynamic>[
+        data['targetAccount'],
+        data['phoneNumber'],
+        _extractPhoneFromBody((data['body'] ?? '').toString()),
+      ]);
+      final String targetText = target.isEmpty
+          ? AppTranslations.getText(context, 'unknown')
+          : target;
+      return _NotificationMessageData(
+        title: AppTranslations.getText(context, 'success_title'),
+        body:
+            '${AppTranslations.getText(context, 'top_up_for')} $targetText - $amountText VND',
+        type: resolvedType,
+        amount: amount,
+        isTransaction: true,
+        isNegative: true,
+      );
+    }
+
+    if (resolvedType == 'withdraw') {
+      final String code = _firstNonEmpty(<dynamic>[
+        data['transactionCode'],
+        data['withdrawCode'],
+        data['targetAccount'],
+      ]);
+      return _NotificationMessageData(
+        title: AppTranslations.getText(context, 'withdraw_notification_title'),
+        body: AppTranslations.getTextWithParams(
+          context,
+          'withdraw_notification_body',
+          <String, String>{
+            'code': code.isEmpty ? '-' : code,
+            'amount': amountText,
+          },
+        ),
+        type: resolvedType,
+        amount: amount,
+        isTransaction: true,
+        isNegative: true,
+      );
+    }
+
+    if (resolvedType == 'transfer') {
+      final String receiver = _firstNonEmpty(<dynamic>[
+        data['serviceName'],
+        data['receiverName'],
+        data['recipientName'],
+        data['targetAccount'],
+      ]);
+      final String receiverText = receiver.isEmpty
+          ? AppTranslations.getText(context, 'unknown')
+          : receiver;
+      return _NotificationMessageData(
+        title: AppTranslations.getText(context, 'transfer_success_title'),
+        body:
+            '${AppTranslations.getText(context, 'transferred_to')} $receiverText - $amountText VND',
+        type: resolvedType,
+        amount: amount,
+        isTransaction: true,
+        isNegative: true,
+      );
+    }
+
+    return _NotificationMessageData(
+      title: legacyTitle,
+      body: legacyBody,
+      type: resolvedType,
+      amount: amount,
+      isTransaction: _isTransactionType(resolvedType) || amount > 0,
+      isNegative: data['isNegative'] == true || amount > 0,
+    );
+  }
+
+  String _inferTransactionType({
+    required String normalizedType,
+    required Map<String, dynamic> data,
+  }) {
+    final String fromData = _firstNonEmpty(<dynamic>[
+      data['transactionType'],
+      data['activityType'],
+      data['paymentType'],
+      data['type'],
+    ]).toLowerCase();
+
+    if (fromData.isNotEmpty && fromData != 'transaction') {
+      return fromData;
+    }
+
+    if (normalizedType != 'transaction') {
+      return normalizedType;
+    }
+
+    if (data['phoneNumber'] != null) {
+      return 'phone_recharge';
+    }
+    if (data['withdrawCode'] != null) {
+      return 'withdraw';
+    }
+    if (data['serviceId'] != null || data['serviceName'] != null) {
+      return 'shopping';
+    }
+    return 'transfer';
+  }
+
+  Map<String, dynamic> _buildPopupDataFromNotification({
+    required String id,
     required String type,
-    required String rawBody,
+    required String title,
+    required String body,
     required num amount,
+    required DateTime timestamp,
     required Map<String, dynamic> data,
   }) {
     final String normalizedType = type.trim().toLowerCase();
+    final String popupType = _inferTransactionType(
+      normalizedType: normalizedType,
+      data: data,
+    );
 
-    if (normalizedType == 'phone_recharge') {
-      final String phoneFromData = (data['phoneNumber'] ?? '')
-          .toString()
-          .trim();
-      final String phoneFromBody = _extractPhoneFromBody(rawBody);
-      final String phone = phoneFromData.isNotEmpty
-          ? phoneFromData
-          : phoneFromBody;
-      final String amountText = amount > 0
-          ? '${_formatAmount(amount)} VND'
-          : '';
+    final String targetAccount = _firstNonEmpty(<dynamic>[
+      data['targetAccount'],
+      data['toAccountNumber'],
+      data['accountNumber'],
+      data['phoneNumber'],
+      data['receiverName'],
+      data['recipientName'],
+      _extractPhoneFromBody(body),
+    ]);
 
-      if (phone.isNotEmpty && amountText.isNotEmpty) {
-        return '${_t('Phone', 'Phone')} $phone - $amountText';
-      }
-      if (phone.isNotEmpty) {
-        return '${_t('Phone', 'Phone')} $phone';
-      }
-    }
+    final String transactionCode = _firstNonEmpty(<dynamic>[
+      data['transactionCode'],
+      data['withdrawCode'],
+      data['code'],
+      data['relatedId'],
+      id,
+    ]);
 
-    if (rawBody.isEmpty) {
-      return _t('Không có mô tả', 'No description');
-    }
+    final String serviceName = _firstNonEmpty(<dynamic>[
+      data['serviceName'],
+      data['provider'],
+      title,
+    ]);
 
-    return rawBody.replaceAll('SĐT', _t('SĐT', 'Phone'));
+    return <String, dynamic>{
+      ...data,
+      'id': id,
+      'type': popupType,
+      'title': title,
+      'body': body,
+      'amount': amount,
+      'timestamp': timestamp,
+      'targetAccount': targetAccount,
+      'transactionCode': transactionCode,
+      'serviceName': serviceName,
+      'isNegative': true,
+    };
   }
 
   IconData _iconForType(String type) {
@@ -411,35 +603,30 @@ class _NotificationScreenState extends State<NotificationScreen> {
           itemCount: docs.length,
           itemBuilder: (BuildContext context, int index) {
             final Map<String, dynamic> data = docs[index].data();
-            final String rawTitle =
-                (data['title'] ?? _t('Thông báo mới', 'New notification'))
-                    .toString()
-                    .trim();
-            final String rawBody = (data['body'] ?? '').toString().trim();
-            final DateTime timestamp = _readTimestamp(data['timestamp']);
+            final DateTime timestamp = _readTimestamp(
+              data['timestamp'] ?? data['createdAt'],
+            );
             final bool isRead = data['isRead'] == true;
-            final String type = (data['type'] ?? '').toString();
-            final num amount = _readAmount(data['amount']);
-            final String title = _localizedNotificationTitle(
-              type: type,
-              rawTitle: rawTitle,
-              data: data,
-            );
-            final String body = _localizedNotificationBody(
-              type: type,
-              rawBody: rawBody,
-              amount: amount,
-              data: data,
-            );
+            final _NotificationMessageData messageData =
+                _buildNotificationMessageData(data);
+            final bool isTransaction = messageData.isTransaction;
+            final Map<String, dynamic> popupData =
+                _buildPopupDataFromNotification(
+                  id: docs[index].id,
+                  type: messageData.type,
+                  title: messageData.title,
+                  body: messageData.body,
+                  amount: messageData.amount,
+                  timestamp: timestamp,
+                  data: data,
+                );
 
-            final bool isNegative =
-                type == 'phone_recharge' ||
-                type == 'withdraw' ||
-                type == 'transfer' ||
-                type == 'bill_payment' ||
-                type == 'transaction';
+            final bool isNegative = messageData.isNegative;
+            final String normalizedType = messageData.type.trim().toLowerCase();
             final bool isSystem =
-                type == 'system' || type == 'announcement' || type.isEmpty;
+                normalizedType == 'system' ||
+                normalizedType == 'announcement' ||
+                normalizedType.isEmpty;
 
             final Color iconColor = isSystem
                 ? const Color(0xFF0A67D8)
@@ -452,7 +639,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
                       ? const Color(0xFF1E40AF).withValues(alpha: 0.14)
                       : const Color(0xFF0284C7).withValues(alpha: 0.14));
 
-            final bool hasAmount = amount > 0;
+            final bool hasAmount = messageData.amount > 0;
             final String amountSign = isNegative ? '-' : '+';
             final Color amountColor = isNegative
                 ? const Color(0xFF1E40AF)
@@ -464,7 +651,11 @@ class _NotificationScreenState extends State<NotificationScreen> {
                 color: Colors.transparent,
                 child: InkWell(
                   borderRadius: BorderRadius.circular(16),
-                  onTap: () {},
+                  onTap: isTransaction
+                      ? () {
+                          TransactionDetailPopup.show(context, popupData);
+                        }
+                      : null,
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 14,
@@ -525,21 +716,21 @@ class _NotificationScreenState extends State<NotificationScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                title,
+                                messageData.title,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
+                                style: GoogleFonts.poppins(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 14,
-                                  color: Color(0xFF111827),
+                                  color: const Color(0xFF111827),
                                 ),
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                '$body • ${_formatTimestamp(timestamp)}',
+                                '${messageData.body} • ${_formatTimestamp(timestamp)}',
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
+                                style: GoogleFonts.poppins(
                                   fontSize: 12,
                                   color: Colors.grey,
                                   height: 1.35,
@@ -553,9 +744,9 @@ class _NotificationScreenState extends State<NotificationScreen> {
                           ConstrainedBox(
                             constraints: const BoxConstraints(minWidth: 92),
                             child: Text(
-                              '$amountSign ${_formatAmount(amount)} VND',
+                              '$amountSign ${_formatAmount(messageData.amount)} VND',
                               textAlign: TextAlign.right,
-                              style: TextStyle(
+                              style: GoogleFonts.poppins(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w700,
                                 color: amountColor,
@@ -629,7 +820,9 @@ class _NotificationScreenState extends State<NotificationScreen> {
                 color: Colors.transparent,
                 child: InkWell(
                   borderRadius: BorderRadius.circular(16),
-                  onTap: () {},
+                  onTap: () {
+                    TransactionDetailPopup.show(context, item.data);
+                  },
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 14,
@@ -671,10 +864,10 @@ class _NotificationScreenState extends State<NotificationScreen> {
                                 item.title,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
+                                style: GoogleFonts.poppins(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 14,
-                                  color: Color(0xFF111827),
+                                  color: const Color(0xFF111827),
                                 ),
                               ),
                               const SizedBox(height: 4),
@@ -682,7 +875,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
                                 '${item.description} • ${_formatTimestamp(item.timestamp)}',
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
+                                style: GoogleFonts.poppins(
                                   fontSize: 12,
                                   color: Colors.grey,
                                   height: 1.35,
@@ -697,7 +890,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
                           child: Text(
                             '$sign ${_formatAmount(item.amount)} VND',
                             textAlign: TextAlign.right,
-                            style: TextStyle(
+                            style: GoogleFonts.poppins(
                               color: amountColor,
                               fontWeight: FontWeight.w700,
                               fontSize: 15,
@@ -731,7 +924,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
         ),
         title: Text(
           _t('Thông báo', 'Notifications'),
-          style: const TextStyle(
+          style: GoogleFonts.poppins(
             color: Colors.black,
             fontSize: 20,
             fontWeight: FontWeight.w600,
@@ -756,7 +949,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
                         children: <Widget>[
                           Text(
                             tabs[index],
-                            style: TextStyle(
+                            style: GoogleFonts.poppins(
                               color: isActive
                                   ? _activeTabColor
                                   : const Color(0xFF374151),

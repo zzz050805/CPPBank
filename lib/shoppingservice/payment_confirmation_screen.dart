@@ -8,9 +8,9 @@ import 'package:intl/intl.dart';
 import '../app_preferences.dart';
 import '../core/app_translations.dart';
 import '../data/user_firestore_service.dart';
-import '../screen/home_screen.dart';
 import '../services/notification_service.dart';
 import '../widget/pin_popup.dart';
+import 'payment_success_screen.dart';
 import 'service_model.dart';
 
 class PaymentConfirmationScreen extends StatefulWidget {
@@ -357,6 +357,34 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
     return AppTranslations.getText(context, 'payment_failed');
   }
 
+  num _readBalance(dynamic value) {
+    if (value is num) {
+      return value;
+    }
+    if (value is String) {
+      final String text = value.trim();
+      if (text.isEmpty) {
+        return 0;
+      }
+      return num.tryParse(text) ?? 0;
+    }
+    return 0;
+  }
+
+  bool _parseHasVipCard(dynamic value) {
+    if (value is bool) {
+      return value;
+    }
+    if (value is num) {
+      return value != 0;
+    }
+    if (value is String) {
+      final String normalized = value.trim().toLowerCase();
+      return normalized == 'true' || normalized == '1' || normalized == 'yes';
+    }
+    return false;
+  }
+
   Future<_ShoppingReceiptData> _processShoppingTransaction() async {
     final String uid = _resolveUid();
     if (uid.isEmpty) {
@@ -386,30 +414,16 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
     final String serviceName = widget.service.localizedName(_languageCode);
     final String packageName = _buildPackageLabel();
     final String amountText = _formatAmount(widget.selectedAmount);
-    final String amountForNotification = _formatNotificationAmount(
-      widget.selectedAmount,
-    );
-    final String notificationTitleRaw = AppTranslations.getTextByCode(
-      _languageCode,
-      'transaction_success',
-    );
-    final String notificationTitle =
-        notificationTitleRaw == 'transaction_success'
-        ? 'Giao dịch thành công'
-        : notificationTitleRaw;
-    final String notificationBodyRaw = AppTranslations.getTextByCodeWithParams(
-      _languageCode,
-      'shopping_payment_body',
-      <String, String>{'service': serviceName, 'amount': amountForNotification},
-    );
-    final String notificationBody =
-        notificationBodyRaw == 'shopping_payment_body'
-        ? 'Thanh toán dịch vụ $serviceName - $amountForNotification VND'
-        : notificationBodyRaw;
 
     final DocumentReference<Map<String, dynamic>> userRef = firestore
         .collection('users')
         .doc(uid);
+    final DocumentReference<Map<String, dynamic>> standardCardRef = userRef
+        .collection('cards')
+        .doc('standard');
+    final DocumentReference<Map<String, dynamic>> vipCardRef = userRef
+        .collection('cards')
+        .doc('vip');
     final DocumentReference<Map<String, dynamic>> shoppingRef = userRef
         .collection('Shopping')
         .doc();
@@ -429,8 +443,70 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
         );
       }
 
+      final Map<String, dynamic> userData =
+          userDoc.data() ?? <String, dynamic>{};
+      final bool hasVipCard = _parseHasVipCard(userData['hasVipCard']);
+      final DocumentSnapshot<Map<String, dynamic>> standardCardSnap =
+          await transaction.get(standardCardRef);
+      final DocumentSnapshot<Map<String, dynamic>> vipCardSnap =
+          await transaction.get(vipCardRef);
+
+      num standardBalance = _readBalance(standardCardSnap.data()?['balance']);
+      num vipBalance = _readBalance(vipCardSnap.data()?['balance']);
+      final num cardsBalance = hasVipCard
+          ? (standardBalance + vipBalance)
+          : standardBalance;
+      final num userBalance = _readBalance(userData['balance']);
+      final num paymentAmount = widget.selectedAmount;
+
+      final bool hasAnyCardBalance = cardsBalance > 0;
+      final num currentBalance = hasAnyCardBalance ? cardsBalance : userBalance;
+
+      if (currentBalance < paymentAmount) {
+        throw Exception(
+          _languageCode == 'en' ? 'Insufficient balance.' : 'Số dư không đủ.',
+        );
+      }
+
+      num newBalance;
+      if (hasAnyCardBalance) {
+        if (standardBalance >= paymentAmount) {
+          standardBalance -= paymentAmount;
+        } else {
+          final num remaining = paymentAmount - standardBalance;
+          standardBalance = 0;
+          if (!hasVipCard || vipBalance < remaining) {
+            throw Exception(
+              _languageCode == 'en'
+                  ? 'Insufficient balance.'
+                  : 'Số dư không đủ.',
+            );
+          }
+          vipBalance -= remaining;
+        }
+
+        newBalance = hasVipCard
+            ? (standardBalance + vipBalance)
+            : standardBalance;
+
+        transaction.set(standardCardRef, <String, dynamic>{
+          'balance': standardBalance,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+
+        if (hasVipCard) {
+          transaction.set(vipCardRef, <String, dynamic>{
+            'balance': vipBalance,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+        }
+      } else {
+        newBalance = userBalance - paymentAmount;
+      }
+
       transaction.set(userRef, <String, dynamic>{
-        'balance': FieldValue.increment(-widget.selectedAmount),
+        'balance': newBalance,
+        'spending_stats.shopping': FieldValue.increment(widget.selectedAmount),
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
@@ -457,13 +533,17 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
       });
 
       transaction.set(notificationRef, <String, dynamic>{
-        'title': notificationTitle,
-        'body': notificationBody,
         'timestamp': FieldValue.serverTimestamp(),
-        'type': 'transaction',
-        'isRead': false,
-        'relatedId': shoppingRef.id,
+        'createdAt': FieldValue.serverTimestamp(),
+        'type': 'shopping',
+        'serviceName': serviceName,
+        'targetAccount': targetAccount,
         'amount': widget.selectedAmount,
+        'transactionCode': transactionCode,
+        'relatedId': shoppingRef.id,
+        'status': 'success',
+        'isNegative': true,
+        'isRead': false,
       });
     });
 
@@ -499,14 +579,12 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
       try {
         final String amount = _formatNotificationAmount(widget.selectedAmount);
         final String serviceName = widget.service.localizedName(_languageCode);
-        final String notificationTitleRaw = AppTranslations.getTextByCode(
-          _languageCode,
-          'transaction_success',
-        );
         final String notificationTitle =
-            notificationTitleRaw == 'transaction_success'
-            ? 'Giao dịch thành công'
-            : notificationTitleRaw;
+            AppTranslations.getTextByCodeWithParams(
+              _languageCode,
+              'shopping_notification_title',
+              <String, String>{'service': serviceName},
+            );
         final String notificationBodyRaw =
             AppTranslations.getTextByCodeWithParams(
               _languageCode,
@@ -529,12 +607,18 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
         );
       }
 
-      Navigator.pushAndRemoveUntil(
+      Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) => ShoppingPaymentReceiptScreen(receipt: receipt),
+          builder: (_) => PaymentSuccessScreen(
+            service: widget.service,
+            amount: widget.selectedAmount,
+            targetAccount: receipt.targetAccount,
+            transactionCode: receipt.transactionCode,
+            paidAt: receipt.createdAt,
+            sourceAccount: receipt.sourceAccount,
+          ),
         ),
-        (Route<dynamic> route) => false,
       );
     } catch (e) {
       if (!mounted) {
@@ -957,193 +1041,4 @@ class _ShoppingReceiptData {
   final String sourceAccount;
   final DateTime createdAt;
   final String logoPath;
-}
-
-class ShoppingPaymentReceiptScreen extends StatelessWidget {
-  const ShoppingPaymentReceiptScreen({super.key, required this.receipt});
-
-  final _ShoppingReceiptData receipt;
-
-  static const Color _primaryBlue = Color(0xFF000DC0);
-  static const Color _lightBlue = Color(0xFFEAF0FF);
-  static const Color _silverGray = Color(0xFF98A2B3);
-
-  String _formatAmount(BuildContext context, int value) {
-    final String code = AppTranslations.currentLanguageCode(context);
-    final String locale = code == 'en' ? 'en_US' : 'vi_VN';
-    return NumberFormat.currency(
-      locale: locale,
-      symbol: 'đ',
-      decimalDigits: 0,
-    ).format(value);
-  }
-
-  Widget _row(String label, String value, {bool strong = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: Text(
-              label,
-              style: GoogleFonts.poppins(
-                fontSize: 13,
-                color: _silverGray,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              textAlign: TextAlign.right,
-              style: GoogleFonts.poppins(
-                fontSize: strong ? 18 : 14,
-                color: _primaryBlue,
-                fontWeight: strong ? FontWeight.w800 : FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _lightBlue,
-      appBar: AppBar(
-        backgroundColor: _lightBlue,
-        elevation: 0,
-        centerTitle: true,
-        automaticallyImplyLeading: false,
-        title: Text(
-          AppTranslations.getText(context, 'transaction_receipt'),
-          style: GoogleFonts.poppins(
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-            color: _primaryBlue,
-          ),
-        ),
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
-          child: Column(
-            children: <Widget>[
-              Container(
-                width: 82,
-                height: 82,
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.check_circle_rounded,
-                  size: 56,
-                  color: _primaryBlue,
-                ),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                AppTranslations.getText(context, 'payment_successful'),
-                style: GoogleFonts.poppins(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w700,
-                  color: _primaryBlue,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: _silverGray.withOpacity(0.20)),
-                  boxShadow: <BoxShadow>[
-                    BoxShadow(
-                      color: _primaryBlue.withOpacity(0.07),
-                      blurRadius: 24,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  children: <Widget>[
-                    _row(
-                      AppTranslations.getText(context, 'transaction_id'),
-                      receipt.transactionCode,
-                    ),
-                    Divider(color: _silverGray.withOpacity(0.20)),
-                    _row(
-                      AppTranslations.getText(context, 'service'),
-                      receipt.serviceName,
-                    ),
-                    Divider(color: _silverGray.withOpacity(0.20)),
-                    _row(
-                      AppTranslations.getText(context, 'package'),
-                      receipt.packageName,
-                    ),
-                    Divider(color: _silverGray.withOpacity(0.20)),
-                    _row(
-                      AppTranslations.getText(context, 'recipient_account'),
-                      receipt.targetAccount,
-                    ),
-                    Divider(color: _silverGray.withOpacity(0.20)),
-                    _row(
-                      AppTranslations.getText(context, 'from'),
-                      receipt.sourceAccount,
-                    ),
-                    Divider(color: _silverGray.withOpacity(0.20)),
-                    _row(
-                      AppTranslations.getText(context, 'time'),
-                      DateFormat(
-                        'HH:mm:ss dd/MM/yyyy',
-                      ).format(receipt.createdAt),
-                    ),
-                    Divider(color: _silverGray.withOpacity(0.20)),
-                    _row(
-                      AppTranslations.getText(context, 'total'),
-                      _formatAmount(context, receipt.amount),
-                      strong: true,
-                    ),
-                  ],
-                ),
-              ),
-              const Spacer(),
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pushAndRemoveUntil(
-                      context,
-                      MaterialPageRoute(builder: (_) => const HomeScreen()),
-                      (Route<dynamic> route) => false,
-                    );
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _primaryBlue,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  child: Text(
-                    AppTranslations.getText(context, 'back_to_home'),
-                    style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }

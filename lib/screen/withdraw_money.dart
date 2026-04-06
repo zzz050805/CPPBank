@@ -233,23 +233,6 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
       final DateTime expiresAt = createdAt.add(const Duration(minutes: 15));
       final String withdrawCode = _generateWithdrawCode();
       final String amountText = _formatIntAmount(amount);
-      final String notificationTitleRaw = AppTranslations.getText(
-        context,
-        'withdraw_notification_title',
-      );
-      final String notificationTitle =
-          notificationTitleRaw == 'withdraw_notification_title'
-          ? _t('Rút tiền mặt', 'Cash withdrawal')
-          : notificationTitleRaw;
-      final String notificationBodyRaw = AppTranslations.getTextWithParams(
-        context,
-        'withdraw_notification_body',
-        <String, String>{'code': withdrawCode, 'amount': amountText},
-      );
-      final String notificationBody =
-          notificationBodyRaw == 'withdraw_notification_body'
-          ? 'Mã $withdrawCode - $amountText VND'
-          : notificationBodyRaw;
       final String successTitleRaw = AppTranslations.getText(
         context,
         'withdraw_success_title',
@@ -363,10 +346,14 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
         });
 
         transaction.set(notificationRef, <String, dynamic>{
-          'title': notificationTitle,
-          'body': notificationBody,
           'timestamp': FieldValue.serverTimestamp(),
+          'createdAt': FieldValue.serverTimestamp(),
           'type': 'withdraw',
+          'isNegative': true,
+          'serviceName': _t('Rút tiền mặt', 'Cash withdrawal'),
+          'targetAccount': withdrawCode,
+          'transactionCode': withdrawCode,
+          'status': 'success',
           'isRead': false,
           'relatedId': withdrawRef.id,
           'amount': amount,
