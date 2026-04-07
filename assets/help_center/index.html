@@ -24,6 +24,31 @@
         radial-gradient(circle at top left, rgba(0,29,192,.10), transparent 24%),
         var(--bg);
       color: var(--text);
+      overflow-x: hidden;
+    }
+    body::before,
+    body::after {
+      content: '';
+      position: fixed;
+      z-index: -1;
+      border-radius: 50%;
+      pointer-events: none;
+      filter: blur(12px);
+      animation: drift 14s ease-in-out infinite alternate;
+    }
+    body::before {
+      width: 260px;
+      height: 260px;
+      left: -80px;
+      top: 18vh;
+      background: rgba(0, 29, 192, 0.08);
+    }
+    body::after {
+      width: 340px;
+      height: 340px;
+      right: -120px;
+      top: 4vh;
+      background: rgba(77, 95, 255, 0.08);
     }
     .hero {
       padding: 56px 24px 32px;
@@ -34,6 +59,7 @@
       overflow: hidden;
       opacity: 0;
       transform: translateY(18px);
+      animation: float-hero 6s ease-in-out infinite;
     }
     .hero::after {
       content: '';
@@ -44,6 +70,18 @@
       background: rgba(255,255,255,.08);
       border-radius: 50%;
       filter: blur(2px);
+      animation: orb-rotate 18s linear infinite;
+    }
+    .hero::before {
+      content: '';
+      position: absolute;
+      inset: 24px auto auto 22px;
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: rgba(255,255,255,.08);
+      filter: blur(2px);
+      animation: drift 9s ease-in-out infinite alternate;
     }
     .brand {
       display: inline-flex;
@@ -90,12 +128,42 @@
       color: var(--muted);
       box-shadow: var(--shadow);
       text-align: left;
+      position: relative;
+      animation: search-breathe 3.8s ease-in-out infinite;
+    }
+    .search input {
+      flex: 1;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      color: var(--text);
+      font-size: 16px;
+      font-family: inherit;
+      min-width: 0;
+    }
+    .search input::placeholder {
+      color: var(--muted);
+      opacity: 1;
+    }
+    .search:focus-within {
+      box-shadow: 0 18px 48px rgba(0, 13, 192, 0.16);
+      transform: translateY(-1px);
+    }
+    .search:focus-within::after {
+      content: '';
+      position: absolute;
+      inset: -2px;
+      border-radius: 22px;
+      border: 1px solid rgba(0, 29, 192, 0.2);
+      animation: focus-ring 1.2s ease-out infinite;
+      pointer-events: none;
     }
     .search::before {
       content: '⌕';
       color: var(--blue);
       font-size: 22px;
       font-weight: 700;
+      animation: icon-pop 2.4s ease-in-out infinite;
     }
     .wrap {
       max-width: 1120px;
@@ -111,6 +179,7 @@
       font-size: 12px;
       font-weight: 800;
       letter-spacing: 1px;
+      animation: badge-glow 4s ease-in-out infinite;
     }
     h2 {
       margin: 12px 0 18px;
@@ -122,6 +191,7 @@
       gap: 16px;
     }
     .card {
+      position: relative;
       background: var(--card);
       border: 1px solid var(--line);
       border-radius: 22px;
@@ -135,6 +205,20 @@
     .card:hover {
       transform: translateY(-2px);
       box-shadow: 0 16px 32px rgba(0,0,0,.08);
+    }
+    .card::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 22px;
+      background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,.28), transparent 70%);
+      transform: translateX(-120%);
+      opacity: 0;
+      pointer-events: none;
+    }
+    .card:hover::after {
+      opacity: 1;
+      animation: sheen 1s ease;
     }
     .card strong {
       display: block;
@@ -151,6 +235,11 @@
       box-shadow: 0 10px 24px rgba(0,0,0,.03);
       opacity: 0;
       transform: translateY(16px);
+      transition: transform .2s ease, box-shadow .2s ease;
+    }
+    .faq-item:hover {
+      transform: translateY(-2px) scale(1.01);
+      box-shadow: 0 16px 32px rgba(0,0,0,.08);
     }
     .faq-item strong {
       display: block;
@@ -173,6 +262,11 @@
       padding: 16px 18px;
       opacity: 0;
       transform: translateY(16px);
+      transition: transform .2s ease, box-shadow .2s ease;
+    }
+    .contact:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 16px 32px rgba(0,0,0,.08);
     }
     .contact .title { font-weight: 700; margin-bottom: 4px; }
     .arrow {
@@ -230,8 +324,64 @@
       }
     }
 
+    @keyframes drift {
+      0% { transform: translate3d(0, 0, 0) scale(1); }
+      100% { transform: translate3d(18px, -22px, 0) scale(1.08); }
+    }
+
+    @keyframes float-hero {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-6px); }
+    }
+
+    @keyframes orb-rotate {
+      from { transform: rotate(0deg) scale(1); }
+      to { transform: rotate(360deg) scale(1.02); }
+    }
+
+    @keyframes search-breathe {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-2px); }
+    }
+
+    @keyframes focus-ring {
+      0% { opacity: .9; transform: scale(1); }
+      100% { opacity: 0; transform: scale(1.03); }
+    }
+
+    @keyframes icon-pop {
+      0%, 100% { transform: scale(1) translateX(0); }
+      50% { transform: scale(1.12) translateX(1px); }
+    }
+
+    @keyframes badge-glow {
+      0%, 100% { box-shadow: 0 0 0 rgba(255,255,255,0); }
+      50% { box-shadow: 0 0 24px rgba(255,255,255,.12); }
+    }
+
+    @keyframes sheen {
+      from { transform: translateX(-120%); }
+      to { transform: translateX(120%); }
+    }
+
     body.page-ready .hero {
       animation: rise-in .55s ease-out forwards;
+    }
+
+    body.page-ready .hero h1 {
+      animation: rise-in .55s ease-out .1s forwards;
+    }
+
+    body.page-ready .hero p {
+      animation: rise-in .55s ease-out .18s forwards;
+    }
+
+    body.page-ready .hero .brand {
+      animation: rise-in .45s ease-out .05s forwards, badge-glow 4s ease-in-out infinite;
+    }
+
+    body.page-ready .search {
+      animation: rise-in .55s ease-out .14s forwards, search-breathe 3.8s ease-in-out infinite;
     }
 
     body.page-ready .card {
@@ -262,6 +412,21 @@
     body.page-ready .status {
       animation: rise-in .45s ease-out .48s forwards;
     }
+
+    body.page-ready .card:hover,
+    body.page-ready .faq-item:hover,
+    body.page-ready .contact:hover {
+      transform: translateY(-2px);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
     @media (max-width: 640px) {
       .hero { padding-top: 44px; }
       .wrap { padding: 18px; }
@@ -274,7 +439,9 @@
     <div class="brand"><span class="brand-badge">B</span> TRUNG TÂM HỖ TRỢ CPPBANK</div>
     <h1>Chúng tôi có thể<br>giúp gì cho bạn?</h1>
     <p>Tìm kiếm câu trả lời nhanh chóng cho các dịch vụ ngân hàng hoặc liên hệ trực tiếp chuyên viên chăm sóc khách hàng 24/7.</p>
-    <div class="search">Tìm kiếm giao dịch, thẻ, bảo mật, khoản vay...</div>
+    <label class="search" aria-label="Tìm kiếm hỗ trợ">
+      <input type="text" placeholder="Tìm kiếm giao dịch, thẻ, bảo mật, khoản vay..." />
+    </label>
   </section>
 
   <main class="wrap">

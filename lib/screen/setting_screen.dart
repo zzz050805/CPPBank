@@ -2,10 +2,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../app_preferences.dart';
 import '../data/user_firestore_service.dart';
 import '../effect/gentle_page_route.dart';
 import '../l10n/app_text.dart';
+import '../services/help_center_web_server.dart';
 import 'user_info_screen.dart';
 import 'search_screen.dart';
 import 'home_screen.dart';
@@ -351,6 +353,7 @@ class _SettingScreenState extends State<SettingScreen> {
                         _buildSettingItem(
                           Icons.help_outline,
                           _t("Trung tâm trợ giúp", "Help center"),
+                          onTap: _openHelpCenterInBrowser,
                         ),
                       ]),
 
@@ -582,6 +585,20 @@ class _SettingScreenState extends State<SettingScreen> {
       ),
       onTap: onTap,
     );
+  }
+
+  Future<void> _openHelpCenterInBrowser() async {
+    final Uri uri = await HelpCenterWebServer.instance.ensureStarted();
+    final bool launched = await launchUrl(
+      uri,
+      mode: LaunchMode.externalApplication,
+    );
+
+    if (!launched && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Không thể mở Trung tâm trợ giúp.')),
+      );
+    }
   }
 
   Future<void> _showLanguagePicker() async {
