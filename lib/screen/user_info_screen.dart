@@ -7,6 +7,7 @@ import '../data/user_firestore_service.dart';
 import '../effect/gentle_page_route.dart';
 import '../l10n/app_text.dart';
 import '../widget/ccp_app_bar.dart';
+import 'delete_account_otp_screen.dart';
 import 'smart_otp_screen.dart';
 
 class UserInfoScreen extends StatefulWidget {
@@ -56,8 +57,8 @@ class _UserInfoScreenState extends State<UserInfoScreen>
     if (normalized.contains('bạc') || normalized.contains('silver')) {
       return _t('BẠC', 'SILVER');
     }
-    if (normalized.contains('onyx')) {
-      return 'ONYX';
+    if (normalized.contains('thành viên') || normalized.contains('member')) {
+      return _t('THÀNH VIÊN', 'MEMBER');
     }
     return text.toUpperCase();
   }
@@ -93,9 +94,9 @@ class _UserInfoScreenState extends State<UserInfoScreen>
   _MembershipRankData _membershipStyle(String tierLabel) {
     final String normalized = tierLabel.toLowerCase();
 
-    if (normalized.contains('prive')) {
+    if (normalized.contains('king')) {
       return const _MembershipRankData(
-        name: 'PRIVÉ',
+        name: 'KING',
         gradient: [Color(0xFF6B4A00), Color(0xFFD4AF37)],
         icon: Icons.workspace_premium_outlined,
       );
@@ -131,9 +132,9 @@ class _UserInfoScreenState extends State<UserInfoScreen>
         icon: Icons.military_tech_outlined,
       );
     }
-    if (normalized.contains('onyx')) {
+    if (normalized.contains('THÀNH VIÊN') || normalized.contains('member')) {
       return const _MembershipRankData(
-        name: 'ONYX',
+        name: 'THÀNH VIÊN',
         gradient: [Color(0xFF101010), Color(0xFF313131)],
         icon: Icons.diamond_outlined,
       );
@@ -360,6 +361,134 @@ class _UserInfoScreenState extends State<UserInfoScreen>
           currentValue: _isMissing(currentValue) ? '' : currentValue,
         ),
       ),
+    );
+  }
+
+  Future<void> _showDeleteAccountDialog() async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext dialogContext) {
+        return Dialog(
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFFFCFCFF),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFFFE0E0)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.12),
+                  blurRadius: 26,
+                  offset: const Offset(0, 14),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFE5E5),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.delete_forever_outlined,
+                        color: Colors.red,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        _t('Xóa tài khoản', 'Delete account'),
+                        style: GoogleFonts.poppins(
+                          color: Colors.red,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  _t(
+                    'Bạn có chắc chắn muốn xóa tài khoản này không? Mọi dữ liệu giao dịch và số dư sẽ bị xóa vĩnh viễn và không thể khôi phục.',
+                    'Are you sure you want to delete this account? All transaction data and balances will be permanently removed and cannot be restored.',
+                  ),
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    height: 1.45,
+                    color: const Color(0xFF364152),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Color(0xFFD0D5DD)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(11),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 11),
+                        ),
+                        onPressed: () => Navigator.of(dialogContext).pop(false),
+                        child: Text(
+                          _t('Hủy', 'Cancel'),
+                          style: GoogleFonts.poppins(
+                            color: Colors.grey.shade700,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(11),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 11),
+                        ),
+                        onPressed: () => Navigator.of(dialogContext).pop(true),
+                        child: Text(
+                          _t('Có, Xóa', 'Yes, Delete'),
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    await Navigator.push(
+      context,
+      GentlePageRoute<void>(page: const DeleteAccountOtpScreen()),
     );
   }
 
@@ -679,6 +808,25 @@ class _UserInfoScreenState extends State<UserInfoScreen>
                                         isLast: true,
                                       ),
                                     ],
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
+                                TextButton.icon(
+                                  onPressed: _showDeleteAccountDialog,
+                                  icon: const Icon(
+                                    Icons.delete_outline,
+                                    size: 18,
+                                    color: Colors.red,
+                                  ),
+                                  label: Text(
+                                    _t('Xóa tài khoản', 'Delete account'),
+                                    style: GoogleFonts.poppins(
+                                      color: Colors.red,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: Colors.red,
                                   ),
                                 ),
                               ],

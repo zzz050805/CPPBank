@@ -1,4 +1,6 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'dart:ui';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
@@ -1822,12 +1824,32 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildSpendingChart() {
-    const Color darkBlue = Color(0xFF1A365D);
+    const Color darkBlue = Color(0xFF000A95);
     const Color lightBlue = Color(0xFF42A5F5);
     const Color silverGrey = Color(0xFFCBD5E1);
     const Color shoppingPurple = Color(0xFF9C27B0);
     const Color emptyGrey = Color(0xFFE5E7EB);
     const Color textPrimary = Color(0xFF1F2937);
+    const List<Color> transferGradient = <Color>[
+      Color(0xFF00065E),
+      Color(0xFF000EA8),
+    ];
+    const List<Color> billGradient = <Color>[
+      Color(0xFFB7E3FF),
+      Color(0xFF4AA9FF),
+    ];
+    const List<Color> phoneGradient = <Color>[
+      Color(0xFFF5F7FA),
+      Color(0xFFD7DEE8),
+    ];
+    const List<Color> shoppingGradient = <Color>[
+      Color(0xFFD9A4FF),
+      Color(0xFF8A2BE2),
+    ];
+    const List<Color> emptyGradient = <Color>[
+      Color(0xFFF2F4F7),
+      Color(0xFFE5E7EB),
+    ];
     const double normalRadius = 74;
     const double touchedRadius = 84;
     const double centerSpaceRadius = 54;
@@ -1874,24 +1896,28 @@ class _HomeScreenState extends State<HomeScreen> {
               labelEn: 'Transfer',
               value: transferValue,
               color: darkBlue,
+              gradientColors: transferGradient,
             ),
             _SpendingSlice(
               labelVi: 'Thanh toán hóa đơn',
               labelEn: 'Bill payment',
               value: billValue,
               color: lightBlue,
+              gradientColors: billGradient,
             ),
             _SpendingSlice(
               labelVi: 'Nạp ĐT',
               labelEn: 'Top up',
               value: phoneValue,
               color: silverGrey,
+              gradientColors: phoneGradient,
             ),
             _SpendingSlice(
               labelVi: 'Mua sắm - Giải trí',
               labelEn: 'Shopping & Entertainment',
               value: shoppingValue,
               color: shoppingPurple,
+              gradientColors: shoppingGradient,
             ),
           ];
 
@@ -1933,167 +1959,271 @@ class _HomeScreenState extends State<HomeScreen> {
                     labelEn: 'No spending',
                     value: 1,
                     color: emptyGrey,
+                    gradientColors: emptyGradient,
                   ),
                 ]
               : displaySlices;
 
-          return Container(
-            padding: const EdgeInsets.fromLTRB(20, 22, 20, 18),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: const Color(0xFFEFF4FA)),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF42A5F5).withOpacity(0.08),
-                  blurRadius: 30,
-                  offset: const Offset(0, 10),
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(20, 22, 20, 18),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.7),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: Colors.white.withOpacity(0.68)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.blueGrey.withOpacity(0.08),
+                      blurRadius: 24,
+                      offset: const Offset(0, 10),
+                    ),
+                    BoxShadow(
+                      color: Colors.white.withOpacity(0.48),
+                      blurRadius: 12,
+                      offset: const Offset(-2, -2),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Text(
-                  _t('Thống kê tiêu dùng', 'Spending statistics'),
-                  style: GoogleFonts.poppins(
-                    color: Colors.grey.shade600,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 18),
-                SizedBox(
-                  width: 220,
-                  height: 220,
-                  child: Stack(
-                    alignment: Alignment.center,
+                child: DefaultTextStyle.merge(
+                  style: GoogleFonts.poppins(),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      PieChart(
-                        PieChartData(
-                          centerSpaceRadius: centerSpaceRadius,
-                          sectionsSpace: 2,
-                          startDegreeOffset: -90,
-                          borderData: FlBorderData(show: false),
-                          pieTouchData: PieTouchData(
-                            touchCallback:
-                                (
-                                  FlTouchEvent event,
-                                  PieTouchResponse? pieTouchResponse,
-                                ) {
-                                  if (!event.isInterestedForInteractions ||
-                                      pieTouchResponse == null ||
-                                      pieTouchResponse.touchedSection == null) {
-                                    if (touchedIndex != -1) {
-                                      setState(() {
-                                        touchedIndex = -1;
-                                      });
-                                    }
-                                    return;
-                                  }
-
-                                  final int nextIndex = pieTouchResponse
-                                      .touchedSection!
-                                      .touchedSectionIndex;
-                                  if (nextIndex != touchedIndex) {
-                                    setState(() {
-                                      touchedIndex = nextIndex;
-                                    });
-                                  }
-                                },
-                          ),
-                          sections: List<PieChartSectionData>.generate(
-                            pieSlices.length,
-                            (int index) {
-                              final bool isTouched = activeIndex == index;
-                              final _SpendingSlice slice = pieSlices[index];
-                              final Color sectionColor = isTouched
-                                  ? Color.lerp(slice.color, Colors.black, 0.1)!
-                                  : slice.color;
-
-                              return PieChartSectionData(
-                                value: slice.value,
-                                color: sectionColor,
-                                title: '',
-                                showTitle: false,
-                                radius: isTouched
-                                    ? touchedRadius
-                                    : normalRadius,
-                              );
-                            },
-                          ),
+                      Text(
+                        _t('Thống kê tiêu dùng', 'Spending statistics'),
+                        style: GoogleFonts.poppins(
+                          color: Colors.grey.shade700,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
                         ),
-                        swapAnimationDuration: const Duration(
-                          milliseconds: 500,
-                        ),
-                        swapAnimationCurve: Curves.easeOutCubic,
                       ),
-                      Container(
-                        width: centerSpaceRadius * 2,
-                        height: centerSpaceRadius * 2,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: const Color(0xFFE9EEF4)),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFF1A365D).withOpacity(0.05),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                centerLabel,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: GoogleFonts.poppins(
-                                  color: Colors.grey.shade600,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: 230,
+                        height: 230,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            IgnorePointer(
+                              child: Container(
+                                width: 215,
+                                height: 215,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(
+                                        0xFF0B1D3A,
+                                      ).withOpacity(0.12),
+                                      blurRadius: 22,
+                                      offset: const Offset(0, 14),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              const SizedBox(height: 4),
-                              FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Text(
-                                  currencyFormatter.format(centerAmount),
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 23,
-                                    fontWeight: FontWeight.bold,
-                                    color: centerAmountColor,
-                                    height: 1,
+                            ),
+                            PieChart(
+                              PieChartData(
+                                centerSpaceRadius: centerSpaceRadius,
+                                sectionsSpace: 2,
+                                startDegreeOffset: -90,
+                                borderData: FlBorderData(show: false),
+                                pieTouchData: PieTouchData(
+                                  touchCallback:
+                                      (
+                                        FlTouchEvent event,
+                                        PieTouchResponse? pieTouchResponse,
+                                      ) {
+                                        if (!event
+                                                .isInterestedForInteractions ||
+                                            pieTouchResponse == null ||
+                                            pieTouchResponse.touchedSection ==
+                                                null) {
+                                          if (touchedIndex != -1) {
+                                            setState(() {
+                                              touchedIndex = -1;
+                                            });
+                                          }
+                                          return;
+                                        }
+
+                                        final int nextIndex = pieTouchResponse
+                                            .touchedSection!
+                                            .touchedSectionIndex;
+                                        if (nextIndex != touchedIndex) {
+                                          setState(() {
+                                            touchedIndex = nextIndex;
+                                          });
+                                        }
+                                      },
+                                ),
+                                sections: List<PieChartSectionData>.generate(
+                                  pieSlices.length,
+                                  (int index) {
+                                    final bool isTouched = activeIndex == index;
+                                    final _SpendingSlice slice =
+                                        pieSlices[index];
+                                    final List<Color> sectionGradientColors =
+                                        isTouched
+                                        ? slice.gradientColors
+                                              .map(
+                                                (Color color) => Color.lerp(
+                                                  color,
+                                                  Colors.black,
+                                                  0.14,
+                                                )!,
+                                              )
+                                              .toList()
+                                        : slice.gradientColors;
+
+                                    return PieChartSectionData(
+                                      value: slice.value,
+                                      gradient: LinearGradient(
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                        colors: sectionGradientColors,
+                                      ),
+                                      borderSide: BorderSide(
+                                        color: Colors.white.withOpacity(0.26),
+                                        width: 1.2,
+                                      ),
+                                      title: '',
+                                      showTitle: false,
+                                      radius: isTouched
+                                          ? touchedRadius
+                                          : normalRadius,
+                                    );
+                                  },
+                                ),
+                              ),
+                              swapAnimationDuration: const Duration(
+                                milliseconds: 500,
+                              ),
+                              swapAnimationCurve: Curves.easeOutCubic,
+                            ),
+                            ClipOval(
+                              child: BackdropFilter(
+                                filter: ImageFilter.blur(
+                                  sigmaX: 10,
+                                  sigmaY: 10,
+                                ),
+                                child: Container(
+                                  width: centerSpaceRadius * 2,
+                                  height: centerSpaceRadius * 2,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.72),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: Colors.white.withOpacity(0.5),
+                                      width: 5,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.white.withOpacity(0.3),
+                                        blurRadius: 10,
+                                        offset: const Offset(-2, -2),
+                                      ),
+                                      BoxShadow(
+                                        color: const Color(
+                                          0xFF0D1D38,
+                                        ).withOpacity(0.1),
+                                        blurRadius: 12,
+                                        offset: const Offset(2, 5),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Stack(
+                                    fit: StackFit.expand,
+                                    children: [
+                                      IgnorePointer(
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            gradient: RadialGradient(
+                                              center: const Alignment(
+                                                -0.2,
+                                                -0.4,
+                                              ),
+                                              radius: 1.1,
+                                              colors: [
+                                                Colors.white.withOpacity(0.36),
+                                                Colors.transparent,
+                                                const Color(
+                                                  0xFF0F1F39,
+                                                ).withOpacity(0.08),
+                                              ],
+                                              stops: const [0, 0.62, 1],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                        ),
+                                        child: Column(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            Text(
+                                              centerLabel,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: GoogleFonts.poppins(
+                                                color: Colors.grey.shade600,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            FittedBox(
+                                              fit: BoxFit.scaleDown,
+                                              child: Text(
+                                                currencyFormatter.format(
+                                                  centerAmount,
+                                                ),
+                                                style: GoogleFonts.poppins(
+                                                  fontSize: 23,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: centerAmountColor,
+                                                  height: 1,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
+                      ),
+                      const SizedBox(height: 32),
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 10,
+                        runSpacing: 10,
+                        children: displaySlices
+                            .map(
+                              (_SpendingSlice slice) =>
+                                  _buildSpendingLegendChip(
+                                    gradientColors: slice.gradientColors,
+                                    label: _t(slice.labelVi, slice.labelEn),
+                                    textColor: textPrimary,
+                                  ),
+                            )
+                            .toList(),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 20),
-                Wrap(
-                  alignment: WrapAlignment.center,
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: displaySlices
-                      .map(
-                        (_SpendingSlice slice) => _buildSpendingLegendChip(
-                          color: slice.color,
-                          label: _t(slice.labelVi, slice.labelEn),
-                          textColor: textPrimary,
-                        ),
-                      )
-                      .toList(),
-                ),
-              ],
+              ),
             ),
           );
         },
@@ -2102,30 +2232,56 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildSpendingLegendChip({
-    required Color color,
+    required List<Color> gradientColors,
     required String label,
     required Color textColor,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE9EEF4)),
+        color: Colors.white.withOpacity(0.58),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.66)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0F1F39).withOpacity(0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+          BoxShadow(
+            color: Colors.white.withOpacity(0.34),
+            blurRadius: 8,
+            offset: const Offset(-1, -1),
+          ),
+        ],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: gradientColors,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: gradientColors.last.withOpacity(0.45),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(width: 7),
+          const SizedBox(width: 8),
           Text(
             label,
             style: GoogleFonts.poppins(
-              fontSize: 12,
+              fontSize: 12.5,
               color: textColor,
               fontWeight: FontWeight.w500,
             ),
@@ -2417,12 +2573,14 @@ class _SpendingSlice {
     required this.labelEn,
     required this.value,
     required this.color,
+    required this.gradientColors,
   });
 
   final String labelVi;
   final String labelEn;
   final double value;
   final Color color;
+  final List<Color> gradientColors;
 }
 
 class _HomeTransactionModel {
