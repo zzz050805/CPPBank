@@ -376,18 +376,10 @@ class _SettingScreenState extends State<SettingScreen> {
   // --- WIDGET PHỤ TRỢ ---
 
   Widget _buildAvatar() {
-    return Container(
-      padding: const EdgeInsets.all(3),
-      decoration: const BoxDecoration(
-        color: Colors.white24,
-        shape: BoxShape.circle,
-      ),
-      child: const CircleAvatar(
-        radius: 35,
-        backgroundImage: NetworkImage(
-          'https://i.pravatar.cc/150?img=68',
-        ), // Avatar mẫu
-      ),
+    return CircleAvatar(
+      radius: 26,
+      backgroundColor: Colors.white.withValues(alpha: 0.2),
+      child: const Icon(Icons.person, color: Colors.white, size: 32),
     );
   }
 

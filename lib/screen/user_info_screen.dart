@@ -220,7 +220,7 @@ class _UserInfoScreenState extends State<UserInfoScreen>
     if (normalized.contains('bạc') || normalized.contains('silver')) {
       return Icons.military_tech_outlined;
     }
-    if (normalized.contains('prive') || normalized.contains('privé')) {
+    if (normalized.contains('thành viên') || normalized.contains('member')) {
       return Icons.workspace_premium_outlined;
     }
     return Icons.person_outline;
@@ -573,6 +573,21 @@ class _UserInfoScreenState extends State<UserInfoScreen>
     );
   }
 
+  Widget _buildHomeStyleAvatar() {
+    return Container(
+      padding: const EdgeInsets.all(2),
+      decoration: const BoxDecoration(
+        color: Color(0xFF000DC0),
+        shape: BoxShape.circle,
+      ),
+      child: CircleAvatar(
+        radius: 26,
+        backgroundColor: Colors.white.withValues(alpha: 0.2),
+        child: const Icon(Icons.person, color: Colors.white, size: 32),
+      ),
+    );
+  }
+
   Widget _buildLoading() {
     return Center(
       child: SizedBox(
@@ -707,11 +722,7 @@ class _UserInfoScreenState extends State<UserInfoScreen>
                             child: Column(
                               children: [
                                 const SizedBox(height: 8),
-                                const Icon(
-                                  Icons.account_box_outlined,
-                                  size: 58,
-                                  color: Color(0xFF1A237E),
-                                ),
+                                _buildHomeStyleAvatar(),
                                 const SizedBox(height: 8),
                                 Text(
                                   fullName,

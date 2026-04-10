@@ -14,10 +14,10 @@ class NotificationService {
   bool _permissionGranted = true;
 
   static const int _maxNotificationId = 2147483647;
-  static const String _channelId = 'high_importance_channel_v2';
-  static const String _channelName = 'Thông báo quan trọng';
+  static const String _channelId = 'high_importance_channel_v3';
+  static const String _channelName = 'Thong bao quan trong';
   static const String _channelDescription =
-      'Kênh thông báo cho các giao dịch quan trọng';
+      'Kenh thong bao cho OTP va giao dich quan trong';
 
   static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
     _channelId,
@@ -152,6 +152,8 @@ class NotificationService {
           channelAction: AndroidNotificationChannelAction.createIfNotExists,
           importance: Importance.max,
           priority: Priority.max,
+          category: AndroidNotificationCategory.message,
+          ticker: 'Tin nhan moi',
           playSound: true,
           enableVibration: true,
           visibility: NotificationVisibility.public,

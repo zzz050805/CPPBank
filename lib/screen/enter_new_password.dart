@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../data/user_firestore_service.dart';
 import '../l10n/app_text.dart';
+import '../widget/ccp_app_bar.dart';
 import 'login.dart';
 
 class ResetPasswordPage extends StatefulWidget {
@@ -636,6 +637,12 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FE),
+      appBar: CCPAppBar(
+        title: widget.requireCurrentPassword
+            ? _t('Đổi mật khẩu', 'Change password')
+            : _t('Quên mật khẩu', 'Forgot password'),
+        backgroundColor: const Color(0xFFF8F9FE),
+      ),
       body: SafeArea(
         child: Center(
           child: Container(
@@ -644,27 +651,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.chevron_left, size: 28),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      widget.requireCurrentPassword
-                          ? _t('Đổi mật khẩu', 'Change password')
-                          : _t('Quên mật khẩu', 'Forgot password'),
-                      style: GoogleFonts.poppins(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 10),
 
                 Container(
                   padding: const EdgeInsets.all(20),

@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:intl/intl.dart';
+import 'package:shimmer/shimmer.dart';
 import '../core/app_translations.dart';
 import '../data/notification_firestore_service.dart';
 import '../data/user_firestore_service.dart';
@@ -783,6 +784,68 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildHeaderUserName() {
+    const double nameSlotWidth = 188;
+    const double nameSlotHeight = 28;
+
+    return SizedBox(
+      width: nameSlotWidth,
+      height: nameSlotHeight,
+      child: StreamBuilder<UserProfileData?>(
+        stream: _profileStream,
+        initialData: UserFirestoreService.instance.latestProfile,
+        builder: (context, snapshot) {
+          final UserProfileData? profile =
+              snapshot.data ?? UserFirestoreService.instance.latestProfile;
+
+          if (!snapshot.hasError &&
+              snapshot.connectionState == ConnectionState.waiting &&
+              profile == null) {
+            return Align(
+              alignment: Alignment.centerLeft,
+              child: _buildNameSkeleton(),
+            );
+          }
+
+          final String name = snapshot.hasError
+              ? _t('Không tìm thấy user', 'User not found')
+              : ((profile?.fullname.isNotEmpty == true)
+                    ? profile!.fullname
+                    : _t('Khách hàng', 'Customer'));
+
+          return Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              name.toUpperCase(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.poppins(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildNameSkeleton() {
+    return Shimmer.fromColors(
+      baseColor: Colors.grey.shade300,
+      highlightColor: Colors.grey.shade100,
+      child: Container(
+        width: 156,
+        height: 22,
+        decoration: BoxDecoration(
+          color: Colors.grey.shade300,
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+    );
+  }
+
   // --- DỮ LIỆU BANNER (Kiểm tra kỹ đuôi file máy bro nhé) ---
   final List<String> bannerImages = [
     'assets/images/banner1.jpg', // Sửa .png -> .jpg nếu cần
@@ -846,45 +909,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             fontSize: 16,
                           ),
                         ),
-                        StreamBuilder<UserProfileData?>(
-                          stream: _profileStream,
-                          initialData:
-                              UserFirestoreService.instance.latestProfile,
-                          builder: (context, snapshot) {
-                            final UserProfileData? profile =
-                                snapshot.data ??
-                                UserFirestoreService.instance.latestProfile;
-
-                            if (!snapshot.hasError &&
-                                snapshot.connectionState ==
-                                    ConnectionState.waiting &&
-                                profile == null) {
-                              return const Padding(
-                                padding: EdgeInsets.only(top: 4),
-                                child: ShimmerBox(
-                                  width: 140,
-                                  height: 22,
-                                  radius: 8,
-                                ),
-                              );
-                            }
-
-                            final String name = snapshot.hasError
-                                ? _t('Không tìm thấy user', 'User not found')
-                                : ((profile?.fullname.isNotEmpty == true)
-                                      ? profile!.fullname
-                                      : _t('Khách hàng', 'Customer'));
-
-                            return Text(
-                              name.toUpperCase(),
-                              style: GoogleFonts.poppins(
-                                color: Colors.white,
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            );
-                          },
-                        ),
+                        _buildHeaderUserName(),
                       ],
                     ),
                     const Spacer(),
@@ -917,7 +942,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 clipBehavior: Clip.none,
                 child: Column(
                   children: [
-                    _buildBalanceCard(),
+                    _buildBalanceCardSection(),
                     const SizedBox(height: 8),
                     _buildActionGrid(),
                     _buildBannerCarousel(),
@@ -936,6 +961,81 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildBalanceCardSection() {
+    return StreamBuilder<UserProfileData?>(
+      stream: _profileStream,
+      initialData: UserFirestoreService.instance.latestProfile,
+      builder: (context, snapshot) {
+        final UserProfileData? profile =
+            snapshot.data ?? UserFirestoreService.instance.latestProfile;
+
+        final bool shouldShowSkeleton =
+            !snapshot.hasError &&
+            snapshot.connectionState == ConnectionState.waiting &&
+            profile == null &&
+            !_hasLoadedBalance;
+
+        if (shouldShowSkeleton) {
+          return _buildBalanceCardSkeleton();
+        }
+
+        return _buildBalanceCard();
+      },
+    );
+  }
+
+  Widget _buildBalanceCardSkeleton() {
+    return Transform.translate(
+      offset: const Offset(0, 16),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 30),
+        child: Shimmer.fromColors(
+          baseColor: Colors.grey.shade300,
+          highlightColor: Colors.grey.shade100,
+          child: Container(
+            height: 140,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 120,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  width: 188,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  width: 140,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   // --- SỬA CHÍNH: THẺ SỐ DƯ NỔI LÊN, BO GÓC CHUẨN XỊN ---
   Widget _buildBalanceCard() {
     return Transform.translate(
@@ -946,6 +1046,7 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 30),
         child: Container(
+          height: 140,
           // Chỉnh gradient và bo góc cho xịn
           decoration: BoxDecoration(
             gradient: const LinearGradient(
@@ -1104,11 +1205,41 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(height: 14),
                       Row(
                         children: [
-                          Text(
-                            _t('Lịch sử giao dịch >', 'Transaction history >'),
-                            style: GoogleFonts.poppins(
-                              color: Colors.white70,
-                              fontSize: 10.5,
+                          PressableScale(
+                            onTap: () {
+                              _pushPremium(
+                                const NotificationScreen(initialTabIndex: 0),
+                              );
+                            },
+                            borderRadius: BorderRadius.circular(8),
+                            splashColor: Colors.white24,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 2,
+                                vertical: 1,
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    _t(
+                                      'Lịch sử giao dịch',
+                                      'Transaction history',
+                                    ),
+                                    style: GoogleFonts.poppins(
+                                      color: const Color(0xFFAEEBFF),
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 2),
+                                  const Icon(
+                                    Icons.chevron_right_rounded,
+                                    size: 14,
+                                    color: Color(0xFFAEEBFF),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                           const Spacer(),
