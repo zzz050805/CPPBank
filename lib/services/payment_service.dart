@@ -170,10 +170,6 @@ class PaymentService {
     final String spendingKey = _mapBillTypeToSpendingKey(billType);
     final String billTypeLabel = AppText.textByCode(languageCode, billTypeKey);
     final String amountText = _formatAmountByLanguage(amount, languageCode);
-    final String shoppingServiceName = billTypeLabel;
-    final String shoppingTitle = languageCode == 'en'
-        ? 'Payment $billTypeLabel (ID: $billId)'
-        : 'Thanh toán $billTypeLabel (Mã: $billId)';
 
     final String notificationTitle = AppText.paymentSuccessTitleByCode(
       languageCode,
@@ -194,13 +190,6 @@ class PaymentService {
     final DocumentReference<Map<String, dynamic>> payBillRef = userRef
         .collection('pay_bill')
         .doc();
-    final DocumentReference<Map<String, dynamic>> categoryRef =
-        spendingKey == 'phone'
-        ? userRef.collection('phone_recharge').doc(payBillRef.id)
-        : userRef.collection('bill_payment').doc(payBillRef.id);
-    final DocumentReference<Map<String, dynamic>> shoppingRef = userRef
-        .collection('Shopping')
-        .doc(payBillRef.id);
     final DocumentReference<Map<String, dynamic>> spendingStatsRef = userRef
         .collection('spending_stats')
         .doc('summary');
@@ -331,45 +320,16 @@ class PaymentService {
 
       transaction.set(payBillRef, <String, dynamic>{
         'type': billType,
-        'id': billId,
-        'amount': amount,
-        'date': FieldValue.serverTimestamp(),
-        'createdAt': FieldValue.serverTimestamp(),
-        'status': 'completed',
-        'transactionCode': payBillRef.id,
-      }, SetOptions(merge: true));
-
-      transaction.set(categoryRef, <String, dynamic>{
-        'type': billType,
         'billType': billType,
-        'amount': amount,
-        'amountText': amountText,
         'id': billId,
         'customerCode': billId,
-        'transactionCode': payBillRef.id,
-        'isNegative': true,
-        'status': 'completed',
-        'timestamp': FieldValue.serverTimestamp(),
-        'createdAt': FieldValue.serverTimestamp(),
-        'relatedId': payBillRef.id,
-      }, SetOptions(merge: true));
-
-      transaction.set(shoppingRef, <String, dynamic>{
-        'type': 'shopping',
-        'category': 'shopping',
-        'transactionType': 'shopping',
-        'activityType': 'shopping',
-        'title': shoppingTitle,
-        'description': shoppingTitle,
-        'serviceName': shoppingServiceName,
-        'targetAccount': billId,
-        'customerCode': billId,
         'amount': amount,
         'amountText': amountText,
         'isNegative': true,
-        'status': 'completed',
+        'date': FieldValue.serverTimestamp(),
         'timestamp': FieldValue.serverTimestamp(),
         'createdAt': FieldValue.serverTimestamp(),
+        'status': 'completed',
         'transactionCode': payBillRef.id,
         'relatedId': payBillRef.id,
       }, SetOptions(merge: true));

@@ -445,10 +445,52 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final List<List<Map<String, dynamic>>> userResults = await Future.wait(
       userTasks,
     );
+    final List<Map<String, dynamic>> mergedTransactions = userResults
+        .expand((List<Map<String, dynamic>> userTx) => userTx)
+        .toList(growable: false);
+
+    final Map<String, Map<String, dynamic>> dedupByKey =
+        <String, Map<String, dynamic>>{};
+    for (final Map<String, dynamic> tx in mergedTransactions) {
+      final String userPart = (tx['userId'] ?? tx['userName'] ?? '')
+          .toString()
+          .trim();
+      if (userPart.isEmpty) {
+        continue;
+      }
+
+      final double amount = _toDouble(tx['amount']);
+      final DateTime? parsedTime = tx['_parsedTime'] as DateTime?;
+      final String minutePart = parsedTime == null
+          ? 'no_time'
+          : '${parsedTime.year.toString().padLeft(4, '0')}-'
+                '${parsedTime.month.toString().padLeft(2, '0')}-'
+                '${parsedTime.day.toString().padLeft(2, '0')} '
+                '${parsedTime.hour.toString().padLeft(2, '0')}:'
+                '${parsedTime.minute.toString().padLeft(2, '0')}';
+      final String dedupKey =
+          '${userPart}_${amount.toStringAsFixed(2)}_$minutePart';
+
+      final Map<String, dynamic>? existing = dedupByKey[dedupKey];
+      if (existing == null) {
+        dedupByKey[dedupKey] = tx;
+        continue;
+      }
+
+      final String existingSource = (existing['_sourceCollection'] ?? '')
+          .toString();
+      final String currentSource = (tx['_sourceCollection'] ?? '').toString();
+      final bool currentIsCanonical =
+          currentSource == 'pay_bill' || currentSource == 'paybill';
+      final bool existingIsCanonical =
+          existingSource == 'pay_bill' || existingSource == 'paybill';
+      if (currentIsCanonical && !existingIsCanonical) {
+        dedupByKey[dedupKey] = tx;
+      }
+    }
+
     final List<Map<String, dynamic>> allTransactions =
-        userResults
-            .expand((List<Map<String, dynamic>> userTx) => userTx)
-            .toList(growable: false)
+        dedupByKey.values.toList(growable: false)
           ..sort((Map<String, dynamic> a, Map<String, dynamic> b) {
             final DateTime? atA = a['_parsedTime'] as DateTime?;
             final DateTime? atB = b['_parsedTime'] as DateTime?;
@@ -958,8 +1000,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                     Expanded(
                                       child: Text(
                                         _t(
-                                          'Giao dịch theo User (đa nguồn)',
-                                          'Transactions by user (multi-source)',
+                                          'Giao dịch theo User',
+                                          'Transactions by user',
                                         ),
                                         style: GoogleFonts.poppins(
                                           fontSize: 16,
@@ -2931,6 +2973,31 @@ class _AdminUserTransactionHistoryScreenState
     return 0;
   }
 
+  int _sourcePriority(String sourceKey) {
+    switch (sourceKey) {
+      case 'pay_bill':
+      case 'paybill':
+        return 100;
+      case 'recent_tranfer':
+        return 95;
+      case 'bill_payment':
+        return 90;
+      case 'phone_recharge':
+        return 85;
+      case 'withdraw':
+        return 80;
+      case 'Shopping':
+      case 'shopping':
+        return 70;
+      case 'recent_transfer':
+        return 60;
+      case 'recent_transfers':
+        return 55;
+      default:
+        return 0;
+    }
+  }
+
   Stream<List<_AdminMergedTransaction>> _userTransactionsStream() {
     final DateTimeRange range = _currentRange();
     final List<Stream<QuerySnapshot<Map<String, dynamic>>>> streams =
@@ -2947,7 +3014,9 @@ class _AdminUserTransactionHistoryScreenState
     return CombineLatestStream.list<QuerySnapshot<Map<String, dynamic>>>(
       streams,
     ).map((List<QuerySnapshot<Map<String, dynamic>>> snapshots) {
-      final List<_AdminMergedTransaction> merged = <_AdminMergedTransaction>[];
+      final Map<String, _AdminMergedTransaction> mergedByKey =
+          <String, _AdminMergedTransaction>{};
+      final Map<String, int> priorityByKey = <String, int>{};
 
       for (int i = 0; i < snapshots.length; i++) {
         final String sourceKey = _kTransactionCollections[i];
@@ -2961,16 +3030,42 @@ class _AdminUserTransactionHistoryScreenState
             continue;
           }
 
-          merged.add(
-            _AdminMergedTransaction(
-              sourceKey: sourceKey,
-              typeLabel: _sourceLabel(sourceKey),
-              amount: _readAmount(data),
-              occurredAt: txTime,
-            ),
+          final double amount = _readAmount(data);
+          final String transactionCode =
+              (data['transactionCode'] ?? data['relatedId'] ?? data['id'] ?? '')
+                  .toString()
+                  .trim();
+          final String minuteKey = txTime == null
+              ? 'no_time'
+              : '${txTime.year.toString().padLeft(4, '0')}-'
+                    '${txTime.month.toString().padLeft(2, '0')}-'
+                    '${txTime.day.toString().padLeft(2, '0')} '
+                    '${txTime.hour.toString().padLeft(2, '0')}:'
+                    '${txTime.minute.toString().padLeft(2, '0')}';
+
+          final String dedupKey = transactionCode.isNotEmpty
+              ? '${widget.userId}_code_$transactionCode'
+              : '${widget.userId}_${amount.toStringAsFixed(2)}_$minuteKey';
+
+          final int currentPriority = _sourcePriority(sourceKey);
+          final int existingPriority = priorityByKey[dedupKey] ?? -1;
+          if (currentPriority < existingPriority) {
+            continue;
+          }
+
+          mergedByKey[dedupKey] = _AdminMergedTransaction(
+            sourceKey: sourceKey,
+            typeLabel: _sourceLabel(sourceKey),
+            amount: amount,
+            occurredAt: txTime,
           );
+          priorityByKey[dedupKey] = currentPriority;
         }
       }
+
+      final List<_AdminMergedTransaction> merged = mergedByKey.values.toList(
+        growable: false,
+      );
 
       merged.sort((a, b) {
         final DateTime? atA = a.occurredAt;
