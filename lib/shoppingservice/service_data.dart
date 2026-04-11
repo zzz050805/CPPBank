@@ -6,8 +6,8 @@ final List<ServiceModel> shoppingServices = <ServiceModel>[
     name: <String, String>{'vi': 'Shopee', 'en': 'Shopee'},
     logoPath: 'assets/images/shopee.png',
     description: <String, String>{
-      'vi': 'Voucher mua sam truc tuyen voi giao dich an toan.',
-      'en': 'Official digital vouchers with secure checkout support.',
+      'vi': 'Goi mua sam truc tuyen voi giao dich an toan.',
+      'en': 'Official digital shopping packages with secure checkout support.',
     },
     packages: <int>[50000, 100000, 200000, 500000],
     accountFields: <ServiceAccountField>[

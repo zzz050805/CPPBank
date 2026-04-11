@@ -28,7 +28,11 @@ class AdminFirestoreSetupService {
           'nameVi': 'Shopee',
           'nameEn': 'Shopee',
           'logoPath': 'assets/images/shopee.png',
-          'packages': <int>[50000, 100000, 200000, 500000],
+          'packages': <Map<String, dynamic>>[
+            <String, dynamic>{'price': 50000, 'discountPercent': 0},
+            <String, dynamic>{'price': 100000, 'discountPercent': 0},
+            <String, dynamic>{'price': 200000, 'discountPercent': 0},
+          ],
           'isActive': true,
         },
         <String, dynamic>{
@@ -38,7 +42,11 @@ class AdminFirestoreSetupService {
           'nameVi': 'Riot Games',
           'nameEn': 'Riot Games',
           'logoPath': 'assets/images/riot.png',
-          'packages': <int>[50000, 100000, 200000, 500000],
+          'packages': <Map<String, dynamic>>[
+            <String, dynamic>{'price': 50000, 'discountPercent': 0},
+            <String, dynamic>{'price': 100000, 'discountPercent': 0},
+            <String, dynamic>{'price': 200000, 'discountPercent': 0},
+          ],
           'isActive': true,
         },
         <String, dynamic>{
@@ -48,7 +56,11 @@ class AdminFirestoreSetupService {
           'nameVi': 'Netflix',
           'nameEn': 'Netflix',
           'logoPath': 'assets/images/netflix.png',
-          'packages': <int>[108000, 220000, 260000],
+          'packages': <Map<String, dynamic>>[
+            <String, dynamic>{'price': 108000, 'discountPercent': 0},
+            <String, dynamic>{'price': 220000, 'discountPercent': 0},
+            <String, dynamic>{'price': 260000, 'discountPercent': 0},
+          ],
           'isActive': true,
         },
         <String, dynamic>{
@@ -58,7 +70,11 @@ class AdminFirestoreSetupService {
           'nameVi': 'Apple Music',
           'nameEn': 'Apple Music',
           'logoPath': 'assets/images/itunes.png',
-          'packages': <int>[69000, 109000, 149000],
+          'packages': <Map<String, dynamic>>[
+            <String, dynamic>{'price': 69000, 'discountPercent': 0},
+            <String, dynamic>{'price': 109000, 'discountPercent': 0},
+            <String, dynamic>{'price': 149000, 'discountPercent': 0},
+          ],
           'isActive': true,
         },
         <String, dynamic>{
@@ -68,7 +84,11 @@ class AdminFirestoreSetupService {
           'nameVi': 'ChatGPT',
           'nameEn': 'ChatGPT',
           'logoPath': 'assets/images/chatgpt.png',
-          'packages': <int>[120000, 490000, 990000],
+          'packages': <Map<String, dynamic>>[
+            <String, dynamic>{'price': 120000, 'discountPercent': 0},
+            <String, dynamic>{'price': 490000, 'discountPercent': 0},
+            <String, dynamic>{'price': 990000, 'discountPercent': 0},
+          ],
           'isActive': true,
         },
         <String, dynamic>{
@@ -78,7 +98,11 @@ class AdminFirestoreSetupService {
           'nameVi': 'Steam',
           'nameEn': 'Steam',
           'logoPath': 'assets/images/steam.png',
-          'packages': <int>[50000, 100000, 200000, 500000],
+          'packages': <Map<String, dynamic>>[
+            <String, dynamic>{'price': 50000, 'discountPercent': 0},
+            <String, dynamic>{'price': 100000, 'discountPercent': 0},
+            <String, dynamic>{'price': 200000, 'discountPercent': 0},
+          ],
           'isActive': true,
         },
         <String, dynamic>{
@@ -88,7 +112,11 @@ class AdminFirestoreSetupService {
           'nameVi': 'Spotify',
           'nameEn': 'Spotify',
           'logoPath': 'assets/images/spotify.png',
-          'packages': <int>[59000, 129000, 179000],
+          'packages': <Map<String, dynamic>>[
+            <String, dynamic>{'price': 59000, 'discountPercent': 0},
+            <String, dynamic>{'price': 129000, 'discountPercent': 0},
+            <String, dynamic>{'price': 179000, 'discountPercent': 0},
+          ],
           'isActive': true,
         },
         <String, dynamic>{
@@ -98,7 +126,11 @@ class AdminFirestoreSetupService {
           'nameVi': 'Xanh SM',
           'nameEn': 'Xanh SM',
           'logoPath': 'assets/images/xanhsm.jpg',
-          'packages': <int>[50000, 100000, 200000, 500000],
+          'packages': <Map<String, dynamic>>[
+            <String, dynamic>{'price': 50000, 'discountPercent': 0},
+            <String, dynamic>{'price': 100000, 'discountPercent': 0},
+            <String, dynamic>{'price': 200000, 'discountPercent': 0},
+          ],
           'isActive': true,
         },
         <String, dynamic>{
@@ -108,7 +140,11 @@ class AdminFirestoreSetupService {
           'nameVi': 'Grab',
           'nameEn': 'Grab',
           'logoPath': 'assets/images/grab.png',
-          'packages': <int>[50000, 100000, 200000, 500000],
+          'packages': <Map<String, dynamic>>[
+            <String, dynamic>{'price': 50000, 'discountPercent': 0},
+            <String, dynamic>{'price': 100000, 'discountPercent': 0},
+            <String, dynamic>{'price': 200000, 'discountPercent': 0},
+          ],
           'isActive': true,
         },
       ];
@@ -283,7 +319,9 @@ class AdminFirestoreSetupService {
 
     await userRef.set(userPatch, SetOptions(merge: true));
 
-    await ensureAdminSeed();
+    if (resolvedRole == 'admin') {
+      await ensureAdminSeed();
+    }
 
     return AdminUserAccessInfo(role: resolvedRole, isLocked: isLocked);
   }

@@ -171,8 +171,9 @@ class PaymentService {
     final String billTypeLabel = AppText.textByCode(languageCode, billTypeKey);
     final String amountText = _formatAmountByLanguage(amount, languageCode);
 
-    final String notificationTitle = AppText.paymentSuccessTitleByCode(
+    final String notificationTitle = AppText.paymentSuccessSpecificTitleByCode(
       languageCode,
+      serviceName: billTypeLabel,
     );
 
     final FirebaseFirestore firestore = FirebaseFirestore.instance;
@@ -336,6 +337,9 @@ class PaymentService {
 
       transaction.set(notificationRef, <String, dynamic>{
         'title': notificationTitle,
+        'titleKey': 'payment_success_specific',
+        'serviceType': billType,
+        'serviceTypeKey': billTypeKey,
         'body': notificationBody,
         'timestamp': FieldValue.serverTimestamp(),
         'createdAt': FieldValue.serverTimestamp(),

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -27,6 +28,8 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _passwordController = TextEditingController();
 
   bool _isLoginEnabled = false;
+  bool _isLoading = false;
+  bool _hasNavigated = false;
   String? _cccdError;
   String? _passwordError;
 
@@ -36,10 +39,20 @@ class _LoginScreenState extends State<LoginScreen> {
     return value.replaceAll(RegExp(r'[^0-9]'), '');
   }
 
+  void _navigateOnce(Widget page) {
+    if (!mounted || _hasNavigated) {
+      return;
+    }
+    _hasNavigated = true;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => page),
+      (Route<dynamic> route) => false,
+    );
+  }
+
   Future<bool> _tryAdminLoginFromAdminCollection({
     required String inputAccount,
     required String inputPass,
-    required VoidCallback closeLoadingDialog,
   }) async {
     if (_digitsOnly(inputAccount) != _adminLoginCccd) {
       return false;
@@ -72,11 +85,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) {
         return true;
       }
-      closeLoadingDialog();
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
-      );
+      _navigateOnce(const AdminDashboardScreen());
       return true;
     }
 
@@ -84,7 +93,6 @@ class _LoginScreenState extends State<LoginScreen> {
       return true;
     }
 
-    closeLoadingDialog();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -164,24 +172,27 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    await _prefetchHomeCache(
-      docId: docId,
-      fallbackName: (profileData['fullname'] ?? profileData['fullName'] ?? '')
-          .toString(),
+    unawaited(
+      _prefetchHomeCache(
+        docId: docId,
+        fallbackName: (profileData['fullname'] ?? profileData['fullName'] ?? '')
+            .toString(),
+      ),
     );
 
     if (!mounted) {
       return;
     }
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => const MainTabShell()),
-    );
+    _navigateOnce(const MainTabShell());
   }
 
   // --- HÀM XỬ LÝ ĐĂNG NHẬP: ĐÃ SỬA ĐỂ NHẬN CẢ SĐT VÀ CCCD ---
   void _handleLogin() async {
+    if (_isLoading) {
+      return;
+    }
+
     setState(() {
       if (_cccdController.text.isEmpty) {
         _cccdError = _t(
@@ -194,7 +205,14 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     });
 
-    if (!_isLoginEnabled) return;
+    if (!_isLoginEnabled) {
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _hasNavigated = false;
+    });
 
     bool isConfigurationNotFound(FirebaseAuthException e) {
       final String code = e.code.toLowerCase();
@@ -221,21 +239,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
     QueryDocumentSnapshot<Map<String, dynamic>>? foundLegacyDoc;
     try {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) =>
-            const Center(child: CircularProgressIndicator(color: Colors.white)),
-      );
-      loadingShown = true;
-
       final String inputAccount = _cccdController.text.trim();
       final String inputPass = _passwordController.text.trim();
 
       if (await _tryAdminLoginFromAdminCollection(
         inputAccount: inputAccount,
         inputPass: inputPass,
-        closeLoadingDialog: closeLoadingDialog,
       )) {
         return;
       }
@@ -579,6 +588,11 @@ class _LoginScreenState extends State<LoginScreen> {
       );
     } finally {
       closeLoadingDialog();
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -784,7 +798,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                   height: 50,
                                   child: ElevatedButton(
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: _isLoginEnabled
+                                      backgroundColor:
+                                          (_isLoginEnabled && !_isLoading)
                                           ? const Color(0xFF000DC0)
                                           : const Color(0xFFF2F4FB),
                                       elevation: 0,
@@ -792,17 +807,28 @@ class _LoginScreenState extends State<LoginScreen> {
                                         borderRadius: BorderRadius.circular(20),
                                       ),
                                     ),
-                                    onPressed: _handleLogin,
-                                    child: Text(
-                                      _t('ĐĂNG NHẬP', 'LOG IN'),
-                                      style: GoogleFonts.poppins(
-                                        color: _isLoginEnabled
-                                            ? Colors.white
-                                            : const Color(0xFF000DC0),
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
+                                    onPressed: (_isLoginEnabled && !_isLoading)
+                                        ? _handleLogin
+                                        : null,
+                                    child: _isLoading
+                                        ? const SizedBox(
+                                            width: 20,
+                                            height: 20,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2.2,
+                                              color: Colors.white,
+                                            ),
+                                          )
+                                        : Text(
+                                            _t('ĐĂNG NHẬP', 'LOG IN'),
+                                            style: GoogleFonts.poppins(
+                                              color: _isLoginEnabled
+                                                  ? Colors.white
+                                                  : const Color(0xFF000DC0),
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
                                   ),
                                 ),
                               ),

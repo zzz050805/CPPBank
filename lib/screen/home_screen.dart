@@ -62,6 +62,13 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    final HomeCacheData cachedHomeData =
+        HomeCacheService.instance.notifier.value;
+    if (cachedHomeData.isReady) {
+      _lastKnownTotalBalance = cachedHomeData.totalBalance;
+      _hasLoadedBalance = true;
+    }
+
     final String uid = _resolveUid();
     if (uid.isNotEmpty) {
       HomeCacheService.instance.startRealtimeSync(uid);
@@ -898,7 +905,16 @@ class _HomeScreenState extends State<HomeScreen> {
               continue;
             }
 
-            final int? firstPrice = int.tryParse(packages.first.toString());
+            int? firstPrice;
+            final dynamic firstItem = packages.first;
+            if (firstItem is Map<String, dynamic>) {
+              firstPrice = int.tryParse((firstItem['price'] ?? '').toString());
+            } else if (firstItem is Map) {
+              firstPrice = int.tryParse((firstItem['price'] ?? '').toString());
+            } else {
+              firstPrice = int.tryParse(firstItem.toString());
+            }
+
             if (firstPrice == null || firstPrice <= 0) {
               continue;
             }
@@ -1344,6 +1360,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildRealtimeTotalBalance() {
     final String uid = _resolveUid();
+    final HomeCacheData cachedHomeData =
+        HomeCacheService.instance.notifier.value;
+    if (cachedHomeData.isReady) {
+      _lastKnownTotalBalance = cachedHomeData.totalBalance;
+      _hasLoadedBalance = true;
+    }
+
     if (uid.isEmpty) {
       if (!_isBalanceVisible) {
         return _buildHiddenBalanceText();
@@ -1382,6 +1405,18 @@ class _HomeScreenState extends State<HomeScreen> {
 
         if (cardsSnapshot.connectionState == ConnectionState.waiting &&
             !_hasLoadedBalance) {
+          if (!_isBalanceVisible) {
+            return _buildHiddenBalanceText();
+          }
+
+          if (_lastKnownTotalBalance > 0) {
+            return _buildBalanceText(_lastKnownTotalBalance);
+          }
+
+          if (cachedHomeData.isReady) {
+            return _buildBalanceText(cachedHomeData.totalBalance);
+          }
+
           return _buildBalanceSkeleton();
         }
 

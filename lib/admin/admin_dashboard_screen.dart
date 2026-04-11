@@ -134,10 +134,15 @@ class AdminDashboardScreen extends StatefulWidget {
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   static const Color _primaryBlue = Color(0xFF000DC0);
   static const Color _pageBg = Color(0xFFF5F7FF);
+  static const Color _sidebarStart = Color(0xFF0B1E4D);
+  static const Color _sidebarEnd = Color(0xFF020617);
+  static const Color _neonBlue = Color(0xFF22D3EE);
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   int _selectedTab = 0;
+  late Stream<QuerySnapshot<Map<String, dynamic>>> _servicesPricingStream;
+  late Stream<QuerySnapshot<Map<String, dynamic>>> _bannersStream;
   late Stream<int> _totalTransactionsCountStream;
 
   static const List<({IconData icon, String vi, String en})> _tabConfig =
@@ -151,6 +156,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   @override
   void initState() {
     super.initState();
+    _servicesPricingStream = _adminCollection('services_pricing')
+        .where('kind', isEqualTo: 'shopping_bundle')
+        .snapshots(includeMetadataChanges: true)
+        .asBroadcastStream();
+
+    _bannersStream = _adminCollection('home_banners')
+        .orderBy('order', descending: false)
+        .snapshots(includeMetadataChanges: true)
+        .asBroadcastStream();
+
     _totalTransactionsCountStream = _allUsersTotalTransactionsCountStream()
         .asBroadcastStream();
   }
@@ -173,11 +188,123 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     return _formatVnd(amount.round());
   }
 
-  List<int> _parsePositivePrices(List<dynamic> raw) {
-    return raw
-        .map((dynamic item) => int.tryParse(item.toString()) ?? 0)
-        .where((int value) => value > 0)
-        .toList(growable: false);
+  int _sanitizeDiscountPercent(dynamic raw) {
+    final int parsed = int.tryParse((raw ?? 0).toString()) ?? 0;
+    if (parsed < 0) {
+      return 0;
+    }
+    if (parsed > 100) {
+      return 100;
+    }
+    return parsed;
+  }
+
+  List<Map<String, dynamic>> _parsePackageRows(List<dynamic> raw) {
+    final List<Map<String, dynamic>> result = <Map<String, dynamic>>[];
+
+    for (final dynamic item in raw) {
+      if (item is Map<String, dynamic>) {
+        final int price = _toDouble(item['price']).round();
+        final int discountPercent = _sanitizeDiscountPercent(
+          item['discountPercent'],
+        );
+        if (price > 0) {
+          result.add(<String, dynamic>{
+            'price': price,
+            'discountPercent': discountPercent,
+          });
+        }
+        continue;
+      }
+
+      if (item is Map) {
+        final Map<String, dynamic> map = item.map(
+          (dynamic key, dynamic value) => MapEntry(key.toString(), value),
+        );
+        final int price = _toDouble(map['price']).round();
+        final int discountPercent = _sanitizeDiscountPercent(
+          map['discountPercent'],
+        );
+        if (price > 0) {
+          result.add(<String, dynamic>{
+            'price': price,
+            'discountPercent': discountPercent,
+          });
+        }
+        continue;
+      }
+
+      final int price = int.tryParse(item.toString()) ?? 0;
+      if (price > 0) {
+        result.add(<String, dynamic>{'price': price, 'discountPercent': 0});
+      }
+    }
+
+    return result;
+  }
+
+  Future<void> _pushShoppingDiscountNotifications({
+    required String serviceId,
+    required String serviceName,
+    required List<Map<String, dynamic>> packages,
+  }) async {
+    int maxDiscount = 0;
+    for (final Map<String, dynamic> item in packages) {
+      final int discount = _sanitizeDiscountPercent(item['discountPercent']);
+      if (discount > maxDiscount) {
+        maxDiscount = discount;
+      }
+    }
+
+    if (maxDiscount <= 0) {
+      return;
+    }
+
+    final String title = '🔥 Ưu đãi giảm đến $maxDiscount% cho $serviceName!';
+    final String body = 'Bấm vào đây để xem ngay các gói đang giảm giá!';
+
+    final QuerySnapshot<Map<String, dynamic>> usersSnapshot = await _firestore
+        .collection('users')
+        .get();
+
+    if (usersSnapshot.docs.isEmpty) {
+      return;
+    }
+
+    WriteBatch batch = _firestore.batch();
+    int operationCount = 0;
+
+    for (final QueryDocumentSnapshot<Map<String, dynamic>> userDoc
+        in usersSnapshot.docs) {
+      final DocumentReference<Map<String, dynamic>> notificationRef = userDoc
+          .reference
+          .collection('notifications')
+          .doc();
+
+      batch.set(notificationRef, <String, dynamic>{
+        'title': title,
+        'body': body,
+        'timestamp': FieldValue.serverTimestamp(),
+        'type': 'uu_dai',
+        'category': 'promotion',
+        'isRead': false,
+        'serviceId': serviceId,
+        'serviceName': serviceName,
+        'discountPercent': maxDiscount,
+        'deepLink': 'shopping_service_detail',
+      });
+
+      operationCount += 1;
+      if (operationCount >= 400) {
+        await batch.commit();
+        batch = _firestore.batch();
+        operationCount = 0;
+      }
+    }
+
+    if (operationCount > 0) {
+      await batch.commit();
+    }
   }
 
   double _toDouble(dynamic raw) {
@@ -578,9 +705,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Stream<int> _allUsersTotalTransactionsCountStream() {
-    final Stream<QuerySnapshot<Map<String, dynamic>>> usersTrigger = _firestore
-        .collection('users')
-        .snapshots(includeMetadataChanges: true);
     final List<Stream<QuerySnapshot<Map<String, dynamic>>>> sourceTriggers =
         _kTransactionCollections
             .map(
@@ -590,17 +714,58 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             )
             .toList(growable: false);
 
-    return MergeStream<Object>(<Stream<Object>>[
-      usersTrigger,
-      ...sourceTriggers,
-    ]).startWith(const Object()).switchMap((Object _) {
-      return Stream.fromFuture(
-        _deepScanAllTransactions().then(
-          (List<Map<String, dynamic>> allTransactions) =>
-              allTransactions.length,
-        ),
-      );
-    });
+    return CombineLatestStream.list<QuerySnapshot<Map<String, dynamic>>>(
+          sourceTriggers,
+        )
+        .map((List<QuerySnapshot<Map<String, dynamic>>> snapshots) {
+          final Map<String, String> dedupByKey = <String, String>{};
+
+          for (int i = 0; i < snapshots.length; i++) {
+            final String source = _kTransactionCollections[i];
+            final QuerySnapshot<Map<String, dynamic>> snapshot = snapshots[i];
+
+            for (final QueryDocumentSnapshot<Map<String, dynamic>> doc
+                in snapshot.docs) {
+              final DocumentReference<Map<String, dynamic>>? userRef =
+                  doc.reference.parent.parent;
+              if (userRef == null || userRef.parent.id != 'users') {
+                continue;
+              }
+
+              final Map<String, dynamic> data = doc.data();
+              final double amount = _toDouble(data['amount']);
+              final DateTime? parsedTime = _extractTransactionTime(data);
+              final String minutePart = parsedTime == null
+                  ? 'no_time'
+                  : '${parsedTime.year.toString().padLeft(4, '0')}-'
+                        '${parsedTime.month.toString().padLeft(2, '0')}-'
+                        '${parsedTime.day.toString().padLeft(2, '0')} '
+                        '${parsedTime.hour.toString().padLeft(2, '0')}:'
+                        '${parsedTime.minute.toString().padLeft(2, '0')}';
+
+              final String dedupKey =
+                  '${userRef.id}_${amount.toStringAsFixed(2)}_$minutePart';
+
+              final String? existingSource = dedupByKey[dedupKey];
+              if (existingSource == null) {
+                dedupByKey[dedupKey] = source;
+                continue;
+              }
+
+              final bool currentIsCanonical =
+                  source == 'pay_bill' || source == 'paybill';
+              final bool existingIsCanonical =
+                  existingSource == 'pay_bill' || existingSource == 'paybill';
+              if (currentIsCanonical && !existingIsCanonical) {
+                dedupByKey[dedupKey] = source;
+              }
+            }
+          }
+
+          return dedupByKey.length;
+        })
+        .startWith(0)
+        .distinct();
   }
 
   Future<void> _showSystemBalancesOverlay() async {
@@ -638,8 +803,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         margin: const EdgeInsets.all(16),
                         padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
                         decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(18),
+                          color: Colors.white.withValues(alpha: 0.92),
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.85),
+                          ),
                           boxShadow: <BoxShadow>[
                             BoxShadow(
                               color: Colors.black.withValues(alpha: 0.14),
@@ -664,9 +832,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                     ),
                                   ),
                                 ),
-                                IconButton(
-                                  onPressed: () => Navigator.pop(dialogContext),
-                                  icon: const Icon(Icons.close_rounded),
+                                SizedBox(
+                                  height: 38,
+                                  child: _gradientActionButton(
+                                    label: _t('Đóng', 'Close'),
+                                    onPressed: () =>
+                                        Navigator.pop(dialogContext),
+                                    icon: Icons.close_rounded,
+                                  ),
                                 ),
                               ],
                             ),
@@ -682,6 +855,21 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                       >
                                       snapshot,
                                     ) {
+                                      if (snapshot.hasError) {
+                                        return Center(
+                                          child: Text(
+                                            _t(
+                                              'Không thể tải dữ liệu người dùng',
+                                              'Unable to load user data',
+                                            ),
+                                            style: GoogleFonts.poppins(
+                                              color: Colors.red.shade700,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        );
+                                      }
+
                                       if (!snapshot.hasData) {
                                         return const Center(
                                           child: CircularProgressIndicator(),
@@ -758,6 +946,21 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                                     headingRowHeight: 44,
                                                     dataRowMinHeight: 50,
                                                     dataRowMaxHeight: 56,
+                                                    headingRowColor:
+                                                        const WidgetStatePropertyAll(
+                                                          Color(0xFFF8FAFC),
+                                                        ),
+                                                    border: TableBorder(
+                                                      horizontalInside:
+                                                          BorderSide(
+                                                            color:
+                                                                const Color(
+                                                                  0xFFE5E7EB,
+                                                                ).withValues(
+                                                                  alpha: 0.7,
+                                                                ),
+                                                          ),
+                                                    ),
                                                     columns: <DataColumn>[
                                                       DataColumn(
                                                         label: Text(
@@ -845,26 +1048,36 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                                                 ),
                                                               ),
                                                               DataCell(
-                                                                Text(
-                                                                  _formatVndDouble(
-                                                                    normalBalance,
-                                                                  ),
-                                                                  style: GoogleFonts.poppins(
-                                                                    fontWeight:
-                                                                        FontWeight
-                                                                            .w600,
+                                                                Align(
+                                                                  alignment:
+                                                                      Alignment
+                                                                          .centerRight,
+                                                                  child: Text(
+                                                                    _formatVndDouble(
+                                                                      normalBalance,
+                                                                    ),
+                                                                    style: GoogleFonts.poppins(
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .w600,
+                                                                    ),
                                                                   ),
                                                                 ),
                                                               ),
                                                               DataCell(
-                                                                Text(
-                                                                  _formatVndDouble(
-                                                                    vipBalance,
-                                                                  ),
-                                                                  style: GoogleFonts.poppins(
-                                                                    fontWeight:
-                                                                        FontWeight
-                                                                            .w600,
+                                                                Align(
+                                                                  alignment:
+                                                                      Alignment
+                                                                          .centerRight,
+                                                                  child: Text(
+                                                                    _formatVndDouble(
+                                                                      vipBalance,
+                                                                    ),
+                                                                    style: GoogleFonts.poppins(
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .w600,
+                                                                    ),
                                                                   ),
                                                                 ),
                                                               ),
@@ -983,8 +1196,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                             margin: const EdgeInsets.all(16),
                             padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
                             decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(18),
+                              color: Colors.white.withValues(alpha: 0.92),
+                              borderRadius: BorderRadius.circular(24),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.85),
+                              ),
                               boxShadow: <BoxShadow>[
                                 BoxShadow(
                                   color: Colors.black.withValues(alpha: 0.14),
@@ -1009,10 +1225,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                         ),
                                       ),
                                     ),
-                                    IconButton(
-                                      onPressed: () =>
-                                          Navigator.pop(dialogContext),
-                                      icon: const Icon(Icons.close_rounded),
+                                    SizedBox(
+                                      height: 38,
+                                      child: _gradientActionButton(
+                                        label: _t('Đóng', 'Close'),
+                                        onPressed: () =>
+                                            Navigator.pop(dialogContext),
+                                        icon: Icons.close_rounded,
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -1136,42 +1356,96 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                                 (
                                                   BuildContext context,
                                                   int index,
-                                                ) => const Divider(height: 1),
+                                                ) => const SizedBox(height: 8),
                                             itemBuilder: (BuildContext context, int index) {
                                               final _AdminUserTransactionStat
                                               item = stats[index];
-                                              return ListTile(
-                                                title: Text(
-                                                  '${item.userName} - ${item.count} ${_t('giao dịch', 'transactions')}',
-                                                  style: GoogleFonts.poppins(
-                                                    fontWeight: FontWeight.w600,
-                                                    fontSize: 13,
+                                              return Material(
+                                                color: Colors.transparent,
+                                                child: InkWell(
+                                                  borderRadius:
+                                                      BorderRadius.circular(14),
+                                                  onTap: () {
+                                                    Navigator.pop(
+                                                      dialogContext,
+                                                    );
+                                                    if (!mounted) {
+                                                      return;
+                                                    }
+                                                    Navigator.push(
+                                                      context,
+                                                      MaterialPageRoute<void>(
+                                                        builder: (_) =>
+                                                            _AdminUserTransactionHistoryScreen(
+                                                              userId:
+                                                                  item.userId,
+                                                              userName:
+                                                                  item.userName,
+                                                              initialFilterType:
+                                                                  filterType,
+                                                              initialSelectedPoint:
+                                                                  selectedPoint,
+                                                            ),
+                                                      ),
+                                                    );
+                                                  },
+                                                  child: Container(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 12,
+                                                          vertical: 10,
+                                                        ),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.white,
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            14,
+                                                          ),
+                                                      border: Border.all(
+                                                        color: const Color(
+                                                          0xFFE5E7EB,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    child: Row(
+                                                      children: <Widget>[
+                                                        Expanded(
+                                                          child: Text(
+                                                            item.userName,
+                                                            style:
+                                                                GoogleFonts.poppins(
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w600,
+                                                                  fontSize: 13,
+                                                                ),
+                                                          ),
+                                                        ),
+                                                        _statusBadge(
+                                                          label:
+                                                              '${item.count} ${_t('giao dịch', 'transactions')}',
+                                                          background:
+                                                              const Color(
+                                                                0xFFEFF6FF,
+                                                              ),
+                                                          foreground:
+                                                              const Color(
+                                                                0xFF1D4ED8,
+                                                              ),
+                                                          icon: Icons
+                                                              .receipt_long_rounded,
+                                                        ),
+                                                        const SizedBox(
+                                                          width: 8,
+                                                        ),
+                                                        const Icon(
+                                                          Icons
+                                                              .chevron_right_rounded,
+                                                        ),
+                                                      ],
+                                                    ),
                                                   ),
                                                 ),
-                                                trailing: const Icon(
-                                                  Icons.chevron_right_rounded,
-                                                ),
-                                                onTap: () {
-                                                  Navigator.pop(dialogContext);
-                                                  if (!mounted) {
-                                                    return;
-                                                  }
-                                                  Navigator.push(
-                                                    context,
-                                                    MaterialPageRoute<void>(
-                                                      builder: (_) =>
-                                                          _AdminUserTransactionHistoryScreen(
-                                                            userId: item.userId,
-                                                            userName:
-                                                                item.userName,
-                                                            initialFilterType:
-                                                                filterType,
-                                                            initialSelectedPoint:
-                                                                selectedPoint,
-                                                          ),
-                                                    ),
-                                                  );
-                                                },
                                               );
                                             },
                                           );
@@ -1260,191 +1534,210 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.transparent,
       builder: (BuildContext sheetContext) {
-        return Padding(
-          padding: EdgeInsets.fromLTRB(
-            18,
-            8,
-            18,
-            22 + MediaQuery.of(sheetContext).viewInsets.bottom,
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  _t('Thông tin người dùng', 'User details'),
-                  style: GoogleFonts.poppins(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF101828),
-                  ),
+        return ClipRRect(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+            child: Container(
+              padding: EdgeInsets.fromLTRB(
+                18,
+                8,
+                18,
+                22 + MediaQuery.of(sheetContext).viewInsets.bottom,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.94),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(28),
                 ),
-                const SizedBox(height: 10),
-                _sheetTextField(
-                  controller: nameController,
-                  label: _t('Họ tên', 'Full name'),
-                ),
-                const SizedBox(height: 8),
-                _sheetTextField(
-                  controller: phoneController,
-                  label: _t('Số điện thoại', 'Phone number'),
-                  keyboardType: TextInputType.phone,
-                ),
-                const SizedBox(height: 8),
-                _sheetTextField(
-                  controller: cccdController,
-                  label: _t('CCCD', 'Citizen ID'),
-                  keyboardType: TextInputType.number,
-                ),
-                const SizedBox(height: 8),
-                _sheetTextField(
-                  controller: addressController,
-                  label: _t('Địa chỉ nhà', 'Home address'),
-                ),
-                const SizedBox(height: 8),
-                _sheetTextField(
-                  controller: normalBalanceController,
-                  label: _t('Số dư Thẻ Thường', 'Normal Card Balance'),
-                  keyboardType: TextInputType.number,
-                ),
-                const SizedBox(height: 8),
-                _sheetTextField(
-                  controller: vipBalanceController,
-                  label: _t('Số dư Thẻ VIP', 'VIP Card Balance'),
-                  keyboardType: TextInputType.number,
-                ),
-                const SizedBox(height: 12),
-                Row(
+                border: Border.all(color: Colors.white.withValues(alpha: 0.85)),
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.pop(sheetContext),
-                        child: Text(
-                          _t('Hủy', 'Cancel'),
-                          style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                    Text(
+                      _t('Thông tin người dùng', 'User details'),
+                      style: GoogleFonts.poppins(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF101828),
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () async {
-                          final String nextName = nameController.text.trim();
-                          final String nextPhone = phoneController.text.trim();
-                          final String nextCccd = cccdController.text.trim();
-                          final String nextAddress = addressController.text
-                              .trim();
-                          final double nextNormalBalance = _parseBalanceInput(
-                            normalBalanceController.text,
-                          );
-                          final double nextVipBalance = _parseBalanceInput(
-                            vipBalanceController.text,
-                          );
-                          final double nextTotalBalance =
-                              nextNormalBalance + nextVipBalance;
-
-                          if (nextName.isEmpty) {
-                            if (!parentContext.mounted) {
-                              return;
-                            }
-                            ScaffoldMessenger.of(parentContext).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  _t(
-                                    'Vui lòng nhập họ tên',
-                                    'Please enter full name',
-                                  ),
-                                ),
+                    const SizedBox(height: 10),
+                    _sheetTextField(
+                      controller: nameController,
+                      label: _t('Họ tên', 'Full name'),
+                    ),
+                    const SizedBox(height: 8),
+                    _sheetTextField(
+                      controller: phoneController,
+                      label: _t('Số điện thoại', 'Phone number'),
+                      keyboardType: TextInputType.phone,
+                    ),
+                    const SizedBox(height: 8),
+                    _sheetTextField(
+                      controller: cccdController,
+                      label: _t('CCCD', 'Citizen ID'),
+                      keyboardType: TextInputType.number,
+                    ),
+                    const SizedBox(height: 8),
+                    _sheetTextField(
+                      controller: addressController,
+                      label: _t('Địa chỉ nhà', 'Home address'),
+                    ),
+                    const SizedBox(height: 8),
+                    _sheetTextField(
+                      controller: normalBalanceController,
+                      label: _t('Số dư Thẻ Thường', 'Normal Card Balance'),
+                      keyboardType: TextInputType.number,
+                    ),
+                    const SizedBox(height: 8),
+                    _sheetTextField(
+                      controller: vipBalanceController,
+                      label: _t('Số dư Thẻ VIP', 'VIP Card Balance'),
+                      keyboardType: TextInputType.number,
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () => Navigator.pop(sheetContext),
+                            child: Text(
+                              _t('Đóng', 'Close'),
+                              style: GoogleFonts.poppins(
+                                fontWeight: FontWeight.w600,
                               ),
-                            );
-                            return;
-                          }
-
-                          try {
-                            final DocumentReference<Map<String, dynamic>>
-                            userRef = _firestore
-                                .collection('users')
-                                .doc(user.id);
-                            final WriteBatch batch = _firestore.batch();
-
-                            batch.set(
-                              userRef.collection('cards').doc('standard'),
-                              <String, dynamic>{
-                                'balance': nextNormalBalance,
-                                'updatedAt': FieldValue.serverTimestamp(),
-                              },
-                              SetOptions(merge: true),
-                            );
-
-                            batch.set(
-                              userRef.collection('cards').doc('vip'),
-                              <String, dynamic>{
-                                'balance': nextVipBalance,
-                                'updatedAt': FieldValue.serverTimestamp(),
-                              },
-                              SetOptions(merge: true),
-                            );
-
-                            batch.set(userRef, <String, dynamic>{
-                              'fullName': nextName,
-                              'fullname': nextName,
-                              'phoneNumber': nextPhone,
-                              'cccd': nextCccd,
-                              'idNumber': nextCccd,
-                              'address': nextAddress,
-                              'balance_normal': nextNormalBalance,
-                              'balance_vip': nextVipBalance,
-                              'balance': nextTotalBalance,
-                              'totalBalance': nextTotalBalance,
-                              'availableBalance': nextTotalBalance,
-                              'updatedAt': FieldValue.serverTimestamp(),
-                            }, SetOptions(merge: true));
-
-                            await batch.commit();
-
-                            if (sheetContext.mounted) {
-                              Navigator.pop(sheetContext);
-                            }
-
-                            if (!parentContext.mounted) {
-                              return;
-                            }
-                            ScaffoldMessenger.of(parentContext).showSnackBar(
-                              const SnackBar(
-                                content: Text('Cập nhật thành công!'),
-                                backgroundColor: Color(0xFF16A34A),
-                              ),
-                            );
-                          } catch (_) {
-                            if (!parentContext.mounted) {
-                              return;
-                            }
-                            ScaffoldMessenger.of(parentContext).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  _t('Cập nhật thất bại', 'Update failed'),
-                                ),
-                                backgroundColor: const Color(0xFFDC2626),
-                              ),
-                            );
-                          }
-                        },
-                        child: Text(
-                          _t('Lưu', 'Save'),
-                          style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
-                      ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _gradientActionButton(
+                            label: _t('Lưu', 'Save'),
+                            icon: Icons.save_rounded,
+                            onPressed: () async {
+                              final String nextName = nameController.text
+                                  .trim();
+                              final String nextPhone = phoneController.text
+                                  .trim();
+                              final String nextCccd = cccdController.text
+                                  .trim();
+                              final String nextAddress = addressController.text
+                                  .trim();
+                              final double nextNormalBalance =
+                                  _parseBalanceInput(
+                                    normalBalanceController.text,
+                                  );
+                              final double nextVipBalance = _parseBalanceInput(
+                                vipBalanceController.text,
+                              );
+                              final double nextTotalBalance =
+                                  nextNormalBalance + nextVipBalance;
+
+                              if (nextName.isEmpty) {
+                                if (!parentContext.mounted) {
+                                  return;
+                                }
+                                ScaffoldMessenger.of(
+                                  parentContext,
+                                ).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      _t(
+                                        'Vui lòng nhập họ tên',
+                                        'Please enter full name',
+                                      ),
+                                    ),
+                                  ),
+                                );
+                                return;
+                              }
+
+                              try {
+                                final DocumentReference<Map<String, dynamic>>
+                                userRef = _firestore
+                                    .collection('users')
+                                    .doc(user.id);
+                                final WriteBatch batch = _firestore.batch();
+
+                                batch.set(
+                                  userRef.collection('cards').doc('standard'),
+                                  <String, dynamic>{
+                                    'balance': nextNormalBalance,
+                                    'updatedAt': FieldValue.serverTimestamp(),
+                                  },
+                                  SetOptions(merge: true),
+                                );
+
+                                batch.set(
+                                  userRef.collection('cards').doc('vip'),
+                                  <String, dynamic>{
+                                    'balance': nextVipBalance,
+                                    'updatedAt': FieldValue.serverTimestamp(),
+                                  },
+                                  SetOptions(merge: true),
+                                );
+
+                                batch.set(userRef, <String, dynamic>{
+                                  'fullName': nextName,
+                                  'fullname': nextName,
+                                  'phoneNumber': nextPhone,
+                                  'cccd': nextCccd,
+                                  'idNumber': nextCccd,
+                                  'address': nextAddress,
+                                  'balance_normal': nextNormalBalance,
+                                  'balance_vip': nextVipBalance,
+                                  'balance': nextTotalBalance,
+                                  'totalBalance': nextTotalBalance,
+                                  'availableBalance': nextTotalBalance,
+                                  'updatedAt': FieldValue.serverTimestamp(),
+                                }, SetOptions(merge: true));
+
+                                await batch.commit();
+
+                                if (sheetContext.mounted) {
+                                  Navigator.pop(sheetContext);
+                                }
+
+                                if (!parentContext.mounted) {
+                                  return;
+                                }
+                                ScaffoldMessenger.of(
+                                  parentContext,
+                                ).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Cập nhật thành công!'),
+                                    backgroundColor: Color(0xFF16A34A),
+                                  ),
+                                );
+                              } catch (_) {
+                                if (!parentContext.mounted) {
+                                  return;
+                                }
+                                ScaffoldMessenger.of(
+                                  parentContext,
+                                ).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      _t('Cập nhật thất bại', 'Update failed'),
+                                    ),
+                                    backgroundColor: const Color(0xFFDC2626),
+                                  ),
+                                );
+                              }
+                            },
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ],
+              ),
             ),
           ),
         );
@@ -1476,6 +1769,74 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
+  Widget _statusBadge({
+    required String label,
+    required Color background,
+    required Color foreground,
+    IconData? icon,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          if (icon != null) ...<Widget>[
+            Icon(icon, size: 13, color: foreground),
+            const SizedBox(width: 4),
+          ],
+          Text(
+            label,
+            style: GoogleFonts.poppins(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: foreground,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _gradientActionButton({
+    required String label,
+    required VoidCallback? onPressed,
+    IconData? icon,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: <Color>[Color(0xFF1D4ED8), Color(0xFF0B1E4D)],
+        ),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: ElevatedButton.icon(
+        onPressed: onPressed,
+        icon: icon == null
+            ? const SizedBox.shrink()
+            : Icon(icon, size: 16, color: Colors.white),
+        label: Text(
+          label,
+          style: GoogleFonts.poppins(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        style: ElevatedButton.styleFrom(
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          foregroundColor: Colors.white,
+          shadowColor: Colors.transparent,
+          shape: const StadiumBorder(),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        ),
+      ),
+    );
+  }
+
   Widget _buildBalanceChartCard(List<_AdminUserSummary> users) {
     final List<_AdminUserSummary> topUsers = users
         .take(6)
@@ -1487,11 +1848,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               : topUsers.first.totalBalance * 1.2);
 
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: const Color(0xFFE5E7EB)),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 15,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1631,11 +1999,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   Widget _buildUserBalancesCard(List<_AdminUserSummary> users) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: const Color(0xFFE5E7EB)),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 15,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1657,29 +2032,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             itemBuilder: (BuildContext context, int index) {
               final _AdminUserSummary user = users[index];
               return InkWell(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(14),
                 onTap: () => _showUserDetails(user),
-                child: Padding(
+                child: Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 2,
-                    vertical: 4,
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFE5E7EB)),
                   ),
                   child: Row(
                     children: <Widget>[
-                      CircleAvatar(
-                        radius: 17,
-                        backgroundColor: _primaryBlue.withValues(alpha: 0.12),
-                        child: Text(
-                          user.fullName.isNotEmpty
-                              ? user.fullName[0].toUpperCase()
-                              : 'U',
-                          style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.w700,
-                            color: _primaryBlue,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1709,8 +2075,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       Text(
                         _formatVndDouble(user.totalBalance),
                         style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
                           color: const Color(0xFF101828),
                         ),
                       ),
@@ -1737,61 +2103,195 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     }, SetOptions(merge: true));
   }
 
-  Future<void> _editPackagePrices(
-    DocumentReference<Map<String, dynamic>> ref,
-    List<dynamic> packages,
-  ) async {
-    final String initial = packages.map((dynamic e) => e.toString()).join(', ');
-    final TextEditingController controller = TextEditingController(
-      text: initial,
+  Future<void> _editPackagePrices({
+    required DocumentReference<Map<String, dynamic>> ref,
+    required String serviceId,
+    required String serviceName,
+    required Map<String, dynamic> currentData,
+  }) async {
+    final List<Map<String, dynamic>> initialPackages = _parsePackageRows(
+      (currentData['packages'] as List<dynamic>?) ?? <dynamic>[],
     );
+
+    final List<String> periodLabels = <String>[
+      '1 tháng',
+      '6 tháng',
+      '12 tháng',
+    ];
+    final List<TextEditingController> priceControllers =
+        List<TextEditingController>.generate(3, (int index) {
+          final int price = index < initialPackages.length
+              ? (initialPackages[index]['price'] as num?)?.toInt() ?? 0
+              : 0;
+          return TextEditingController(text: price > 0 ? price.toString() : '');
+        });
+    final List<TextEditingController> discountControllers =
+        List<TextEditingController>.generate(3, (int index) {
+          final int discount = index < initialPackages.length
+              ? _sanitizeDiscountPercent(
+                  initialPackages[index]['discountPercent'],
+                )
+              : 0;
+          return TextEditingController(
+            text: discount > 0 ? discount.toString() : '',
+          );
+        });
 
     await showDialog<void>(
       context: context,
       builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          title: Text(
-            _t('Sửa gói giá', 'Edit package prices'),
-            style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
-          ),
-          content: TextField(
-            controller: controller,
-            maxLines: 3,
-            decoration: InputDecoration(
-              hintText: _t(
-                'Nhập giá mới, cách nhau bằng dấu phẩy',
-                'Enter new prices separated by commas',
+        return Stack(
+          children: <Widget>[
+            Positioned.fill(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                child: Container(color: Colors.black.withValues(alpha: 0.16)),
               ),
             ),
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: Text(_t('Hủy', 'Cancel'), style: GoogleFonts.poppins()),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final List<int> values = controller.text
-                    .split(',')
-                    .map((String e) => int.tryParse(e.trim()) ?? 0)
-                    .where((int v) => v > 0)
-                    .toList(growable: false);
+            Center(
+              child: Dialog(
+                backgroundColor: Colors.white.withValues(alpha: 0.92),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text(
+                        _t('Sửa gói giá', 'Edit package pricing'),
+                        style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 12),
+                      ...List<Widget>.generate(3, (int index) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: const Color(0xFFE5E7EB),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Text(
+                                  '${_t('Gói', 'Package')} ${periodLabels[index]}',
+                                  style: GoogleFonts.poppins(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                TextField(
+                                  controller: priceControllers[index],
+                                  keyboardType: TextInputType.number,
+                                  decoration: InputDecoration(
+                                    labelText: _t('Giá gốc', 'Original price'),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                TextField(
+                                  controller: discountControllers[index],
+                                  keyboardType: TextInputType.number,
+                                  decoration: InputDecoration(
+                                    labelText: _t(
+                                      '% Giảm giá (0-100)',
+                                      'Discount % (0-100)',
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }),
+                      const SizedBox(height: 14),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: <Widget>[
+                          TextButton(
+                            onPressed: () => Navigator.pop(dialogContext),
+                            child: Text(
+                              _t('Đóng', 'Close'),
+                              style: GoogleFonts.poppins(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          _gradientActionButton(
+                            label: _t('Lưu', 'Save'),
+                            icon: Icons.save_rounded,
+                            onPressed: () async {
+                              final List<Map<String, dynamic>> packages =
+                                  <Map<String, dynamic>>[];
 
-                if (values.isEmpty) {
-                  return;
-                }
+                              for (int i = 0; i < 3; i++) {
+                                final int price =
+                                    int.tryParse(
+                                      priceControllers[i].text
+                                          .trim()
+                                          .replaceAll(RegExp(r'[^0-9]'), ''),
+                                    ) ??
+                                    0;
+                                final int discountPercent =
+                                    _sanitizeDiscountPercent(
+                                      discountControllers[i].text.trim(),
+                                    );
 
-                await ref.set(<String, dynamic>{
-                  'packages': values,
-                  'updatedAt': FieldValue.serverTimestamp(),
-                }, SetOptions(merge: true));
+                                if (price > 0) {
+                                  packages.add(<String, dynamic>{
+                                    'price': price,
+                                    'discountPercent': discountPercent,
+                                  });
+                                }
+                              }
 
-                if (!dialogContext.mounted) return;
-                Navigator.pop(dialogContext);
-              },
-              child: Text(
-                _t('Lưu', 'Save'),
-                style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                              if (packages.isEmpty) {
+                                if (!dialogContext.mounted) {
+                                  return;
+                                }
+                                ScaffoldMessenger.of(
+                                  dialogContext,
+                                ).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      _t(
+                                        'Vui lòng nhập ít nhất 1 mức giá hợp lệ',
+                                        'Please enter at least one valid price',
+                                      ),
+                                    ),
+                                  ),
+                                );
+                                return;
+                              }
+
+                              await ref.set(<String, dynamic>{
+                                'packages': packages,
+                                'discountPercent': FieldValue.delete(),
+                                'updatedAt': FieldValue.serverTimestamp(),
+                              }, SetOptions(merge: true));
+
+                              await _pushShoppingDiscountNotifications(
+                                serviceId: serviceId,
+                                serviceName: serviceName,
+                                packages: packages,
+                              );
+
+                              if (!dialogContext.mounted) return;
+                              Navigator.pop(dialogContext);
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ],
@@ -1815,63 +2315,91 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       builder: (BuildContext dialogContext) {
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setDialogState) {
-            return AlertDialog(
-              title: Text(
-                _t('Sửa banner', 'Edit banner'),
-                style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  TextField(
-                    controller: urlController,
-                    decoration: InputDecoration(
-                      hintText: _t(
-                        'Link ảnh hoặc assets/...',
-                        'Image URL or assets/...',
-                      ),
+            return Stack(
+              children: <Widget>[
+                Positioned.fill(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                    child: Container(
+                      color: Colors.black.withValues(alpha: 0.16),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  SwitchListTile(
-                    value: active,
-                    onChanged: (bool value) {
-                      setDialogState(() {
-                        active = value;
-                      });
-                    },
-                    title: Text(
-                      _t('Đang hiển thị', 'Is active'),
-                      style: GoogleFonts.poppins(fontSize: 13),
-                    ),
-                  ),
-                ],
-              ),
-              actions: <Widget>[
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  child: Text(
-                    _t('Hủy', 'Cancel'),
-                    style: GoogleFonts.poppins(),
                   ),
                 ),
-                ElevatedButton(
-                  onPressed: () async {
-                    final String url = urlController.text.trim();
-                    if (url.isEmpty) {
-                      return;
-                    }
-                    await ref.set(<String, dynamic>{
-                      'imageUrl': url,
-                      'isActive': active,
-                      'updatedAt': FieldValue.serverTimestamp(),
-                    }, SetOptions(merge: true));
-                    if (!dialogContext.mounted) return;
-                    Navigator.pop(dialogContext);
-                  },
-                  child: Text(
-                    _t('Lưu', 'Save'),
-                    style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                Center(
+                  child: Dialog(
+                    backgroundColor: Colors.white.withValues(alpha: 0.92),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(18),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          Text(
+                            _t('Sửa banner', 'Edit banner'),
+                            style: GoogleFonts.poppins(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: urlController,
+                            decoration: InputDecoration(
+                              hintText: _t(
+                                'Link ảnh hoặc assets/...',
+                                'Image URL or assets/...',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          SwitchListTile(
+                            value: active,
+                            onChanged: (bool value) {
+                              setDialogState(() {
+                                active = value;
+                              });
+                            },
+                            title: Text(
+                              _t('Đang hiển thị', 'Is active'),
+                              style: GoogleFonts.poppins(fontSize: 13),
+                            ),
+                          ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: <Widget>[
+                              TextButton(
+                                onPressed: () => Navigator.pop(dialogContext),
+                                child: Text(
+                                  _t('Đóng', 'Close'),
+                                  style: GoogleFonts.poppins(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              _gradientActionButton(
+                                label: _t('Lưu', 'Save'),
+                                icon: Icons.save_rounded,
+                                onPressed: () async {
+                                  final String url = urlController.text.trim();
+                                  if (url.isEmpty) {
+                                    return;
+                                  }
+                                  await ref.set(<String, dynamic>{
+                                    'imageUrl': url,
+                                    'isActive': active,
+                                    'updatedAt': FieldValue.serverTimestamp(),
+                                  }, SetOptions(merge: true));
+                                  if (!dialogContext.mounted) return;
+                                  Navigator.pop(dialogContext);
+                                },
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -1888,51 +2416,84 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     await showDialog<void>(
       context: context,
       builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          title: Text(
-            _t('Thêm banner', 'Add banner'),
-            style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
-          ),
-          content: TextField(
-            controller: urlController,
-            decoration: InputDecoration(
-              hintText: _t(
-                'Link ảnh hoặc assets/...',
-                'Image URL or assets/...',
+        return Stack(
+          children: <Widget>[
+            Positioned.fill(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                child: Container(color: Colors.black.withValues(alpha: 0.16)),
               ),
             ),
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: Text(_t('Hủy', 'Cancel'), style: GoogleFonts.poppins()),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final String url = urlController.text.trim();
-                if (url.isEmpty) {
-                  return;
-                }
+            Center(
+              child: Dialog(
+                backgroundColor: Colors.white.withValues(alpha: 0.92),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text(
+                        _t('Thêm banner', 'Add banner'),
+                        style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: urlController,
+                        decoration: InputDecoration(
+                          hintText: _t(
+                            'Link ảnh hoặc assets/...',
+                            'Image URL or assets/...',
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: <Widget>[
+                          TextButton(
+                            onPressed: () => Navigator.pop(dialogContext),
+                            child: Text(
+                              _t('Đóng', 'Close'),
+                              style: GoogleFonts.poppins(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          _gradientActionButton(
+                            label: _t('Thêm', 'Add'),
+                            icon: Icons.add_rounded,
+                            onPressed: () async {
+                              final String url = urlController.text.trim();
+                              if (url.isEmpty) {
+                                return;
+                              }
 
-                final CollectionReference<Map<String, dynamic>> collection =
-                    _adminCollection('home_banners');
-                final DocumentReference<Map<String, dynamic>> ref = collection
-                    .doc();
+                              final CollectionReference<Map<String, dynamic>>
+                              collection = _adminCollection('home_banners');
+                              final DocumentReference<Map<String, dynamic>>
+                              ref = collection.doc();
 
-                await ref.set(<String, dynamic>{
-                  'imageUrl': url,
-                  'isActive': true,
-                  'order': DateTime.now().millisecondsSinceEpoch,
-                  'createdAt': FieldValue.serverTimestamp(),
-                  'updatedAt': FieldValue.serverTimestamp(),
-                }, SetOptions(merge: true));
+                              await ref.set(<String, dynamic>{
+                                'imageUrl': url,
+                                'isActive': true,
+                                'order': DateTime.now().millisecondsSinceEpoch,
+                                'createdAt': FieldValue.serverTimestamp(),
+                                'updatedAt': FieldValue.serverTimestamp(),
+                              }, SetOptions(merge: true));
 
-                if (!dialogContext.mounted) return;
-                Navigator.pop(dialogContext);
-              },
-              child: Text(
-                _t('Thêm', 'Add'),
-                style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                              if (!dialogContext.mounted) return;
+                              Navigator.pop(dialogContext);
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ],
@@ -1981,9 +2542,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   stream: _totalTransactionsCountStream,
                   builder:
                       (BuildContext context, AsyncSnapshot<int> txSnapshot) {
-                        final String txCountText = txSnapshot.hasData
-                            ? '${txSnapshot.data ?? 0}'
-                            : '...';
+                        final String txCountText = '${txSnapshot.data ?? 0}';
 
                         return LayoutBuilder(
                           builder:
@@ -2017,7 +2576,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                     onTap: _showSystemBalancesOverlay,
                                   ),
                                   _metricCard(
-                                    title: _t('Giao dịch', 'Transactions'),
+                                    title: _t(
+                                      'Tổng giao dịch user',
+                                      'Total user transactions',
+                                    ),
                                     value: txCountText,
                                     icon: Icons.receipt_long_rounded,
                                     onTap: _showTodayTransactionsByUserDialog,
@@ -2082,12 +2644,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final Widget card = Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
         boxShadow: <BoxShadow>[
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 15,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -2095,11 +2658,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       child: Row(
         children: <Widget>[
           Container(
-            width: 44,
-            height: 44,
+            width: 48,
+            height: 48,
             decoration: BoxDecoration(
-              color: _primaryBlue.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
+              color: const Color(0xFFE7EEFF),
+              shape: BoxShape.circle,
             ),
             child: Icon(icon, color: _primaryBlue),
           ),
@@ -2125,8 +2688,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     value,
                     maxLines: 1,
                     style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
                       color: const Color(0xFF111827),
                     ),
                   ),
@@ -2145,7 +2708,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     return Material(
       type: MaterialType.transparency,
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         onTap: onTap,
         child: card,
       ),
@@ -2183,110 +2746,153 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
                 return LayoutBuilder(
                   builder: (BuildContext context, BoxConstraints constraints) {
-                    return SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          minWidth: constraints.maxWidth,
-                        ),
-                        child: DataTable(
-                          showCheckboxColumn: false,
-                          columnSpacing: 18,
-                          horizontalMargin: 10,
-                          headingRowHeight: 44,
-                          dataRowMinHeight: 50,
-                          dataRowMaxHeight: 58,
-                          columns: <DataColumn>[
-                            DataColumn(
-                              label: Text(
-                                _t('Họ tên', 'Full name'),
-                                style: GoogleFonts.poppins(
-                                  fontWeight: FontWeight.w700,
-                                ),
+                    return Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
+                        boxShadow: <BoxShadow>[
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.04),
+                            blurRadius: 15,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      padding: const EdgeInsets.all(12),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            minWidth: constraints.maxWidth,
+                          ),
+                          child: DataTable(
+                            showCheckboxColumn: false,
+                            columnSpacing: 18,
+                            horizontalMargin: 10,
+                            headingRowHeight: 44,
+                            dataRowMinHeight: 50,
+                            dataRowMaxHeight: 58,
+                            headingRowColor: const WidgetStatePropertyAll(
+                              Color(0xFFF8FAFC),
+                            ),
+                            border: TableBorder(
+                              horizontalInside: BorderSide(
+                                color: const Color(
+                                  0xFFE5E7EB,
+                                ).withValues(alpha: 0.7),
                               ),
                             ),
-                            DataColumn(
-                              label: Text(
-                                _t('Trạng thái', 'Status'),
-                                style: GoogleFonts.poppins(
-                                  fontWeight: FontWeight.w700,
+                            columns: <DataColumn>[
+                              DataColumn(
+                                label: Text(
+                                  _t('Họ tên', 'Full name'),
+                                  style: GoogleFonts.poppins(
+                                    fontWeight: FontWeight.w700,
+                                  ),
                                 ),
                               ),
-                            ),
-                            DataColumn(
-                              label: Text(
-                                _t('Hành động', 'Action'),
-                                style: GoogleFonts.poppins(
-                                  fontWeight: FontWeight.w700,
+                              DataColumn(
+                                label: Text(
+                                  _t('Trạng thái', 'Status'),
+                                  style: GoogleFonts.poppins(
+                                    fontWeight: FontWeight.w700,
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
-                          rows: users
-                              .map((_AdminUserSummary user) {
-                                final bool canToggle = user.role != 'admin';
-                                final DocumentReference<Map<String, dynamic>>
-                                ref = _firestore
-                                    .collection('users')
-                                    .doc(user.id);
+                              DataColumn(
+                                label: Text(
+                                  _t('Hành động', 'Action'),
+                                  style: GoogleFonts.poppins(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ],
+                            rows: users
+                                .map((_AdminUserSummary user) {
+                                  final bool canToggle = user.role != 'admin';
+                                  final DocumentReference<Map<String, dynamic>>
+                                  ref = _firestore
+                                      .collection('users')
+                                      .doc(user.id);
 
-                                return DataRow(
-                                  cells: <DataCell>[
-                                    DataCell(
-                                      InkWell(
-                                        borderRadius: BorderRadius.circular(8),
-                                        onTap: () => _showUserDetails(user),
-                                        child: Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                            vertical: 6,
+                                  return DataRow(
+                                    cells: <DataCell>[
+                                      DataCell(
+                                        InkWell(
+                                          borderRadius: BorderRadius.circular(
+                                            8,
                                           ),
-                                          child: Text(
-                                            user.fullName,
-                                            style: GoogleFonts.poppins(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w600,
-                                              color: _primaryBlue,
+                                          onTap: () => _showUserDetails(user),
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: 6,
+                                            ),
+                                            child: Text(
+                                              user.fullName,
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                                color: _primaryBlue,
+                                              ),
                                             ),
                                           ),
                                         ),
                                       ),
-                                    ),
-                                    DataCell(
-                                      Text(
+                                      DataCell(
                                         user.isLocked
-                                            ? _t('Đã khóa', 'Locked')
-                                            : _t('Đang hoạt động', 'Active'),
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                          color: user.isLocked
-                                              ? Colors.red
-                                              : Colors.green,
-                                        ),
-                                      ),
-                                    ),
-                                    DataCell(
-                                      ElevatedButton(
-                                        onPressed: canToggle
-                                            ? () => _toggleUserLock(
-                                                ref,
-                                                !user.isLocked,
+                                            ? _statusBadge(
+                                                label: _t(
+                                                  'Đã bị khóa',
+                                                  'Locked',
+                                                ),
+                                                background: const Color(
+                                                  0xFFFEE2E2,
+                                                ),
+                                                foreground: const Color(
+                                                  0xFFB91C1C,
+                                                ),
+                                                icon: Icons.lock_rounded,
                                               )
-                                            : null,
-                                        child: Text(
-                                          user.isLocked
-                                              ? _t('Mở khóa', 'Unlock')
-                                              : _t('Khóa', 'Lock'),
-                                          style: GoogleFonts.poppins(
-                                            fontSize: 12,
+                                            : _statusBadge(
+                                                label: _t(
+                                                  'Đang hoạt động',
+                                                  'Active',
+                                                ),
+                                                background: const Color(
+                                                  0xFFDCFCE7,
+                                                ),
+                                                foreground: const Color(
+                                                  0xFF166534,
+                                                ),
+                                                icon:
+                                                    Icons.check_circle_rounded,
+                                              ),
+                                      ),
+                                      DataCell(
+                                        ElevatedButton(
+                                          onPressed: canToggle
+                                              ? () => _toggleUserLock(
+                                                  ref,
+                                                  !user.isLocked,
+                                                )
+                                              : null,
+                                          child: Text(
+                                            user.isLocked
+                                                ? _t('Mở khóa', 'Unlock')
+                                                : _t('Khóa', 'Lock'),
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 12,
+                                            ),
                                           ),
                                         ),
                                       ),
-                                    ),
-                                  ],
-                                );
-                              })
-                              .toList(growable: false),
+                                    ],
+                                  );
+                                })
+                                .toList(growable: false),
+                          ),
                         ),
                       ),
                     );
@@ -2300,9 +2906,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   Widget _buildServicesTab() {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: _adminCollection('services_pricing')
-          .where('kind', isEqualTo: 'shopping_bundle')
-          .snapshots(includeMetadataChanges: true),
+      stream: _servicesPricingStream,
       builder: (BuildContext context, snapshot) {
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
@@ -2340,19 +2944,37 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               (data['nameEn'] ?? doc.id).toString(),
             );
             final String logoPath = (data['logoPath'] ?? '').toString();
-            final List<int> values = _parsePositivePrices(
+            final List<Map<String, dynamic>> packageRows = _parsePackageRows(
               (data['packages'] as List<dynamic>?) ?? <dynamic>[],
             );
-            final String priceLabel = values.isEmpty
+            final String priceLabel = packageRows.isEmpty
                 ? _t('Chưa có mức giá', 'No prices yet')
-                : values.map(_formatVnd).join(' | ');
+                : packageRows
+                      .map((Map<String, dynamic> item) {
+                        final int price = (item['price'] as num?)?.toInt() ?? 0;
+                        final int discountPercent = _sanitizeDiscountPercent(
+                          item['discountPercent'],
+                        );
+                        if (discountPercent <= 0) {
+                          return _formatVnd(price);
+                        }
+                        return '${_formatVnd(price)} (-$discountPercent%)';
+                      })
+                      .join(' | ');
 
             return Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(18),
                 border: Border.all(color: const Color(0xFFE5E7EB)),
+                boxShadow: <BoxShadow>[
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.04),
+                    blurRadius: 15,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
               child: Row(
                 children: <Widget>[
@@ -2417,7 +3039,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   ),
                   IconButton(
                     tooltip: _t('Chỉnh sửa giá', 'Edit prices'),
-                    onPressed: () => _editPackagePrices(doc.reference, values),
+                    onPressed: () => _editPackagePrices(
+                      ref: doc.reference,
+                      serviceId: doc.id,
+                      serviceName: name,
+                      currentData: data,
+                    ),
                     icon: const Icon(Icons.edit_rounded),
                     color: _primaryBlue,
                   ),
@@ -2432,9 +3059,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   Widget _buildBannersTab() {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: _adminCollection('home_banners')
-          .orderBy('order', descending: false)
-          .snapshots(includeMetadataChanges: true),
+      stream: _bannersStream,
       builder: (BuildContext context, snapshot) {
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
@@ -2468,6 +3093,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   final bool isActive = data['isActive'] == true;
 
                   return Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: const BorderSide(color: Color(0xFFE5E7EB)),
+                    ),
                     child: ListTile(
                       leading: Container(
                         width: 64,
@@ -2513,14 +3144,27 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.poppins(fontSize: 12),
                       ),
-                      subtitle: Text(
-                        isActive
-                            ? _t('Đang hiển thị', 'Active')
-                            : _t('Đã ẩn', 'Hidden'),
-                        style: GoogleFonts.poppins(
-                          fontWeight: FontWeight.w600,
-                          color: isActive ? Colors.green : Colors.red,
-                        ),
+                      subtitle: Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: isActive
+                            ? _statusBadge(
+                                label: _t('Đang hiển thị', 'Displayed'),
+                                background: const Color(0xFFDCFCE7),
+                                foreground: const Color(0xFF166534),
+                                icon: Icons.check_circle_rounded,
+                              )
+                            : _statusBadge(
+                                label: _t('Bị ẩn', 'Hidden'),
+                                background: const Color(0xFFFEE2E2),
+                                foreground: const Color(0xFFB91C1C),
+                                icon: Icons.visibility_off_rounded,
+                              ),
+                      ),
+                      dense: true,
+                      isThreeLine: true,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
                       ),
                       trailing: Wrap(
                         spacing: 6,
@@ -2548,18 +3192,27 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Widget _buildContent() {
-    switch (_selectedTab) {
-      case 0:
-        return _buildDashboardTab();
-      case 1:
-        return _buildUsersTab();
-      case 2:
-        return _buildServicesTab();
-      case 3:
-        return _buildBannersTab();
-      default:
-        return _buildDashboardTab();
-    }
+    return IndexedStack(
+      index: _selectedTab,
+      children: <Widget>[
+        KeyedSubtree(
+          key: const PageStorageKey<String>('admin-tab-dashboard'),
+          child: _buildDashboardTab(),
+        ),
+        KeyedSubtree(
+          key: const PageStorageKey<String>('admin-tab-users'),
+          child: _buildUsersTab(),
+        ),
+        KeyedSubtree(
+          key: const PageStorageKey<String>('admin-tab-services'),
+          child: _buildServicesTab(),
+        ),
+        KeyedSubtree(
+          key: const PageStorageKey<String>('admin-tab-banners'),
+          child: _buildBannersTab(),
+        ),
+      ],
+    );
   }
 
   Widget _sidebarItem({
@@ -2569,38 +3222,77 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     bool compact = false,
   }) {
     final bool selected = _selectedTab == index;
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      splashColor: _primaryBlue.withValues(alpha: 0.1),
-      onTap: () {
-        setState(() {
-          _selectedTab = index;
-        });
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          color: selected
-              ? _primaryBlue.withValues(alpha: 0.12)
-              : Colors.transparent,
-        ),
-        child: Row(
-          children: <Widget>[
-            Icon(icon, color: selected ? _primaryBlue : Colors.grey.shade600),
-            if (!compact) ...<Widget>[
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  label,
-                  style: GoogleFonts.poppins(
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    color: selected ? _primaryBlue : Colors.grey.shade700,
-                  ),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        splashColor: Colors.white.withValues(alpha: 0.1),
+        onTap: () {
+          setState(() {
+            _selectedTab = index;
+          });
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            gradient: selected
+                ? const LinearGradient(
+                    colors: <Color>[Color(0xFF1D4ED8), Color(0xFF0EA5E9)],
+                  )
+                : null,
+            color: selected ? null : Colors.white.withValues(alpha: 0.03),
+            border: Border.all(
+              color: selected
+                  ? Colors.white.withValues(alpha: 0.28)
+                  : Colors.white.withValues(alpha: 0.08),
+            ),
+            boxShadow: selected
+                ? <BoxShadow>[
+                    BoxShadow(
+                      color: _neonBlue.withValues(alpha: 0.35),
+                      blurRadius: 16,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            children: <Widget>[
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: selected
+                      ? Colors.white.withValues(alpha: 0.2)
+                      : Colors.white.withValues(alpha: 0.08),
+                ),
+                child: Icon(
+                  icon,
+                  color: selected
+                      ? _neonBlue
+                      : Colors.white.withValues(alpha: 0.75),
                 ),
               ),
+              if (!compact) ...<Widget>[
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: GoogleFonts.poppins(
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                      color: selected
+                          ? Colors.white
+                          : Colors.white.withValues(alpha: 0.8),
+                    ),
+                  ),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -2613,11 +3305,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
         boxShadow: <BoxShadow>[
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
+            blurRadius: 15,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -2700,13 +3393,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       margin: const EdgeInsets.all(12),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: <Color>[_sidebarStart, _sidebarEnd],
+        ),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
         boxShadow: <BoxShadow>[
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: Colors.black.withValues(alpha: 0.2),
             blurRadius: 18,
-            offset: const Offset(0, 8),
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -2717,7 +3415,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             wide ? _t('Quản trị', 'Administration') : 'ADM',
             style: GoogleFonts.poppins(
               fontWeight: FontWeight.w800,
-              color: _primaryBlue,
+              color: Colors.white,
             ),
           ),
           const SizedBox(height: 14),
@@ -2755,15 +3453,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       margin: margin ?? const EdgeInsets.fromLTRB(0, 12, 12, 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(20),
       ),
       child: _buildContent(),
     );
@@ -2776,10 +3467,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     return Scaffold(
       backgroundColor: _pageBg,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: <Color>[Color(0xFF0B1E4D), Color(0xFF020617)],
+            ),
+          ),
+        ),
         title: Text(
           _t('CCPBank Admin Dashboard', 'CCPBank Admin Dashboard'),
-          style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
+          style: GoogleFonts.poppins(
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+          ),
         ),
       ),
       body: wide
@@ -3128,18 +3832,61 @@ class _AdminUserTransactionHistoryScreenState
     return '${NumberFormat.decimalPattern('vi_VN').format(value.round())} VND';
   }
 
+  Widget _txStatusBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFDCFCE7),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          const Icon(
+            Icons.check_circle_rounded,
+            size: 13,
+            color: Color(0xFF166534),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            _t('Thành công', 'Success'),
+            style: GoogleFonts.poppins(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF166534),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FF),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: <Color>[Color(0xFF0B1E4D), Color(0xFF020617)],
+            ),
+          ),
+        ),
         title: Text(
           _t(
             'Lịch sử giao dịch: ${widget.userName}',
             'Transaction history: ${widget.userName}',
           ),
-          style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 16),
+          style: GoogleFonts.poppins(
+            fontWeight: FontWeight.w700,
+            fontSize: 16,
+            color: Colors.white,
+          ),
         ),
       ),
       body: Padding(
@@ -3150,11 +3897,11 @@ class _AdminUserTransactionHistoryScreenState
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(18),
                 boxShadow: <BoxShadow>[
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.04),
-                    blurRadius: 12,
+                    blurRadius: 15,
                     offset: const Offset(0, 4),
                   ),
                 ],
@@ -3238,11 +3985,11 @@ class _AdminUserTransactionHistoryScreenState
               child: Container(
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(18),
                   boxShadow: <BoxShadow>[
                     BoxShadow(
                       color: Colors.black.withValues(alpha: 0.04),
-                      blurRadius: 12,
+                      blurRadius: 15,
                       offset: const Offset(0, 4),
                     ),
                   ],
@@ -3307,6 +4054,17 @@ class _AdminUserTransactionHistoryScreenState
                                     headingRowHeight: 42,
                                     dataRowMinHeight: 44,
                                     dataRowMaxHeight: 52,
+                                    headingRowColor:
+                                        const WidgetStatePropertyAll(
+                                          Color(0xFFF8FAFC),
+                                        ),
+                                    border: TableBorder(
+                                      horizontalInside: BorderSide(
+                                        color: const Color(
+                                          0xFFE5E7EB,
+                                        ).withValues(alpha: 0.7),
+                                      ),
+                                    ),
                                     columns: <DataColumn>[
                                       DataColumn(
                                         label: Text(
@@ -3335,6 +4093,14 @@ class _AdminUserTransactionHistoryScreenState
                                           ),
                                         ),
                                       ),
+                                      DataColumn(
+                                        label: Text(
+                                          _t('Trạng thái', 'Status'),
+                                          style: GoogleFonts.poppins(
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ),
                                     ],
                                     rows: docs
                                         .map((_AdminMergedTransaction item) {
@@ -3347,20 +4113,47 @@ class _AdminUserTransactionHistoryScreenState
                                           return DataRow(
                                             cells: <DataCell>[
                                               DataCell(
-                                                Text(
-                                                  item.typeLabel,
-                                                  style: GoogleFonts.poppins(
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
+                                                Row(
+                                                  children: <Widget>[
+                                                    CircleAvatar(
+                                                      radius: 13,
+                                                      backgroundColor:
+                                                          const Color(
+                                                            0xFFEAF2FF,
+                                                          ),
+                                                      child: Icon(
+                                                        Icons
+                                                            .receipt_long_rounded,
+                                                        size: 14,
+                                                        color: const Color(
+                                                          0xFF1D4ED8,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    Text(
+                                                      item.typeLabel,
+                                                      style:
+                                                          GoogleFonts.poppins(
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                          ),
+                                                    ),
+                                                  ],
                                                 ),
                                               ),
                                               DataCell(
-                                                Text(
-                                                  _formatMoney(item.amount),
-                                                  style: GoogleFonts.poppins(
-                                                    fontWeight: FontWeight.w700,
-                                                    color: const Color(
-                                                      0xFF0F766E,
+                                                Align(
+                                                  alignment:
+                                                      Alignment.centerRight,
+                                                  child: Text(
+                                                    _formatMoney(item.amount),
+                                                    style: GoogleFonts.poppins(
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                      color: const Color(
+                                                        0xFF0F766E,
+                                                      ),
                                                     ),
                                                   ),
                                                 ),
@@ -3373,6 +4166,7 @@ class _AdminUserTransactionHistoryScreenState
                                                   ),
                                                 ),
                                               ),
+                                              DataCell(_txStatusBadge()),
                                             ],
                                           );
                                         })

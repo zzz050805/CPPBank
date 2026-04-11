@@ -40,6 +40,10 @@ class AppText {
       'vi': 'Thanh toán thành công!',
       'en': 'Payment successful!',
     },
+    'payment_success_specific': <String, String>{
+      'vi': 'Thanh toán hóa đơn {serviceName} thành công!',
+      'en': '{serviceName} bill payment successful!',
+    },
     'payment_success_body': <String, String>{
       'vi': 'Bạn đã thanh toán {amount} cho hóa đơn {billType}.',
       'en': 'You have paid {amount} for {billType} bill.',
@@ -164,6 +168,26 @@ class AppText {
 
   static String paymentSuccessTitleByCode(String languageCode) {
     return textByCode(languageCode, 'payment_success_title');
+  }
+
+  static String paymentSuccessSpecificTitle(
+    BuildContext context, {
+    required String serviceName,
+  }) {
+    return textWithParams(context, 'payment_success_specific', <String, String>{
+      'serviceName': serviceName,
+    });
+  }
+
+  static String paymentSuccessSpecificTitleByCode(
+    String languageCode, {
+    required String serviceName,
+  }) {
+    return textByCodeWithParams(
+      languageCode,
+      'payment_success_specific',
+      <String, String>{'serviceName': serviceName},
+    );
   }
 
   static String paymentNotificationBody(
