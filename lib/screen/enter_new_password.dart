@@ -328,26 +328,6 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
       return;
     }
 
-    final User? user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            _t(
-              'Không tìm thấy phiên đăng nhập. Vui lòng đăng nhập lại.',
-              'No active session found. Please login again.',
-            ),
-          ),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
     final String oldPassword = _oldPasswordController.text.trim();
     final String newPassword = _passwordController.text.trim();
 
@@ -356,41 +336,94 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
     });
 
     try {
-      final String? email = await _resolveCurrentUserEmail(user);
-      if (email == null || email.isEmpty) {
-        throw FirebaseAuthException(
-          code: 'missing-email',
-          message: _t(
-            'Không thể xác định email tài khoản để xác thực lại.',
-            'Cannot resolve account email for re-authentication.',
-          ),
+      final User? user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final String? email = await _resolveCurrentUserEmail(user);
+        if (email == null || email.isEmpty) {
+          throw FirebaseAuthException(
+            code: 'missing-email',
+            message: _t(
+              'Không thể xác định email tài khoản để xác thực lại.',
+              'Cannot resolve account email for re-authentication.',
+            ),
+          );
+        }
+
+        final AuthCredential credential = EmailAuthProvider.credential(
+          email: email,
+          password: oldPassword,
+        );
+
+        await user.reauthenticateWithCredential(credential);
+        await user.updatePassword(newPassword);
+
+        String linkedPhone = '';
+        final DocumentSnapshot<Map<String, dynamic>> currentUserDoc =
+            await FirebaseFirestore.instance
+                .collection('users')
+                .doc(user.uid)
+                .get();
+        linkedPhone = (currentUserDoc.data()?['phoneNumber'] ?? '').toString();
+
+        await _syncPasswordToLinkedUserDocs(
+          newPassword: newPassword,
+          authUid: user.uid,
+          authEmail: email,
+          phoneNumber: linkedPhone,
+        );
+
+        await FirebaseAuth.instance.signOut();
+      } else {
+        final String? fallbackDocId =
+            UserFirestoreService.instance.currentUserDocId;
+        if (fallbackDocId == null || fallbackDocId.isEmpty) {
+          throw FirebaseAuthException(
+            code: 'missing-session',
+            message: _t(
+              'Không tìm thấy phiên đăng nhập. Vui lòng đăng nhập lại.',
+              'No active session found. Please login again.',
+            ),
+          );
+        }
+
+        final DocumentSnapshot<Map<String, dynamic>> fallbackUserDoc =
+            await FirebaseFirestore.instance
+                .collection('users')
+                .doc(fallbackDocId)
+                .get();
+        if (!fallbackUserDoc.exists) {
+          throw FirebaseException(
+            plugin: 'cloud_firestore',
+            code: 'not-found',
+            message: _t(
+              'Không tìm thấy hồ sơ tài khoản hiện tại.',
+              'Current account profile was not found.',
+            ),
+          );
+        }
+
+        final Map<String, dynamic> fallbackData =
+            fallbackUserDoc.data() ?? <String, dynamic>{};
+        final String currentPassword = (fallbackData['password'] ?? '')
+            .toString()
+            .trim();
+        if (currentPassword.isEmpty || currentPassword != oldPassword) {
+          throw FirebaseAuthException(
+            code: 'wrong-password',
+            message: _t(
+              'Mật khẩu cũ không đúng.',
+              'Old password is incorrect.',
+            ),
+          );
+        }
+
+        await _syncPasswordToLinkedUserDocs(
+          newPassword: newPassword,
+          authUid: (fallbackData['authUid'] ?? '').toString().trim(),
+          authEmail: (fallbackData['authEmail'] ?? '').toString().trim(),
+          phoneNumber: (fallbackData['phoneNumber'] ?? '').toString().trim(),
         );
       }
-
-      final AuthCredential credential = EmailAuthProvider.credential(
-        email: email,
-        password: oldPassword,
-      );
-
-      await user.reauthenticateWithCredential(credential);
-      await user.updatePassword(newPassword);
-
-      String linkedPhone = '';
-      final DocumentSnapshot<Map<String, dynamic>> currentUserDoc =
-          await FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.uid)
-              .get();
-      linkedPhone = (currentUserDoc.data()?['phoneNumber'] ?? '').toString();
-
-      await _syncPasswordToLinkedUserDocs(
-        newPassword: newPassword,
-        authUid: user.uid,
-        authEmail: email,
-        phoneNumber: linkedPhone,
-      );
-
-      await FirebaseAuth.instance.signOut();
 
       if (!mounted) {
         return;
@@ -408,6 +441,13 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
       String message;
       if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
         message = _t('Mật khẩu cũ không đúng.', 'Old password is incorrect.');
+      } else if (e.code == 'missing-session') {
+        message =
+            e.message ??
+            _t(
+              'Không tìm thấy phiên đăng nhập. Vui lòng đăng nhập lại.',
+              'No active session found. Please login again.',
+            );
       } else if (e.code == 'weak-password') {
         message = _t(
           'Mật khẩu mới quá yếu, vui lòng đặt mật khẩu mạnh hơn.',
