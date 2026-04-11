@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 
 import '../l10n/app_text.dart';
 import '../widget/ccp_app_bar.dart';
-import 'bill.dart';
 import 'main_tab_shell.dart';
 
 class ElectricBillSuccessScreen extends StatelessWidget {
@@ -25,6 +24,8 @@ class ElectricBillSuccessScreen extends StatelessWidget {
   String _t(BuildContext context, String vi, String en) =>
       AppText.tr(context, vi, en);
 
+  String _tr(BuildContext context, String key) => AppText.text(context, key);
+
   String _formatAmount() {
     final NumberFormat format = NumberFormat.decimalPattern('vi_VN');
     return '${format.format(totalAmount)} VND';
@@ -34,13 +35,6 @@ class ElectricBillSuccessScreen extends StatelessWidget {
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const MainTabShell(initialIndex: 0)),
       (route) => false,
-    );
-  }
-
-  void _payAnotherBill(BuildContext context) {
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const BillScreen()),
-      (route) => route.isFirst,
     );
   }
 
@@ -148,26 +142,7 @@ class ElectricBillSuccessScreen extends StatelessWidget {
                     ),
                   ),
                   child: Text(
-                    _t(context, 'VỀ TRANG CHỦ', 'GO HOME'),
-                    style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: OutlinedButton(
-                  onPressed: () => _payAnotherBill(context),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: _primaryBlue,
-                    side: const BorderSide(color: Color(0xFFCED6F0)),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  child: Text(
-                    _t(context, 'THANH TOÁN HÓA ĐƠN KHÁC', 'PAY ANOTHER BILL'),
+                    _tr(context, 'back_to_home').toUpperCase(),
                     style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
                   ),
                 ),

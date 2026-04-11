@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../l10n/app_text.dart';
 import '../widget/ccp_app_bar.dart';
+import 'bill_mock_data.dart';
 import 'main_tab_shell.dart';
 import 'water_bill_pay.dart';
 
@@ -23,33 +24,28 @@ class _WaterBillScreenState extends State<WaterBillScreen>
 
   final Map<String, _WaterBillLookupResult> _demoBills =
       <String, _WaterBillLookupResult>{
-        'PE13000245678': const _WaterBillLookupResult(
-          customerName: 'NGUYEN THI MAI',
-          serviceAddress: '288 Le Loi, Quan 1, TP.HCM',
-          billingPeriod: '03/2026',
-          usageM3: 36,
-          totalAmount: 426000,
-        ),
-        'PE13000987654': const _WaterBillLookupResult(
-          customerName: 'TRAN QUANG VINH',
-          serviceAddress: 'A12 Sky Garden, Quan 7, TP.HCM',
-          billingPeriod: '03/2026',
-          usageM3: 42,
-          totalAmount: 518000,
-        ),
+        for (final MockInvoice invoice in mockInvoices.values)
+          if (invoice.serviceType == 'water')
+            invoice.code: _WaterBillLookupResult(
+              customerName: invoice.customerName,
+              serviceAddress: invoice.serviceAddress,
+              billingPeriod: invoice.billingPeriodText,
+              usageM3: invoice.usageValue,
+              totalAmount: invoice.amountVnd.toDouble(),
+            ),
       };
 
   final List<_RecentWaterBillItem> _recentBills = <_RecentWaterBillItem>[
     const _RecentWaterBillItem(
       titleVi: 'Nhà riêng',
       titleEn: 'Home',
-      customerCode: 'PE13000245678',
+      customerCode: 'WA88000123456',
       icon: Icons.home_rounded,
     ),
     const _RecentWaterBillItem(
-      titleVi: 'Căn hộ',
-      titleEn: 'Apartment',
-      customerCode: 'PE13000987654',
+      titleVi: 'Phòng trọ',
+      titleEn: 'Rental room',
+      customerCode: 'WA88000654321',
       icon: Icons.apartment_rounded,
     ),
   ];
@@ -90,15 +86,15 @@ class _WaterBillScreenState extends State<WaterBillScreen>
 
   void _lookupWaterBill() {
     final String code = _customerCodeController.text.trim().toUpperCase();
-    final RegExp codePattern = RegExp(r'^PE\d{8,13}$');
+    final RegExp codePattern = RegExp(r'^WA\d{11}$');
 
     if (!codePattern.hasMatch(code)) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             _t(
-              'Vui lòng nhập mã danh bộ hợp lệ (PE + 8-13 số).',
-              'Please enter a valid customer code (PE + 8-13 digits).',
+              'Vui lòng nhập mã danh bộ hợp lệ (WA + 11 số).',
+              'Please enter a valid customer code (WA + 11 digits).',
             ),
           ),
           backgroundColor: Colors.redAccent,
@@ -235,7 +231,7 @@ class _WaterBillScreenState extends State<WaterBillScreen>
               fontSize: 13,
             ),
             decoration: InputDecoration(
-              hintText: 'e.g., PE13000245678',
+              hintText: 'e.g., WA88000123456',
               hintStyle: GoogleFonts.poppins(
                 color: const Color(0xFFA3A7BE),
                 fontWeight: FontWeight.w500,
@@ -348,7 +344,7 @@ class _WaterBillScreenState extends State<WaterBillScreen>
                 Row(
                   children: <Widget>[
                     Text(
-                      _t('BƯỚC 1/4', 'STEP 1/4'),
+                      _t('BƯỚC 1/3', 'STEP 1/3'),
                       style: GoogleFonts.poppins(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,

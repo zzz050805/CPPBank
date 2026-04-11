@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import 'electric_bill_pay.dart';
 import 'main_tab_shell.dart';
+import 'bill_mock_data.dart';
 import '../l10n/app_text.dart';
 import '../widget/ccp_app_bar.dart';
 
@@ -32,26 +33,18 @@ class _ElectricBillScreenState extends State<ElectricBillScreen>
 
   final Map<String, Map<String, dynamic>> _demoBills =
       <String, Map<String, dynamic>>{
-        'PE13000456281': <String, dynamic>{
-          'aliasVi': 'Nhà riêng',
-          'aliasEn': 'Home',
-          'customerName': 'NGUYEN VAN AN',
-          'serviceAddress': '123 Duong Lang, Ha Noi',
-          'billingPeriodText': '03/2026',
-          'dueDate': '2026-04-10',
-          'usageKwh': 365,
-          'amountVnd': 854000,
-        },
-        'PE13000998724': <String, dynamic>{
-          'aliasVi': 'Văn phòng',
-          'aliasEn': 'Office',
-          'customerName': 'CONG TY AN PHAT',
-          'serviceAddress': '18 Le Van Luong, Ha Noi',
-          'billingPeriodText': '03/2026',
-          'dueDate': '2026-04-12',
-          'usageKwh': 512,
-          'amountVnd': 1342545,
-        },
+        for (final MockInvoice invoice in mockInvoices.values)
+          if (invoice.serviceType == 'electric')
+            invoice.code: <String, dynamic>{
+              'aliasVi': invoice.aliasVi,
+              'aliasEn': invoice.aliasEn,
+              'customerName': invoice.customerName,
+              'serviceAddress': invoice.serviceAddress,
+              'billingPeriodText': invoice.billingPeriodText,
+              'dueDate': invoice.dueDateIso,
+              'usageKwh': invoice.usageValue,
+              'amountVnd': invoice.amountVnd,
+            },
       };
 
   final List<_RecentBillItem> _recentBills = <_RecentBillItem>[
@@ -138,9 +131,9 @@ class _ElectricBillScreenState extends State<ElectricBillScreen>
         return;
       }
 
-      final Map<String, dynamic>? sourceData = query.docs.isNotEmpty
-          ? query.docs.first.data()
-          : _demoBills[code];
+      final Map<String, dynamic>? sourceData =
+          _demoBills[code] ??
+          (query.docs.isNotEmpty ? query.docs.first.data() : null);
 
       if (sourceData == null) {
         final String message = _t(
@@ -271,7 +264,7 @@ class _ElectricBillScreenState extends State<ElectricBillScreen>
               ),
               const SizedBox(height: 14),
               Text(
-                _t('Kết quả tra cứu', 'Lookup result'),
+                AppText.lookupResult(context),
                 style: GoogleFonts.poppins(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
@@ -279,25 +272,19 @@ class _ElectricBillScreenState extends State<ElectricBillScreen>
                 ),
               ),
               const SizedBox(height: 12),
+              _sheetRow(AppText.customerCode(context), result.customerCode),
               _sheetRow(
-                _t('Mã khách hàng', 'Customer code'),
-                result.customerCode,
-              ),
-              _sheetRow(
-                _t('Tên gợi nhớ', 'Alias'),
+                AppText.alias(context),
                 _t(result.displayTitleVi, result.displayTitleEn),
               ),
-              _sheetRow(
-                _t('Kỳ hóa đơn', 'Billing period'),
-                result.billingPeriod,
-              ),
-              _sheetRow(_t('Hạn thanh toán', 'Due date'), result.dueDate),
+              _sheetRow(AppText.billingCycle(context), result.billingPeriod),
+              _sheetRow(AppText.dueDate(context), result.dueDate),
               _sheetRow(
                 _t('Sản lượng', 'Usage'),
                 '${result.usageKwh.toStringAsFixed(0)} kWh',
               ),
               _sheetRow(
-                _t('Số tiền', 'Amount'),
+                AppText.paymentAmount(context),
                 _formatVnd(result.amountVnd),
                 valueColor: _primaryBlue,
               ),
@@ -394,7 +381,7 @@ class _ElectricBillScreenState extends State<ElectricBillScreen>
     return Scaffold(
       backgroundColor: _surface,
       appBar: CCPAppBar(
-        title: 'Thanh toán hóa đơn',
+        title: _t('Thanh toán hóa đơn', 'Bill payment'),
         backgroundColor: _surface,
         onBackPressed: () => Navigator.maybePop(context),
         actions: [
@@ -414,7 +401,7 @@ class _ElectricBillScreenState extends State<ElectricBillScreen>
               _reveal(
                 0,
                 Text(
-                  _t('BƯỚC 1/4', 'STEP 1/4'),
+                  _t('BƯỚC 1/3', 'STEP 1/3'),
                   style: GoogleFonts.poppins(
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
@@ -521,8 +508,6 @@ class _ElectricBillScreenState extends State<ElectricBillScreen>
     return Row(
       children: <Widget>[
         _pill(isActive: true),
-        const SizedBox(width: 6),
-        _pill(isActive: false),
         const SizedBox(width: 6),
         _pill(isActive: false),
         const SizedBox(width: 6),

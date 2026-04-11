@@ -5,6 +5,7 @@ import '../l10n/app_text.dart';
 import '../widget/ccp_app_bar.dart';
 import 'data_bill.dart';
 import 'electric_bill.dart';
+import 'internet_bill.dart';
 import 'water_bill.dart';
 
 class BillScreen extends StatelessWidget {
@@ -25,13 +26,6 @@ class BillScreen extends StatelessWidget {
         title: _t(context, 'Hóa đơn', 'Bills'),
         backgroundColor: surface,
         onBackPressed: () => Navigator.pop(context),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_none),
-            color: const Color(0xFF000DC0),
-            onPressed: () {},
-          ),
-        ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -121,15 +115,11 @@ class BillScreen extends StatelessWidget {
                 iconBackground: const Color(0xFF0B5866),
                 iconForeground: Colors.white,
                 onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        _t(
-                          context,
-                          'Tính năng thanh toán Internet sẽ sớm ra mắt.',
-                          'Internet bill payment is coming soon.',
-                        ),
-                      ),
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (BuildContext context) =>
+                          const InternetBillScreen(),
                     ),
                   );
                 },

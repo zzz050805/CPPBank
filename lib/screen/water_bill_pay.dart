@@ -5,10 +5,11 @@ import 'package:intl/intl.dart';
 
 import '../data/user_firestore_service.dart';
 import '../l10n/app_text.dart';
+import '../services/payment_service.dart';
 import '../widget/pin_popup.dart';
 import '../widget/ccp_app_bar.dart';
 import 'main_tab_shell.dart';
-import 'water_bill_otp.dart';
+import 'water_bill_success.dart';
 
 class WaterBillPayScreen extends StatefulWidget {
   const WaterBillPayScreen({
@@ -40,6 +41,7 @@ class _WaterBillPayScreenState extends State<WaterBillPayScreen>
   final NumberFormat _moneyFormat = NumberFormat.decimalPattern('vi_VN');
   late final AnimationController _introController;
   late final Stream<UserProfileData?> _profileStream;
+  bool _isSubmitting = false;
 
   String _t(String vi, String en) => AppText.tr(context, vi, en);
 
@@ -72,6 +74,69 @@ class _WaterBillPayScreenState extends State<WaterBillPayScreen>
       MaterialPageRoute(builder: (_) => const MainTabShell(initialIndex: 0)),
       (Route<dynamic> route) => false,
     );
+  }
+
+  Future<void> _processPayment() async {
+    if (_isSubmitting) {
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    try {
+      await PaymentService.instance.processPayment(
+        amount: widget.totalAmount,
+        billType: 'water',
+        billId: widget.customerCode,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => WaterBillSuccessScreen(
+            totalAmount: widget.totalAmount,
+            customerName: widget.customerName,
+            customerCode: widget.customerCode,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      final String message = e
+          .toString()
+          .replaceFirst('Exception: ', '')
+          .replaceFirst('PaymentServiceException: ', '')
+          .trim();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            message.isEmpty
+                ? _t(
+                    'Thanh toán thất bại. Vui lòng thử lại.',
+                    'Payment failed. Please try again.',
+                  )
+                : message,
+          ),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
   }
 
   bool _parseHasVipCard(dynamic value) {
@@ -254,16 +319,6 @@ class _WaterBillPayScreenState extends State<WaterBillPayScreen>
             height: 4,
             decoration: BoxDecoration(
               color: _primaryBlue,
-              borderRadius: BorderRadius.circular(30),
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Container(
-            height: 4,
-            decoration: BoxDecoration(
-              color: _primaryBlue.withValues(alpha: 0.14),
               borderRadius: BorderRadius.circular(30),
             ),
           ),
@@ -546,7 +601,7 @@ class _WaterBillPayScreenState extends State<WaterBillPayScreen>
                 Row(
                   children: <Widget>[
                     Text(
-                      _t('BƯỚC 2/4', 'STEP 2/4'),
+                      _t('BƯỚC 2/3', 'STEP 2/3'),
                       style: GoogleFonts.poppins(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
@@ -618,27 +673,17 @@ class _WaterBillPayScreenState extends State<WaterBillPayScreen>
                   width: double.infinity,
                   height: 55,
                   child: ElevatedButton(
-                    onPressed: () {
-                      showModalBottomSheet(
-                        context: context,
-                        isScrollControlled: true,
-                        backgroundColor: Colors.transparent,
-                        builder: (_) => PinPopupWidget(
-                          onSuccess: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => WaterBillOtpScreen(
-                                  totalAmount: widget.totalAmount,
-                                  customerName: widget.customerName,
-                                  customerCode: widget.customerCode,
-                                ),
-                              ),
+                    onPressed: _isSubmitting
+                        ? null
+                        : () {
+                            showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (_) =>
+                                  PinPopupWidget(onSuccess: _processPayment),
                             );
                           },
-                        ),
-                      );
-                    },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _primaryBlue,
                       foregroundColor: Colors.white,
@@ -647,13 +692,22 @@ class _WaterBillPayScreenState extends State<WaterBillPayScreen>
                       ),
                       elevation: 0,
                     ),
-                    child: Text(
-                      _t('THANH TOÁN NGAY', 'PAY NOW'),
-                      style: GoogleFonts.poppins(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                    child: _isSubmitting
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.6,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Text(
+                            _t('THANH TOÁN NGAY', 'PAY NOW'),
+                            style: GoogleFonts.poppins(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                   ),
                 ),
               ),

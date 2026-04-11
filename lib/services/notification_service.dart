@@ -128,6 +128,7 @@ class NotificationService {
   Future<bool> showNotification({
     required String title,
     required String body,
+    bool lightVibration = false,
   }) async {
     if (!_isInitialized) {
       await init();
@@ -144,7 +145,13 @@ class NotificationService {
       return false;
     }
 
-    const AndroidNotificationDetails androidPlatformChannelSpecifics =
+    const DarwinNotificationDetails iosDetails = DarwinNotificationDetails();
+
+    final Int64List? vibrationPattern = lightVibration
+        ? Int64List.fromList(<int>[0, 120, 80, 120])
+        : null;
+
+    final AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
           _channelId,
           _channelName,
@@ -156,15 +163,14 @@ class NotificationService {
           ticker: 'Tin nhan moi',
           playSound: true,
           enableVibration: true,
+          vibrationPattern: vibrationPattern,
           visibility: NotificationVisibility.public,
           audioAttributesUsage: AudioAttributesUsage.notification,
           icon: '@mipmap/ic_launcher',
         );
 
-    const DarwinNotificationDetails iosDetails = DarwinNotificationDetails();
-
     final NotificationDetails details = NotificationDetails(
-      android: androidPlatformChannelSpecifics,
+      android: androidDetails,
       iOS: iosDetails,
     );
 
@@ -172,5 +178,12 @@ class NotificationService {
 
     debugPrint('System notification shown: $title');
     return true;
+  }
+
+  Future<bool> showPaymentSuccessHeadsUp({
+    required String title,
+    required String body,
+  }) {
+    return showNotification(title: title, body: body, lightVibration: true);
   }
 }

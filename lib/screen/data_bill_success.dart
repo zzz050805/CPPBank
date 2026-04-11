@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 
 import '../l10n/app_text.dart';
 import '../widget/ccp_app_bar.dart';
-import 'bill.dart';
 import 'main_tab_shell.dart';
 
 class DataBillSuccessScreen extends StatelessWidget {
@@ -32,13 +31,6 @@ class DataBillSuccessScreen extends StatelessWidget {
     );
   }
 
-  void _goToBills(BuildContext context) {
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const BillScreen()),
-      (Route<dynamic> route) => false,
-    );
-  }
-
   String _maskedPhone() {
     if (phoneNumber.length < 4) return phoneNumber;
     return '${phoneNumber.substring(0, 3)} *** ${phoneNumber.substring(6)}';
@@ -62,7 +54,7 @@ class DataBillSuccessScreen extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
           child: Column(
             children: <Widget>[
-              const _StepLine(activeCount: 4),
+              const _StepLine(activeCount: 3),
               const SizedBox(height: 20),
               Container(
                 width: 104,
@@ -145,7 +137,7 @@ class DataBillSuccessScreen extends StatelessWidget {
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: () => _goToBills(context),
+                  onPressed: () => _goHome(context),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _primaryBlue,
                     foregroundColor: Colors.white,
@@ -154,30 +146,7 @@ class DataBillSuccessScreen extends StatelessWidget {
                     ),
                   ),
                   child: Text(
-                    _t(
-                      context,
-                      'THANH TOÁN HOÁ ĐƠN KHÁC',
-                      'PAY ANOTHER BILL',
-                    ),
-                    style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: OutlinedButton(
-                  onPressed: () => _goHome(context),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: _primaryBlue,
-                    side: const BorderSide(color: Color(0xFFCED6F0)),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  child: Text(
-                    _t(context, 'VỀ TRANG CHỦ', 'GO HOME'),
+                    _t(context, 'QUAY VỀ TRANG CHỦ', 'BACK TO HOME'),
                     style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
                   ),
                 ),
@@ -227,11 +196,11 @@ class _StepLine extends StatelessWidget {
     const Color primaryBlue = Color(0xFF000DC0);
 
     return Row(
-      children: List<Widget>.generate(4, (int index) {
+      children: List<Widget>.generate(3, (int index) {
         final bool active = index < activeCount;
         return Expanded(
           child: Padding(
-            padding: EdgeInsets.only(right: index == 3 ? 0 : 8),
+            padding: EdgeInsets.only(right: index == 2 ? 0 : 8),
             child: Container(
               height: 4,
               decoration: BoxDecoration(

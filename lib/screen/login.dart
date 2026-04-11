@@ -5,6 +5,7 @@ import 'dart:ui';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../data/user_firestore_service.dart';
+import '../services/home_cache_service.dart';
 import 'forget_password.dart';
 import 'main_tab_shell.dart';
 import 'register.dart';
@@ -46,6 +47,17 @@ class _LoginScreenState extends State<LoginScreen> {
         _passwordError = null;
       }
     });
+  }
+
+  Future<void> _prefetchHomeCache({
+    required String docId,
+    String? fallbackName,
+  }) async {
+    await HomeCacheService.instance.preloadForUser(
+      userId: docId,
+      fallbackName: fallbackName,
+    );
+    HomeCacheService.instance.startRealtimeSync(docId);
   }
 
   // --- HÀM XỬ LÝ ĐĂNG NHẬP: ĐÃ SỬA ĐỂ NHẬN CẢ SĐT VÀ CCCD ---
@@ -199,6 +211,12 @@ class _LoginScreenState extends State<LoginScreen> {
             );
             if (!mounted) return;
             closeLoadingDialog();
+            await _prefetchHomeCache(
+              docId: legacyDoc.id,
+              fallbackName: (data['fullname'] ?? data['fullName'] ?? '')
+                  .toString(),
+            );
+            if (!mounted) return;
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(builder: (context) => const MainTabShell()),
@@ -264,6 +282,12 @@ class _LoginScreenState extends State<LoginScreen> {
               );
               if (!mounted) return;
               closeLoadingDialog();
+              await _prefetchHomeCache(
+                docId: legacyDoc.id,
+                fallbackName: (data['fullname'] ?? data['fullName'] ?? '')
+                    .toString(),
+              );
+              if (!mounted) return;
               Navigator.pushReplacement(
                 context,
                 MaterialPageRoute(builder: (context) => const MainTabShell()),
@@ -333,6 +357,12 @@ class _LoginScreenState extends State<LoginScreen> {
             );
             if (!mounted) return;
             closeLoadingDialog();
+            await _prefetchHomeCache(
+              docId: legacyDoc.id,
+              fallbackName: (data['fullname'] ?? data['fullName'] ?? '')
+                  .toString(),
+            );
+            if (!mounted) return;
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(builder: (context) => const MainTabShell()),
@@ -358,6 +388,15 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (!mounted) return;
       closeLoadingDialog();
+      final String finalDocId =
+          UserFirestoreService.instance.currentUserDocId ??
+          FirebaseAuth.instance.currentUser?.uid ??
+          legacyDoc.id;
+      await _prefetchHomeCache(
+        docId: finalDocId,
+        fallbackName: (data['fullname'] ?? data['fullName'] ?? '').toString(),
+      );
+      if (!mounted) return;
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const MainTabShell()),
@@ -397,6 +436,13 @@ class _LoginScreenState extends State<LoginScreen> {
 
         if (!mounted) return;
         closeLoadingDialog();
+        await _prefetchHomeCache(
+          docId: foundLegacyDoc.id,
+          fallbackName:
+              (fallbackData['fullname'] ?? fallbackData['fullName'] ?? '')
+                  .toString(),
+        );
+        if (!mounted) return;
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const MainTabShell()),

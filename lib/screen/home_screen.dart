@@ -15,6 +15,7 @@ import '../l10n/app_text.dart';
 import '../shoppingservice/service_data.dart';
 import '../shoppingservice/service_model.dart';
 import '../shoppingservice/shopping_store_screen.dart';
+import '../services/home_cache_service.dart';
 import '../widget/pressable_scale.dart';
 import '../widget/shimmer_box.dart';
 import '../widget/transaction_detail_popup.dart';
@@ -43,7 +44,6 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isBalanceVisible = false;
   int _currentBannerIndex = 0;
   int touchedIndex = -1;
-  late final Stream<UserProfileData?> _profileStream;
   String? _spendingDataUid;
   Future<Map<String, double>>? _spendingDataFutureCache;
   String? _recentTransactionsUid;
@@ -62,10 +62,25 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _profileStream = UserFirestoreService.instance.currentUserProfileStream();
+    final String uid = _resolveUid();
+    if (uid.isNotEmpty) {
+      HomeCacheService.instance.startRealtimeSync(uid);
+      if (!HomeCacheService.instance.notifier.value.isReady) {
+        HomeCacheService.instance.preloadForUser(
+          userId: uid,
+          fallbackName: UserFirestoreService.instance.latestProfile?.fullname,
+        );
+      }
+    }
   }
 
   void refreshHomeData() {
+    final String uid = _resolveUid();
+    if (uid.isNotEmpty) {
+      HomeCacheService.instance.startRealtimeSync(uid);
+      HomeCacheService.instance.refreshCurrent();
+    }
+
     if (!mounted) {
       return;
     }
@@ -108,6 +123,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   String _resolveUid() {
+    final String cachedUid = HomeCacheService.instance.notifier.value.userId;
+    if (cachedUid.isNotEmpty) {
+      return cachedUid;
+    }
+
     final String? fromService = UserFirestoreService.instance.currentUserDocId;
     if (fromService != null && fromService.isNotEmpty) {
       return fromService;
@@ -791,27 +811,19 @@ class _HomeScreenState extends State<HomeScreen> {
     return SizedBox(
       width: nameSlotWidth,
       height: nameSlotHeight,
-      child: StreamBuilder<UserProfileData?>(
-        stream: _profileStream,
-        initialData: UserFirestoreService.instance.latestProfile,
-        builder: (context, snapshot) {
-          final UserProfileData? profile =
-              snapshot.data ?? UserFirestoreService.instance.latestProfile;
-
-          if (!snapshot.hasError &&
-              snapshot.connectionState == ConnectionState.waiting &&
-              profile == null) {
+      child: ValueListenableBuilder<HomeCacheData>(
+        valueListenable: HomeCacheService.instance.notifier,
+        builder: (context, cacheData, _) {
+          if (!cacheData.isReady && cacheData.userName.trim().isEmpty) {
             return Align(
               alignment: Alignment.centerLeft,
               child: _buildNameSkeleton(),
             );
           }
 
-          final String name = snapshot.hasError
-              ? _t('Không tìm thấy user', 'User not found')
-              : ((profile?.fullname.isNotEmpty == true)
-                    ? profile!.fullname
-                    : _t('Khách hàng', 'Customer'));
+          final String name = cacheData.userName.trim().isEmpty
+              ? _t('Khách hàng', 'Customer')
+              : cacheData.userName;
 
           return Align(
             alignment: Alignment.centerLeft,
@@ -962,18 +974,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildBalanceCardSection() {
-    return StreamBuilder<UserProfileData?>(
-      stream: _profileStream,
-      initialData: UserFirestoreService.instance.latestProfile,
-      builder: (context, snapshot) {
-        final UserProfileData? profile =
-            snapshot.data ?? UserFirestoreService.instance.latestProfile;
-
+    return ValueListenableBuilder<HomeCacheData>(
+      valueListenable: HomeCacheService.instance.notifier,
+      builder: (context, cacheData, _) {
         final bool shouldShowSkeleton =
-            !snapshot.hasError &&
-            snapshot.connectionState == ConnectionState.waiting &&
-            profile == null &&
-            !_hasLoadedBalance;
+            !cacheData.isReady && !_hasLoadedBalance;
 
         if (shouldShowSkeleton) {
           return _buildBalanceCardSkeleton();
@@ -1294,104 +1299,27 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildRealtimeTotalBalance() {
-    return StreamBuilder<UserProfileData?>(
-      stream: _profileStream,
-      initialData: UserFirestoreService.instance.latestProfile,
-      builder: (context, profileSnapshot) {
-        final UserProfileData? profile =
-            profileSnapshot.data ?? UserFirestoreService.instance.latestProfile;
-        final String? resolvedUserId = profile?.uid;
+    return ValueListenableBuilder<HomeCacheData>(
+      valueListenable: HomeCacheService.instance.notifier,
+      builder: (context, cacheData, _) {
+        if (cacheData.isReady) {
+          _lastKnownTotalBalance = cacheData.totalBalance;
+          _hasLoadedBalance = true;
+        }
 
-        if (resolvedUserId == null || resolvedUserId.isEmpty) {
+        if (!cacheData.isReady && !_hasLoadedBalance) {
+          return _buildBalanceSkeleton();
+        }
+
+        if (!_isBalanceVisible) {
           return _buildHiddenBalanceText();
         }
 
-        return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-          stream: FirebaseFirestore.instance
-              .collection('users')
-              .doc(resolvedUserId)
-              .snapshots(),
-          builder: (context, userSnapshot) {
-            final bool hasVipCard = _parseHasVipCard(
-              userSnapshot.data?.data()?['hasVipCard'],
-            );
+        final double amountToRender = _hasLoadedBalance
+            ? _lastKnownTotalBalance
+            : cacheData.totalBalance;
 
-            return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: FirebaseFirestore.instance
-                  .collection('users')
-                  .doc(resolvedUserId)
-                  .collection('cards')
-                  .snapshots(),
-              builder: (context, cardsSnapshot) {
-                if (cardsSnapshot.hasData) {
-                  double standardBalance = 0;
-                  double vipBalance = 0;
-
-                  for (final doc in cardsSnapshot.data!.docs) {
-                    final Map<String, dynamic> data = doc.data();
-                    final dynamic rawBalance = data['balance'];
-
-                    double balance = 0;
-                    if (rawBalance is num) {
-                      balance = rawBalance.toDouble();
-                    } else if (rawBalance is String) {
-                      balance = double.tryParse(rawBalance) ?? 0;
-                    }
-
-                    final String docId = doc.id.toLowerCase();
-                    if (docId == 'standard') {
-                      standardBalance = balance;
-                    } else if (docId == 'vip') {
-                      vipBalance = balance;
-                    }
-                  }
-
-                  _lastKnownTotalBalance = hasVipCard
-                      ? standardBalance + vipBalance
-                      : standardBalance;
-                  _hasLoadedBalance = true;
-                }
-
-                if (cardsSnapshot.connectionState == ConnectionState.waiting &&
-                    !_hasLoadedBalance) {
-                  return _buildBalanceSkeleton();
-                }
-
-                if (cardsSnapshot.hasError || userSnapshot.hasError) {
-                  if (_hasLoadedBalance) {
-                    return _buildBalanceText(_lastKnownTotalBalance);
-                  }
-
-                  final String error =
-                      (cardsSnapshot.error ?? userSnapshot.error)
-                          .toString()
-                          .toLowerCase();
-                  final bool networkError =
-                      error.contains('unavailable') ||
-                      error.contains('network') ||
-                      error.contains('failed-host-lookup');
-
-                  return Text(
-                    networkError
-                        ? _t('Mất kết nối mạng', 'No network connection')
-                        : _t('Không tải được số dư', 'Unable to load balance'),
-                    style: GoogleFonts.poppins(
-                      color: Colors.white70,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  );
-                }
-
-                if (!_isBalanceVisible) {
-                  return _buildHiddenBalanceText();
-                }
-
-                return _buildBalanceText(_lastKnownTotalBalance);
-              },
-            );
-          },
-        );
+        return _buildBalanceText(amountToRender);
       },
     );
   }
@@ -2340,16 +2268,23 @@ class _HomeScreenState extends State<HomeScreen> {
                         alignment: WrapAlignment.center,
                         spacing: 10,
                         runSpacing: 10,
-                        children: displaySlices
-                            .map(
-                              (_SpendingSlice slice) =>
-                                  _buildSpendingLegendChip(
-                                    gradientColors: slice.gradientColors,
-                                    label: _t(slice.labelVi, slice.labelEn),
-                                    textColor: textPrimary,
-                                  ),
-                            )
-                            .toList(),
+                        children: List<Widget>.generate(displaySlices.length, (
+                          int index,
+                        ) {
+                          final _SpendingSlice slice = displaySlices[index];
+                          final bool isActive = index == activeIndex;
+                          return _buildSpendingLegendChip(
+                            gradientColors: slice.gradientColors,
+                            label: _t(slice.labelVi, slice.labelEn),
+                            textColor: textPrimary,
+                            isActive: isActive,
+                            onTap: () {
+                              setState(() {
+                                touchedIndex = isActive ? -1 : index;
+                              });
+                            },
+                          );
+                        }),
                       ),
                     ],
                   ),
@@ -2366,58 +2301,72 @@ class _HomeScreenState extends State<HomeScreen> {
     required List<Color> gradientColors,
     required String label,
     required Color textColor,
+    required bool isActive,
+    required VoidCallback onTap,
   }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.58),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.66)),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0F1F39).withOpacity(0.06),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        decoration: BoxDecoration(
+          color: isActive
+              ? Colors.white.withOpacity(0.82)
+              : Colors.white.withOpacity(0.58),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isActive
+                ? gradientColors.last.withOpacity(0.75)
+                : Colors.white.withOpacity(0.66),
+            width: isActive ? 1.3 : 1,
           ),
-          BoxShadow(
-            color: Colors.white.withOpacity(0.34),
-            blurRadius: 8,
-            offset: const Offset(-1, -1),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: gradientColors,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: gradientColors.last.withOpacity(0.45),
-                  blurRadius: 6,
-                  offset: const Offset(0, 2),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF0F1F39).withOpacity(0.06),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+            BoxShadow(
+              color: Colors.white.withOpacity(0.34),
+              blurRadius: 8,
+              offset: const Offset(-1, -1),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: gradientColors,
                 ),
-              ],
+                boxShadow: [
+                  BoxShadow(
+                    color: gradientColors.last.withOpacity(0.45),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            label,
-            style: GoogleFonts.poppins(
-              fontSize: 12.5,
-              color: textColor,
-              fontWeight: FontWeight.w500,
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: GoogleFonts.poppins(
+                fontSize: 12.5,
+                color: textColor,
+                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

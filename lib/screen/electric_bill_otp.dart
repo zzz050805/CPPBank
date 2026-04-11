@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'electric_bill_success.dart';
 import 'main_tab_shell.dart';
 import '../l10n/app_text.dart';
+import '../services/payment_service.dart';
 import '../widget/ccp_app_bar.dart';
 
 class ElectricBillOtpScreen extends StatefulWidget {
@@ -33,6 +34,7 @@ class _ElectricBillOtpScreenState extends State<ElectricBillOtpScreen>
 
   final NumberFormat _moneyFormat = NumberFormat.decimalPattern('vi_VN');
   late final AnimationController _introController;
+  bool _isSubmitting = false;
 
   final List<TextEditingController> _otpControllers =
       List<TextEditingController>.generate(6, (_) => TextEditingController());
@@ -90,7 +92,7 @@ class _ElectricBillOtpScreenState extends State<ElectricBillOtpScreen>
     }
   }
 
-  void _onConfirm() {
+  Future<void> _onConfirm() async {
     if (_enteredOtp().length != 6) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -103,16 +105,65 @@ class _ElectricBillOtpScreenState extends State<ElectricBillOtpScreen>
       return;
     }
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ElectricBillSuccessScreen(
-          totalAmount: widget.totalAmount,
-          customerName: widget.customerName,
-          customerCode: widget.customerCode,
+    if (_isSubmitting) {
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    try {
+      await PaymentService.instance.processPayment(
+        amount: widget.totalAmount,
+        billType: 'electric',
+        billId: widget.customerCode,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ElectricBillSuccessScreen(
+            totalAmount: widget.totalAmount,
+            customerName: widget.customerName,
+            customerCode: widget.customerCode,
+          ),
         ),
-      ),
-    );
+      );
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      final String message = e
+          .toString()
+          .replaceFirst('Exception: ', '')
+          .replaceFirst('PaymentServiceException: ', '')
+          .trim();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            message.isEmpty
+                ? _t(
+                    'Thanh toán thất bại. Vui lòng thử lại.',
+                    'Payment failed. Please try again.',
+                  )
+                : message,
+          ),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
   }
 
   Widget _reveal(int index, Widget child) {
@@ -405,7 +456,7 @@ class _ElectricBillOtpScreenState extends State<ElectricBillOtpScreen>
                   width: double.infinity,
                   height: 55,
                   child: ElevatedButton(
-                    onPressed: _onConfirm,
+                    onPressed: _isSubmitting ? null : _onConfirm,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _primaryBlue,
                       foregroundColor: Colors.white,
@@ -414,13 +465,22 @@ class _ElectricBillOtpScreenState extends State<ElectricBillOtpScreen>
                         borderRadius: BorderRadius.circular(28),
                       ),
                     ),
-                    child: Text(
-                      _t('XÁC NHẬN', 'CONFIRM'),
-                      style: GoogleFonts.poppins(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                    child: _isSubmitting
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.4,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Text(
+                            _t('XÁC NHẬN', 'CONFIRM'),
+                            style: GoogleFonts.poppins(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                   ),
                 ),
               ),

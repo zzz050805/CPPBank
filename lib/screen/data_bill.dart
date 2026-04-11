@@ -224,16 +224,6 @@ class _DataBillScreenState extends State<DataBillScreen>
             ),
           ),
         ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Container(
-            height: 4,
-            decoration: BoxDecoration(
-              color: _primaryBlue.withValues(alpha: 0.14),
-              borderRadius: BorderRadius.circular(30),
-            ),
-          ),
-        ),
       ],
     );
   }
@@ -426,7 +416,7 @@ class _DataBillScreenState extends State<DataBillScreen>
       appBar: CCPAppBar(
         title: _t('Thanh toán hoá đơn', 'Bill payment'),
         backgroundColor: _surface,
-        onBackPressed: () => Navigator.maybePop(context),
+        onBackPressed: () => Navigator.pop(context),
         actions: <Widget>[
           IconButton(
             onPressed: _goHome,
@@ -446,7 +436,7 @@ class _DataBillScreenState extends State<DataBillScreen>
                 Row(
                   children: <Widget>[
                     Text(
-                      _t('BƯỚC 1/4', 'STEP 1/4'),
+                      _t('BƯỚC 1/3', 'STEP 1/3'),
                       style: GoogleFonts.poppins(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,

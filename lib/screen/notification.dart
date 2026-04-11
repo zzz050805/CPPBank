@@ -175,13 +175,16 @@ class _NotificationScreenState extends State<NotificationScreen> {
     final List<QuerySnapshot<Map<String, dynamic>>> snapshots =
         await Future.wait(<Future<QuerySnapshot<Map<String, dynamic>>>>[
           userRef.collection('phone_recharge').get(),
+          userRef.collection('bill_payment').get(),
           userRef.collection('withdraw').get(),
           userRef.collection('recent_transfers').get(),
         ]);
 
     final QuerySnapshot<Map<String, dynamic>> topUpSnapshot = snapshots[0];
-    final QuerySnapshot<Map<String, dynamic>> withdrawSnapshot = snapshots[1];
-    final QuerySnapshot<Map<String, dynamic>> transferSnapshot = snapshots[2];
+    final QuerySnapshot<Map<String, dynamic>> billPaymentSnapshot =
+        snapshots[1];
+    final QuerySnapshot<Map<String, dynamic>> withdrawSnapshot = snapshots[2];
+    final QuerySnapshot<Map<String, dynamic>> transferSnapshot = snapshots[3];
 
     final List<TransactionNotificationModel> allTransactions =
         <TransactionNotificationModel>[];
@@ -212,6 +215,59 @@ class _NotificationScreenState extends State<NotificationScreen> {
             'title': title,
             'type': 'phone_recharge',
             'targetAccount': description,
+          },
+        ),
+      );
+    }
+
+    for (final QueryDocumentSnapshot<Map<String, dynamic>> doc
+        in billPaymentSnapshot.docs) {
+      final Map<String, dynamic> data = doc.data();
+      final String billType = (data['billType'] ?? data['type'] ?? '')
+          .toString()
+          .trim()
+          .toLowerCase();
+      final String billId = (data['customerCode'] ?? data['id'] ?? '')
+          .toString()
+          .trim();
+
+      String serviceLabel;
+      switch (billType) {
+        case 'electric':
+          serviceLabel = _t('Tiền điện', 'Electricity');
+          break;
+        case 'water':
+          serviceLabel = _t('Tiền nước', 'Water');
+          break;
+        case 'internet':
+          serviceLabel = _t('Internet', 'Internet');
+          break;
+        case 'mobile':
+        case 'mobile_postpaid':
+          serviceLabel = _t('Di động', 'Mobile');
+          break;
+        default:
+          serviceLabel = _t('Hóa đơn', 'Bill');
+      }
+
+      allTransactions.add(
+        TransactionNotificationModel(
+          id: doc.id,
+          title: '${_t('Thanh toán', 'Payment')} $serviceLabel',
+          description: billId.isEmpty
+              ? _t('Không có mã khách hàng', 'No customer code')
+              : billId,
+          amount: _readAmount(data['amount']),
+          timestamp: _readTimestamp(data['createdAt'] ?? data['timestamp']),
+          type: 'bill_payment',
+          isNegative: true,
+          data: <String, dynamic>{
+            ...data,
+            'id': doc.id,
+            'title': '${_t('Thanh toán', 'Payment')} $serviceLabel',
+            'type': 'bill_payment',
+            'targetAccount': billId,
+            'serviceName': serviceLabel,
           },
         ),
       );

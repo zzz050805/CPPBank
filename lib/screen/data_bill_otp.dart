@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 import '../l10n/app_text.dart';
+import '../services/payment_service.dart';
 import '../widget/ccp_app_bar.dart';
 import 'data_bill_success.dart';
 import 'main_tab_shell.dart';
@@ -25,12 +26,13 @@ class DataBillOtpScreen extends StatefulWidget {
 }
 
 class _DataBillOtpScreenState extends State<DataBillOtpScreen>
-  with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin {
   static const Color _primaryBlue = Color(0xFF000DC0);
   static const Color _surface = Color(0xFFF6F7FF);
 
   final NumberFormat _moneyFormat = NumberFormat.decimalPattern('vi_VN');
   late final AnimationController _introController;
+  bool _isSubmitting = false;
 
   final List<TextEditingController> _otpControllers =
       List<TextEditingController>.generate(6, (_) => TextEditingController());
@@ -78,6 +80,11 @@ class _DataBillOtpScreenState extends State<DataBillOtpScreen>
     final String rawDigits = widget.totalText.replaceAll(RegExp(r'[^0-9]'), '');
     final int amount = int.tryParse(rawDigits) ?? 0;
     return '${_moneyFormat.format(amount)} VND';
+  }
+
+  double _parsedAmount() {
+    final String rawDigits = widget.totalText.replaceAll(RegExp(r'[^0-9]'), '');
+    return double.tryParse(rawDigits) ?? 0;
   }
 
   String _enteredOtp() => _otpControllers.map((c) => c.text).join();
@@ -211,7 +218,7 @@ class _DataBillOtpScreenState extends State<DataBillOtpScreen>
     );
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     if (_enteredOtp().length != 6) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -224,16 +231,65 @@ class _DataBillOtpScreenState extends State<DataBillOtpScreen>
       return;
     }
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => DataBillSuccessScreen(
-          phoneNumber: widget.phoneNumber,
-          planName: widget.planName,
-          totalText: widget.totalText,
+    if (_isSubmitting) {
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    try {
+      await PaymentService.instance.processPayment(
+        amount: _parsedAmount(),
+        billType: 'mobile',
+        billId: widget.phoneNumber,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => DataBillSuccessScreen(
+            phoneNumber: widget.phoneNumber,
+            planName: widget.planName,
+            totalText: widget.totalText,
+          ),
         ),
-      ),
-    );
+      );
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      final String message = e
+          .toString()
+          .replaceFirst('Exception: ', '')
+          .replaceFirst('PaymentServiceException: ', '')
+          .trim();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            message.isEmpty
+                ? _t(
+                    'Thanh toán thất bại. Vui lòng thử lại.',
+                    'Payment failed. Please try again.',
+                  )
+                : message,
+          ),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
   }
 
   @override
@@ -405,7 +461,7 @@ class _DataBillOtpScreenState extends State<DataBillOtpScreen>
                   width: double.infinity,
                   height: 55,
                   child: ElevatedButton(
-                    onPressed: _submit,
+                    onPressed: _isSubmitting ? null : _submit,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _primaryBlue,
                       foregroundColor: Colors.white,
@@ -414,13 +470,22 @@ class _DataBillOtpScreenState extends State<DataBillOtpScreen>
                         borderRadius: BorderRadius.circular(28),
                       ),
                     ),
-                    child: Text(
-                      _t('XÁC NHẬN', 'CONFIRM'),
-                      style: GoogleFonts.poppins(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                    child: _isSubmitting
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.4,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Text(
+                            _t('XÁC NHẬN', 'CONFIRM'),
+                            style: GoogleFonts.poppins(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                   ),
                 ),
               ),

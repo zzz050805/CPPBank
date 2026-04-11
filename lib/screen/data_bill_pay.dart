@@ -5,9 +5,10 @@ import 'package:intl/intl.dart';
 
 import '../data/user_firestore_service.dart';
 import '../l10n/app_text.dart';
+import '../services/payment_service.dart';
 import '../widget/pin_popup.dart';
 import '../widget/ccp_app_bar.dart';
-import 'data_bill_otp.dart';
+import 'data_bill_success.dart';
 import 'main_tab_shell.dart';
 
 class DataBillConfirmScreen extends StatefulWidget {
@@ -34,6 +35,7 @@ class _DataBillConfirmScreenState extends State<DataBillConfirmScreen> {
 
   final NumberFormat _moneyFormat = NumberFormat.decimalPattern('vi_VN');
   late final Stream<UserProfileData?> _profileStream;
+  bool _isSubmitting = false;
 
   String _t(String vi, String en) => AppText.tr(context, vi, en);
 
@@ -48,6 +50,69 @@ class _DataBillConfirmScreenState extends State<DataBillConfirmScreen> {
       MaterialPageRoute(builder: (_) => const MainTabShell(initialIndex: 0)),
       (Route<dynamic> route) => false,
     );
+  }
+
+  Future<void> _processPayment() async {
+    if (_isSubmitting) {
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    try {
+      await PaymentService.instance.processPayment(
+        amount: _parseAmount(_totalText(widget.planPriceText)),
+        billType: 'mobile',
+        billId: widget.phoneNumber,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => DataBillSuccessScreen(
+            phoneNumber: widget.phoneNumber,
+            planName: widget.planName,
+            totalText: _totalText(widget.planPriceText),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      final String message = e
+          .toString()
+          .replaceFirst('Exception: ', '')
+          .replaceFirst('PaymentServiceException: ', '')
+          .trim();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            message.isEmpty
+                ? _t(
+                    'Thanh toán thất bại. Vui lòng thử lại.',
+                    'Payment failed. Please try again.',
+                  )
+                : message,
+          ),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
   }
 
   String _formatBalanceLine(double amount) {
@@ -231,7 +296,7 @@ class _DataBillConfirmScreenState extends State<DataBillConfirmScreen> {
       appBar: CCPAppBar(
         title: _t('Thanh toán hoá đơn', 'Bill payment'),
         backgroundColor: _surface,
-        onBackPressed: () => Navigator.maybePop(context),
+        onBackPressed: () => Navigator.pop(context),
         actions: <Widget>[
           IconButton(
             onPressed: _goHome,
@@ -249,7 +314,7 @@ class _DataBillConfirmScreenState extends State<DataBillConfirmScreen> {
               Row(
                 children: <Widget>[
                   Text(
-                    _t('BƯỚC 2/4', 'STEP 2/4'),
+                    _t('BƯỚC 2/3', 'STEP 2/3'),
                     style: GoogleFonts.poppins(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
@@ -384,27 +449,17 @@ class _DataBillConfirmScreenState extends State<DataBillConfirmScreen> {
                 width: double.infinity,
                 height: 54,
                 child: ElevatedButton(
-                  onPressed: () {
-                    showModalBottomSheet(
-                      context: context,
-                      isScrollControlled: true,
-                      backgroundColor: Colors.transparent,
-                      builder: (_) => PinPopupWidget(
-                        onSuccess: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => DataBillOtpScreen(
-                                phoneNumber: widget.phoneNumber,
-                                planName: widget.planName,
-                                totalText: _totalText(widget.planPriceText),
-                              ),
-                            ),
+                  onPressed: _isSubmitting
+                      ? null
+                      : () {
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (_) =>
+                                PinPopupWidget(onSuccess: _processPayment),
                           );
                         },
-                      ),
-                    );
-                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _primaryBlue,
                     foregroundColor: Colors.white,
@@ -413,10 +468,21 @@ class _DataBillConfirmScreenState extends State<DataBillConfirmScreen> {
                     ),
                     elevation: 0,
                   ),
-                  child: Text(
-                    _t('THANH TOÁN NGAY', 'PAY NOW'),
-                    style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
-                  ),
+                  child: _isSubmitting
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.4,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Text(
+                          _t('THANH TOÁN NGAY', 'PAY NOW'),
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                 ),
               ),
               const SizedBox(height: 8),
@@ -477,6 +543,11 @@ class _DataBillConfirmScreenState extends State<DataBillConfirmScreen> {
     );
     return '$formattedđ';
   }
+
+  double _parseAmount(String amountText) {
+    final String rawDigits = amountText.replaceAll(RegExp(r'[^0-9]'), '');
+    return double.tryParse(rawDigits) ?? 0;
+  }
 }
 
 class _StepLine extends StatelessWidget {
@@ -489,11 +560,11 @@ class _StepLine extends StatelessWidget {
     const Color primaryBlue = Color(0xFF000DC0);
 
     return Row(
-      children: List<Widget>.generate(4, (int index) {
+      children: List<Widget>.generate(3, (int index) {
         final bool active = index < activeCount;
         return Expanded(
           child: Padding(
-            padding: EdgeInsets.only(right: index == 3 ? 0 : 8),
+            padding: EdgeInsets.only(right: index == 2 ? 0 : 8),
             child: Container(
               height: 4,
               decoration: BoxDecoration(
