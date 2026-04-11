@@ -112,16 +112,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  bool _parseHasVipCard(dynamic value) {
-    if (value is bool) return value;
-    if (value is num) return value != 0;
-    if (value is String) {
-      final String normalized = value.trim().toLowerCase();
-      return normalized == 'true' || normalized == '1' || normalized == 'yes';
-    }
-    return false;
-  }
-
   String _resolveUid() {
     final String cachedUid = HomeCacheService.instance.notifier.value.userId;
     if (cachedUid.isNotEmpty) {
@@ -145,30 +135,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     return '';
-  }
-
-  num _readNumericValue(dynamic raw) {
-    if (raw is num) {
-      return raw;
-    }
-
-    if (raw is String) {
-      final String trimmed = raw.trim();
-      if (trimmed.isEmpty) {
-        return 0;
-      }
-      final num? direct = num.tryParse(trimmed);
-      if (direct != null) {
-        return direct;
-      }
-      final String digitsOnly = trimmed.replaceAll(RegExp(r'\D'), '');
-      if (digitsOnly.isEmpty) {
-        return 0;
-      }
-      return num.tryParse(digitsOnly) ?? 0;
-    }
-
-    return 0;
   }
 
   String _firstNonEmpty(List<dynamic> values) {
