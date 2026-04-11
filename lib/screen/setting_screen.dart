@@ -207,7 +207,16 @@ class _SettingScreenState extends State<SettingScreen> {
 
   double _readBalance(dynamic rawBalance) {
     if (rawBalance is num) return rawBalance.toDouble();
-    if (rawBalance is String) return double.tryParse(rawBalance) ?? 0;
+    if (rawBalance is String) {
+      final String trimmed = rawBalance.trim();
+      if (trimmed.isEmpty) return 0;
+
+      final double? direct = double.tryParse(trimmed);
+      if (direct != null) return direct;
+
+      final String digitsOnly = trimmed.replaceAll(RegExp(r'[^0-9]'), '');
+      return double.tryParse(digitsOnly) ?? 0;
+    }
     return 0;
   }
 
@@ -424,33 +433,53 @@ class _SettingScreenState extends State<SettingScreen> {
             (userData['fullname'] ?? userData['fullName'] ?? '')
                 .toString()
                 .trim();
-        final bool hasVipCard = userData['hasVipCard'] == true;
 
         return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
           stream: FirebaseFirestore.instance
               .collection('users')
               .doc(userId)
               .collection('cards')
-              .snapshots(),
+              .snapshots(includeMetadataChanges: true),
           builder: (context, cardsSnapshot) {
             double standardBalance = 0;
             double vipBalance = 0;
+            bool hasCardData = false;
 
-            for (final doc
+            for (final QueryDocumentSnapshot<Map<String, dynamic>> doc
                 in cardsSnapshot.data?.docs ??
                     <QueryDocumentSnapshot<Map<String, dynamic>>>[]) {
-              final String id = doc.id.toLowerCase();
+              final String cardId = doc.id.toLowerCase();
               final double balance = _readBalance(doc.data()['balance']);
-              if (id == 'standard') {
+              if (cardId == 'standard') {
                 standardBalance = balance;
-              } else if (id == 'vip') {
+                hasCardData = true;
+              } else if (cardId == 'vip') {
                 vipBalance = balance;
+                hasCardData = true;
               }
             }
 
-            final double totalBalance = hasVipCard
+            final dynamic rawNormal =
+                userData['balance_normal'] ??
+                userData['standardBalance'] ??
+                userData['balanceNormal'];
+            final dynamic rawVip =
+                userData['balance_vip'] ??
+                userData['vipBalance'] ??
+                userData['balanceVip'];
+            final bool hasSplitBalance = rawNormal != null || rawVip != null;
+            final double fallbackTotal = hasSplitBalance
+                ? _readBalance(rawNormal) + _readBalance(rawVip)
+                : _readBalance(
+                    userData['balance'] ??
+                        userData['totalBalance'] ??
+                        userData['availableBalance'],
+                  );
+
+            final double totalBalance = hasCardData
                 ? standardBalance + vipBalance
-                : standardBalance;
+                : fallbackTotal;
+
             final _MembershipRankData rank = _resolveRankFromFirestore(
               userData: userData,
               totalBalance: totalBalance,

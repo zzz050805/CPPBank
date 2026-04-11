@@ -140,19 +140,8 @@ class _RegisterPasswordScreenState extends State<RegisterPasswordScreen> {
       } on FirebaseAuthException catch (e) {
         if (_isConfigurationNotFound(e)) {
           usedAuthFallback = true;
-
-          final QuerySnapshot<Map<String, dynamic>> existingDocQuery =
-              await FirebaseFirestore.instance
-                  .collection('users')
-                  .where('phoneNumber', isEqualTo: widget.phoneNumber)
-                  .limit(1)
-                  .get();
-
-          if (existingDocQuery.docs.isNotEmpty) {
-            uid = existingDocQuery.docs.first.id;
-          } else {
-            uid = FirebaseFirestore.instance.collection('users').doc().id;
-          }
+          // Fallback mode must still create a brand-new Firestore user doc.
+          uid = FirebaseFirestore.instance.collection('users').doc().id;
         } else {
           rethrow;
         }

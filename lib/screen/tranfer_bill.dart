@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../data/user_firestore_service.dart';
@@ -30,7 +28,6 @@ class SuccessTransactionScreen extends StatefulWidget {
 }
 
 class _SuccessTransactionScreenState extends State<SuccessTransactionScreen> {
-  Timer? _redirectTimer;
   bool _redirected = false;
 
   static const Color primaryBlue = Color(0xFF000DC0);
@@ -41,12 +38,10 @@ class _SuccessTransactionScreenState extends State<SuccessTransactionScreen> {
   @override
   void initState() {
     super.initState();
-    _redirectTimer = Timer(const Duration(seconds: 3), _goHome);
   }
 
   @override
   void dispose() {
-    _redirectTimer?.cancel();
     super.dispose();
   }
 

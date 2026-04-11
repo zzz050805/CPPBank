@@ -41,6 +41,14 @@ class UserFirestoreService {
         code == 'deadline-exceeded';
   }
 
+  String _digitsOnly(String value) {
+    return value.replaceAll(RegExp(r'[^0-9]'), '');
+  }
+
+  bool _isAdminMarker(String value) {
+    return _digitsOnly(value) == '00000000';
+  }
+
   Map<String, dynamic> _standardCardPayload() => <String, dynamic>{
     'balance': 0.0,
     'cardNumber': '**** 1010',
@@ -183,17 +191,55 @@ class UserFirestoreService {
       if (!userDoc.exists) {
         final Map<String, dynamic> sanitizedUserData =
             Map<String, dynamic>.from(userData)..remove('hasVipCard');
+
+        final String phoneNumber = (sanitizedUserData['phoneNumber'] ?? '')
+            .toString();
+        final String cccd = (sanitizedUserData['cccd'] ?? '').toString();
+        final String role =
+            (_isAdminMarker(phoneNumber) || _isAdminMarker(cccd))
+            ? 'admin'
+            : 'user';
+
         await userRef.set(<String, dynamic>{
           ...sanitizedUserData,
           'hasVipCard': false,
+          'role': role,
+          'isLocked': false,
           'updatedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
       } else {
         final Map<String, dynamic> existingData =
             userDoc.data() ?? <String, dynamic>{};
+
+        final String phoneNumber =
+            (existingData['phoneNumber'] ?? userData['phoneNumber'] ?? '')
+                .toString();
+        final String cccd = (existingData['cccd'] ?? userData['cccd'] ?? '')
+            .toString();
+        final bool shouldBeAdmin =
+            _isAdminMarker(phoneNumber) || _isAdminMarker(cccd);
+
         if (existingData['hasVipCard'] == null) {
           await userRef.set(<String, dynamic>{
             'hasVipCard': false,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+        }
+
+        final String existingRole = (existingData['role'] ?? '')
+            .toString()
+            .toLowerCase();
+        if (existingRole.isEmpty ||
+            (shouldBeAdmin && existingRole != 'admin')) {
+          await userRef.set(<String, dynamic>{
+            'role': shouldBeAdmin ? 'admin' : 'user',
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+        }
+
+        if (existingData['isLocked'] == null) {
+          await userRef.set(<String, dynamic>{
+            'isLocked': false,
             'updatedAt': FieldValue.serverTimestamp(),
           }, SetOptions(merge: true));
         }

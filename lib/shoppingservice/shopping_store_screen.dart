@@ -1,4 +1,6 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 import '../core/app_translations.dart';
@@ -24,6 +26,54 @@ class _ShoppingStoreScreenState extends State<ShoppingStoreScreen> {
       symbol: 'đ',
       decimalDigits: 0,
     ).format(amount);
+  }
+
+  Stream<Map<String, List<int>>> _shoppingPricingStream() {
+    return FirebaseFirestore.instance
+        .collection('admin')
+        .doc('settings')
+        .collection('services_pricing')
+        .where('kind', isEqualTo: 'shopping_bundle')
+        .snapshots()
+        .map((QuerySnapshot<Map<String, dynamic>> snapshot) {
+          final Map<String, List<int>> prices = <String, List<int>>{};
+
+          for (final QueryDocumentSnapshot<Map<String, dynamic>> doc
+              in snapshot.docs) {
+            final List<dynamic> rawPackages =
+                (doc.data()['packages'] as List<dynamic>?) ?? <dynamic>[];
+
+            final List<int> parsedPackages = rawPackages
+                .map((dynamic item) => int.tryParse(item.toString()) ?? 0)
+                .where((int value) => value > 0)
+                .toList(growable: false);
+
+            if (parsedPackages.isNotEmpty) {
+              prices[doc.id] = parsedPackages;
+            }
+          }
+
+          return prices;
+        });
+  }
+
+  ServiceModel _serviceWithPricing(
+    ServiceModel service,
+    Map<String, List<int>> pricing,
+  ) {
+    final List<int>? updatedPackages = pricing[service.id];
+    if (updatedPackages == null || updatedPackages.isEmpty) {
+      return service;
+    }
+
+    return ServiceModel(
+      id: service.id,
+      name: service.name,
+      logoPath: service.logoPath,
+      description: service.description,
+      packages: updatedPackages,
+      accountFields: service.accountFields,
+    );
   }
 
   String _packageName(
@@ -160,7 +210,7 @@ class _ShoppingStoreScreenState extends State<ShoppingStoreScreen> {
           Expanded(
             child: Text(
               service.localizedName(languageCode),
-              style: const TextStyle(
+              style: GoogleFonts.poppins(
                 fontSize: 19,
                 fontWeight: FontWeight.w800,
                 color: _primaryBlue,
@@ -232,7 +282,7 @@ class _ShoppingStoreScreenState extends State<ShoppingStoreScreen> {
               const SizedBox(height: 10),
               Text(
                 _formatAmount(amount),
-                style: TextStyle(
+                style: GoogleFonts.poppins(
                   fontSize: 20,
                   fontWeight: FontWeight.w800,
                   color: _primaryBlue,
@@ -243,7 +293,7 @@ class _ShoppingStoreScreenState extends State<ShoppingStoreScreen> {
                 packageName,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
+                style: GoogleFonts.poppins(
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
                   color: _silverGray,
@@ -257,9 +307,7 @@ class _ShoppingStoreScreenState extends State<ShoppingStoreScreen> {
     );
   }
 
-  Widget _buildServiceSection(BuildContext context, int index) {
-    final ServiceModel service = shoppingServices[index];
-
+  Widget _buildServiceSection(ServiceModel service, int index) {
     return Padding(
       padding: EdgeInsets.only(top: index == 0 ? 14 : 6, bottom: 14),
       child: Column(
@@ -272,7 +320,7 @@ class _ShoppingStoreScreenState extends State<ShoppingStoreScreen> {
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
               itemCount: service.packages.length,
-              itemBuilder: (context, packageIndex) {
+              itemBuilder: (BuildContext context, int packageIndex) {
                 return _buildPackageCard(context, service, packageIndex);
               },
             ),
@@ -286,12 +334,36 @@ class _ShoppingStoreScreenState extends State<ShoppingStoreScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(AppTranslations.getText(context, 'service_store')),
+        title: Text(
+          AppTranslations.getText(context, 'service_store'),
+          style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
+        ),
       ),
       backgroundColor: Colors.white,
-      body: ListView.builder(
-        itemCount: shoppingServices.length,
-        itemBuilder: _buildServiceSection,
+      body: StreamBuilder<Map<String, List<int>>>(
+        stream: _shoppingPricingStream(),
+        builder:
+            (
+              BuildContext context,
+              AsyncSnapshot<Map<String, List<int>>> snapshot,
+            ) {
+              final Map<String, List<int>> pricing =
+                  snapshot.data ?? <String, List<int>>{};
+
+              final List<ServiceModel> effectiveServices = shoppingServices
+                  .map(
+                    (ServiceModel service) =>
+                        _serviceWithPricing(service, pricing),
+                  )
+                  .toList(growable: false);
+
+              return ListView.builder(
+                itemCount: effectiveServices.length,
+                itemBuilder: (BuildContext context, int index) {
+                  return _buildServiceSection(effectiveServices[index], index);
+                },
+              );
+            },
       ),
     );
   }

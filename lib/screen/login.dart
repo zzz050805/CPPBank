@@ -4,6 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'dart:ui';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../admin/admin_dashboard_screen.dart';
+import '../admin/admin_firestore_setup_service.dart';
 import '../data/user_firestore_service.dart';
 import '../services/home_cache_service.dart';
 import 'forget_password.dart';
@@ -18,6 +20,9 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  static const String _adminLoginCccd = '00000000';
+  static const String _adminLoginPassword = 'Admin@1234';
+
   final TextEditingController _cccdController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
@@ -26,6 +31,73 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _passwordError;
 
   String _t(String vi, String en) => vi;
+
+  String _digitsOnly(String value) {
+    return value.replaceAll(RegExp(r'[^0-9]'), '');
+  }
+
+  Future<bool> _tryAdminLoginFromAdminCollection({
+    required String inputAccount,
+    required String inputPass,
+    required VoidCallback closeLoadingDialog,
+  }) async {
+    if (_digitsOnly(inputAccount) != _adminLoginCccd) {
+      return false;
+    }
+
+    await AdminFirestoreSetupService.instance.ensureAdminSeed();
+
+    final DocumentSnapshot<Map<String, dynamic>> adminSnapshot =
+        await FirebaseFirestore.instance
+            .collection('admin')
+            .doc('settings')
+            .get();
+    final Map<String, dynamic> data =
+        adminSnapshot.data() ?? <String, dynamic>{};
+
+    final String storedCccd = _digitsOnly(
+      (data['cccd'] ?? '').toString().trim(),
+    );
+    final String storedPhone = _digitsOnly(
+      (data['phoneNumber'] ?? '').toString().trim(),
+    );
+    final String storedPassword = (data['password'] ?? _adminLoginPassword)
+        .toString();
+
+    final bool accountMatched =
+        _digitsOnly(inputAccount) == storedCccd ||
+        _digitsOnly(inputAccount) == storedPhone;
+
+    if (accountMatched && inputPass == storedPassword) {
+      if (!mounted) {
+        return true;
+      }
+      closeLoadingDialog();
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
+      );
+      return true;
+    }
+
+    if (!mounted) {
+      return true;
+    }
+
+    closeLoadingDialog();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          _t(
+            'Tài khoản hoặc mật khẩu không chính xác!',
+            'Incorrect account or password!',
+          ),
+        ),
+        backgroundColor: Colors.red,
+      ),
+    );
+    return true;
+  }
 
   @override
   void initState() {
@@ -58,6 +130,54 @@ class _LoginScreenState extends State<LoginScreen> {
       fallbackName: fallbackName,
     );
     HomeCacheService.instance.startRealtimeSync(docId);
+  }
+
+  Future<void> _routeAfterLogin({
+    required String docId,
+    required Map<String, dynamic> profileData,
+    required String loginAccount,
+  }) async {
+    final AdminUserAccessInfo accessInfo = await AdminFirestoreSetupService
+        .instance
+        .ensureRoleAndSeed(userId: docId, fallbackAccount: loginAccount);
+
+    if (!mounted) {
+      return;
+    }
+
+    if (accessInfo.isLocked && accessInfo.role != 'admin') {
+      await FirebaseAuth.instance.signOut();
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _t(
+              'Tài khoản của bạn đang bị khóa. Vui lòng liên hệ hỗ trợ.',
+              'Your account is locked. Please contact support.',
+            ),
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    await _prefetchHomeCache(
+      docId: docId,
+      fallbackName: (profileData['fullname'] ?? profileData['fullName'] ?? '')
+          .toString(),
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => const MainTabShell()),
+    );
   }
 
   // --- HÀM XỬ LÝ ĐĂNG NHẬP: ĐÃ SỬA ĐỂ NHẬN CẢ SĐT VÀ CCCD ---
@@ -111,6 +231,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
       final String inputAccount = _cccdController.text.trim();
       final String inputPass = _passwordController.text.trim();
+
+      if (await _tryAdminLoginFromAdminCollection(
+        inputAccount: inputAccount,
+        inputPass: inputPass,
+        closeLoadingDialog: closeLoadingDialog,
+      )) {
+        return;
+      }
 
       final QuerySnapshot<Map<String, dynamic>> userQuery =
           await FirebaseFirestore.instance
@@ -211,15 +339,10 @@ class _LoginScreenState extends State<LoginScreen> {
             );
             if (!mounted) return;
             closeLoadingDialog();
-            await _prefetchHomeCache(
+            await _routeAfterLogin(
               docId: legacyDoc.id,
-              fallbackName: (data['fullname'] ?? data['fullName'] ?? '')
-                  .toString(),
-            );
-            if (!mounted) return;
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => const MainTabShell()),
+              profileData: data,
+              loginAccount: inputAccount,
             );
             return;
           }
@@ -282,15 +405,10 @@ class _LoginScreenState extends State<LoginScreen> {
               );
               if (!mounted) return;
               closeLoadingDialog();
-              await _prefetchHomeCache(
+              await _routeAfterLogin(
                 docId: legacyDoc.id,
-                fallbackName: (data['fullname'] ?? data['fullName'] ?? '')
-                    .toString(),
-              );
-              if (!mounted) return;
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (context) => const MainTabShell()),
+                profileData: data,
+                loginAccount: inputAccount,
               );
               return;
             }
@@ -357,15 +475,10 @@ class _LoginScreenState extends State<LoginScreen> {
             );
             if (!mounted) return;
             closeLoadingDialog();
-            await _prefetchHomeCache(
+            await _routeAfterLogin(
               docId: legacyDoc.id,
-              fallbackName: (data['fullname'] ?? data['fullName'] ?? '')
-                  .toString(),
-            );
-            if (!mounted) return;
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => const MainTabShell()),
+              profileData: data,
+              loginAccount: inputAccount,
             );
             return;
           }
@@ -392,14 +505,10 @@ class _LoginScreenState extends State<LoginScreen> {
           UserFirestoreService.instance.currentUserDocId ??
           FirebaseAuth.instance.currentUser?.uid ??
           legacyDoc.id;
-      await _prefetchHomeCache(
+      await _routeAfterLogin(
         docId: finalDocId,
-        fallbackName: (data['fullname'] ?? data['fullName'] ?? '').toString(),
-      );
-      if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const MainTabShell()),
+        profileData: data,
+        loginAccount: inputAccount,
       );
     } on FirebaseAuthException catch (e) {
       if (isConfigurationNotFound(e) && foundLegacyDoc != null) {
@@ -436,16 +545,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
         if (!mounted) return;
         closeLoadingDialog();
-        await _prefetchHomeCache(
+        await _routeAfterLogin(
           docId: foundLegacyDoc.id,
-          fallbackName:
-              (fallbackData['fullname'] ?? fallbackData['fullName'] ?? '')
-                  .toString(),
-        );
-        if (!mounted) return;
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const MainTabShell()),
+          profileData: fallbackData,
+          loginAccount: _cccdController.text.trim(),
         );
         return;
       }

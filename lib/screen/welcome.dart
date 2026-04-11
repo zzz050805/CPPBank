@@ -1,6 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 import 'login.dart';
-import '../widget/ccp_logo.dart'; 
+import '../widget/ccp_logo.dart';
 
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
@@ -10,7 +10,6 @@ class WelcomeScreen extends StatefulWidget {
 }
 
 class _WelcomeScreenState extends State<WelcomeScreen> {
-  
   @override
   void initState() {
     super.initState();
@@ -26,9 +25,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   Widget build(BuildContext context) {
     return const Scaffold(
       backgroundColor: Colors.white,
-      body: Center(
-        child: CCPLogoWidget(), 
-      ),
+      body: Center(child: CCPLogoWidget()),
     );
   }
 }

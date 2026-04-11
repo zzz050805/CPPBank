@@ -269,6 +269,30 @@ class _HomeScreenState extends State<HomeScreen> {
     return double.tryParse(digitsOnly) ?? 0.0;
   }
 
+  double _readUserBalanceField(dynamic rawValue) {
+    if (rawValue is num) {
+      return rawValue.toDouble();
+    }
+    if (rawValue is String) {
+      final String trimmed = rawValue.trim();
+      if (trimmed.isEmpty) {
+        return 0;
+      }
+
+      final double? direct = double.tryParse(trimmed);
+      if (direct != null) {
+        return direct;
+      }
+
+      final String digitsOnly = trimmed.replaceAll(RegExp(r'[^0-9]'), '');
+      if (digitsOnly.isEmpty) {
+        return 0;
+      }
+      return double.tryParse(digitsOnly) ?? 0;
+    }
+    return 0;
+  }
+
   double _extractFirstAmount(Map<String, dynamic> data, List<String> keys) {
     for (final String key in keys) {
       if (!data.containsKey(key) || data[key] == null) {
@@ -824,13 +848,67 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- DỮ LIỆU BANNER (Kiểm tra kỹ đuôi file máy bro nhé) ---
-  final List<String> bannerImages = [
-    'assets/images/banner1.jpg', // Sửa .png -> .jpg nếu cần
+  final List<String> _defaultBannerImages = <String>[
+    'assets/images/banner1.jpg',
     'assets/images/banner2.jpg',
     'assets/images/banner3.jpg',
     'assets/images/banner4.jpg',
   ];
+
+  Stream<List<_HomeBannerItem>> _homeBannersStream() {
+    return FirebaseFirestore.instance
+        .collection('admin')
+        .doc('settings')
+        .collection('home_banners')
+        .where('isActive', isEqualTo: true)
+        .snapshots()
+        .map((QuerySnapshot<Map<String, dynamic>> snapshot) {
+          final List<_HomeBannerItem> banners =
+              snapshot.docs
+                  .map(
+                    (QueryDocumentSnapshot<Map<String, dynamic>> doc) =>
+                        _HomeBannerItem.fromMap(id: doc.id, data: doc.data()),
+                  )
+                  .toList(growable: false)
+                ..sort(
+                  (_HomeBannerItem a, _HomeBannerItem b) =>
+                      a.order.compareTo(b.order),
+                );
+
+          return banners;
+        });
+  }
+
+  Stream<Map<String, int>> _shoppingPricePreviewStream() {
+    return FirebaseFirestore.instance
+        .collection('admin')
+        .doc('settings')
+        .collection('services_pricing')
+        .where('kind', isEqualTo: 'shopping_bundle')
+        .snapshots()
+        .map((QuerySnapshot<Map<String, dynamic>> snapshot) {
+          final Map<String, int> prices = <String, int>{};
+
+          for (final QueryDocumentSnapshot<Map<String, dynamic>> doc
+              in snapshot.docs) {
+            final Map<String, dynamic> data = doc.data();
+            final List<dynamic> packages =
+                (data['packages'] as List<dynamic>?) ?? <dynamic>[];
+            if (packages.isEmpty) {
+              continue;
+            }
+
+            final int? firstPrice = int.tryParse(packages.first.toString());
+            if (firstPrice == null || firstPrice <= 0) {
+              continue;
+            }
+
+            prices[doc.id] = firstPrice;
+          }
+
+          return prices;
+        });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -923,7 +1001,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     _buildBalanceCardSection(),
                     const SizedBox(height: 8),
                     _buildActionGrid(),
-                    _buildBannerCarousel(),
+                    _buildBannerCarouselRealtime(),
                     _buildSpendingChart(),
                     const SizedBox(height: 20),
                     _buildShoppingSection(),
@@ -1265,27 +1343,90 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildRealtimeTotalBalance() {
-    return ValueListenableBuilder<HomeCacheData>(
-      valueListenable: HomeCacheService.instance.notifier,
-      builder: (context, cacheData, _) {
-        if (cacheData.isReady) {
-          _lastKnownTotalBalance = cacheData.totalBalance;
-          _hasLoadedBalance = true;
+    final String uid = _resolveUid();
+    if (uid.isEmpty) {
+      if (!_isBalanceVisible) {
+        return _buildHiddenBalanceText();
+      }
+      return _buildBalanceText(0);
+    }
+
+    final DocumentReference<Map<String, dynamic>> userRef = FirebaseFirestore
+        .instance
+        .collection('users')
+        .doc(uid);
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: userRef
+          .collection('cards')
+          .snapshots(includeMetadataChanges: true),
+      builder: (context, cardsSnapshot) {
+        double normalBalance = 0;
+        double vipBalance = 0;
+        bool hasCardData = false;
+
+        for (final QueryDocumentSnapshot<Map<String, dynamic>> doc
+            in cardsSnapshot.data?.docs ??
+                <QueryDocumentSnapshot<Map<String, dynamic>>>[]) {
+          final String cardId = doc.id.toLowerCase();
+          final double balance = _readUserBalanceField(doc.data()['balance']);
+
+          if (cardId == 'standard') {
+            normalBalance = balance;
+            hasCardData = true;
+          } else if (cardId == 'vip') {
+            vipBalance = balance;
+            hasCardData = true;
+          }
         }
 
-        if (!cacheData.isReady && !_hasLoadedBalance) {
+        if (cardsSnapshot.connectionState == ConnectionState.waiting &&
+            !_hasLoadedBalance) {
           return _buildBalanceSkeleton();
+        }
+
+        if (hasCardData) {
+          _lastKnownTotalBalance = normalBalance + vipBalance;
+          _hasLoadedBalance = true;
         }
 
         if (!_isBalanceVisible) {
           return _buildHiddenBalanceText();
         }
 
-        final double amountToRender = _hasLoadedBalance
-            ? _lastKnownTotalBalance
-            : cacheData.totalBalance;
+        if (_hasLoadedBalance) {
+          return _buildBalanceText(_lastKnownTotalBalance);
+        }
 
-        return _buildBalanceText(amountToRender);
+        return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+          stream: userRef.snapshots(includeMetadataChanges: true),
+          builder: (context, userSnapshot) {
+            final Map<String, dynamic> userData =
+                userSnapshot.data?.data() ?? <String, dynamic>{};
+            final dynamic rawNormal =
+                userData['balance_normal'] ??
+                userData['standardBalance'] ??
+                userData['balanceNormal'];
+            final dynamic rawVip =
+                userData['balance_vip'] ??
+                userData['vipBalance'] ??
+                userData['balanceVip'];
+
+            final bool hasSplitBalance = rawNormal != null || rawVip != null;
+            final double fallbackTotal = hasSplitBalance
+                ? _readUserBalanceField(rawNormal) +
+                      _readUserBalanceField(rawVip)
+                : _readUserBalanceField(
+                    userData['balance'] ??
+                        userData['totalBalance'] ??
+                        userData['availableBalance'],
+                  );
+
+            _lastKnownTotalBalance = fallbackTotal;
+            _hasLoadedBalance = true;
+            return _buildBalanceText(fallbackTotal);
+          },
+        );
       },
     );
   }
@@ -1479,8 +1620,79 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildBannerCarousel() {
-    if (bannerImages.isEmpty) return const SizedBox();
+  Widget _buildBannerCarouselRealtime() {
+    return StreamBuilder<List<_HomeBannerItem>>(
+      stream: _homeBannersStream(),
+      builder:
+          (
+            BuildContext context,
+            AsyncSnapshot<List<_HomeBannerItem>> snapshot,
+          ) {
+            final List<_HomeBannerItem> banners =
+                (snapshot.data != null && snapshot.data!.isNotEmpty)
+                ? snapshot.data!
+                : _defaultBannerImages
+                      .asMap()
+                      .entries
+                      .map(
+                        (MapEntry<int, String> entry) => _HomeBannerItem(
+                          id: 'default_${entry.key}',
+                          imageUrl: entry.value,
+                          order: entry.key,
+                        ),
+                      )
+                      .toList(growable: false);
+
+            if (_currentBannerIndex >= banners.length) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted) {
+                  return;
+                }
+                setState(() {
+                  _currentBannerIndex = 0;
+                });
+              });
+            }
+
+            return _buildBannerCarousel(banners);
+          },
+    );
+  }
+
+  Widget _buildBannerImage(String imageUrl) {
+    if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+      return Image.network(
+        imageUrl,
+        fit: BoxFit.cover,
+        width: double.infinity,
+        errorBuilder: (context, error, stackTrace) => Container(
+          color: Colors.grey[300],
+          child: Center(
+            child: Text(
+              AppTranslations.getText(context, 'banner_fallback_label'),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Image.asset(
+      imageUrl,
+      fit: BoxFit.cover,
+      width: double.infinity,
+      errorBuilder: (context, error, stackTrace) => Container(
+        color: Colors.grey[300],
+        child: Center(
+          child: Text(
+            AppTranslations.getText(context, 'banner_fallback_label'),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBannerCarousel(List<_HomeBannerItem> bannerItems) {
+    if (bannerItems.isEmpty) return const SizedBox();
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 14),
@@ -1533,9 +1745,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         }
                       },
                     ),
-                    items: bannerImages.asMap().entries.map((entry) {
+                    items: bannerItems.asMap().entries.map((entry) {
                       final index = entry.key;
-                      final imagePath = entry.value;
+                      final _HomeBannerItem banner = entry.value;
                       final isActive = _currentBannerIndex == index;
 
                       return AnimatedContainer(
@@ -1562,23 +1774,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           child: Stack(
                             fit: StackFit.expand,
                             children: [
-                              Image.asset(
-                                imagePath,
-                                fit: BoxFit.cover,
-                                width: double.infinity,
-                                errorBuilder: (context, error, stackTrace) =>
-                                    Container(
-                                      color: Colors.grey[300],
-                                      child: Center(
-                                        child: Text(
-                                          AppTranslations.getText(
-                                            context,
-                                            'banner_fallback_label',
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                              ),
+                              _buildBannerImage(banner.imageUrl),
                               Positioned.fill(
                                 child: DecoratedBox(
                                   decoration: BoxDecoration(
@@ -1611,7 +1807,7 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 4),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(bannerImages.length, (index) {
+            children: List.generate(bannerItems.length, (index) {
               final isActive = _currentBannerIndex == index;
               return AnimatedContainer(
                 duration: const Duration(milliseconds: 260),
@@ -1634,46 +1830,63 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildShoppingSection() {
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            _t("Mua sắm - Giải trí", "Shopping - Entertainment"),
-            style: GoogleFonts.poppins(
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-            ),
-          ),
-          const SizedBox(height: 14),
-          LayoutBuilder(
-            builder: (BuildContext context, BoxConstraints constraints) {
-              final int crossAxisCount = constraints.maxWidth >= 420 ? 5 : 4;
+    return StreamBuilder<Map<String, int>>(
+      stream: _shoppingPricePreviewStream(),
+      builder:
+          (BuildContext context, AsyncSnapshot<Map<String, int>> snapshot) {
+            final Map<String, int> previewPrices =
+                snapshot.data ?? <String, int>{};
 
-              return GridView.builder(
-                itemCount: shoppingServices.length,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: crossAxisCount,
-                  crossAxisSpacing: 10,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: 0.84,
-                ),
-                itemBuilder: (BuildContext context, int index) {
-                  final ServiceModel service = shoppingServices[index];
-                  return _buildShoppingPreviewItem(service);
-                },
-              );
-            },
-          ),
-        ],
-      ),
+            return Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _t("Mua sắm - Giải trí", "Shopping - Entertainment"),
+                    style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  LayoutBuilder(
+                    builder:
+                        (BuildContext context, BoxConstraints constraints) {
+                          final int crossAxisCount = constraints.maxWidth >= 420
+                              ? 5
+                              : 4;
+
+                          return GridView.builder(
+                            itemCount: shoppingServices.length,
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            gridDelegate:
+                                SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: crossAxisCount,
+                                  crossAxisSpacing: 10,
+                                  mainAxisSpacing: 12,
+                                  childAspectRatio: 0.84,
+                                ),
+                            itemBuilder: (BuildContext context, int index) {
+                              final ServiceModel service =
+                                  shoppingServices[index];
+                              return _buildShoppingPreviewItem(
+                                service,
+                                firstPrice: previewPrices[service.id],
+                              );
+                            },
+                          );
+                        },
+                  ),
+                ],
+              ),
+            );
+          },
     );
   }
 
-  Widget _buildShoppingPreviewItem(ServiceModel service) {
+  Widget _buildShoppingPreviewItem(ServiceModel service, {int? firstPrice}) {
     final String languageCode = Localizations.localeOf(context).languageCode;
 
     return InkWell(
@@ -1727,6 +1940,20 @@ class _HomeScreenState extends State<HomeScreen> {
               height: 1.2,
             ),
           ),
+          if (firstPrice != null) ...<Widget>[
+            const SizedBox(height: 2),
+            Text(
+              '${_formatCurrency(firstPrice.toDouble())} VND',
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.poppins(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF000DC0),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -2659,6 +2886,29 @@ class _HomeTransactionSource {
 
   final String collectionName;
   final String activityType;
+}
+
+class _HomeBannerItem {
+  const _HomeBannerItem({
+    required this.id,
+    required this.imageUrl,
+    required this.order,
+  });
+
+  final String id;
+  final String imageUrl;
+  final int order;
+
+  factory _HomeBannerItem.fromMap({
+    required String id,
+    required Map<String, dynamic> data,
+  }) {
+    return _HomeBannerItem(
+      id: id,
+      imageUrl: (data['imageUrl'] ?? '').toString().trim(),
+      order: (data['order'] as num?)?.toInt() ?? 0,
+    );
+  }
 }
 
 class _ActionItemData {
