@@ -1,10 +1,128 @@
+import 'dart:ui';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:rxdart/rxdart.dart';
 
 import '../l10n/app_text.dart';
+
+const List<String> _kTransactionCollections = <String>[
+  'Shopping',
+  'shopping',
+  'bill_payment',
+  'pay_bill',
+  'paybill',
+  'phone_recharge',
+  'recent_tranfer',
+  'recent_transfer',
+  'recent_transfers',
+  'withdraw',
+];
+
+DateTime? parseTransactionTime(dynamic timeData) {
+  if (timeData == null) {
+    return null;
+  }
+
+  if (timeData is Timestamp) {
+    return timeData.toDate();
+  }
+
+  if (timeData is DateTime) {
+    return timeData;
+  }
+
+  if (timeData is int) {
+    final int value = timeData;
+    // Accept both seconds (10-digit) and milliseconds (13-digit) epochs.
+    if (value.abs() < 100000000000) {
+      return DateTime.fromMillisecondsSinceEpoch(value * 1000);
+    }
+    return DateTime.fromMillisecondsSinceEpoch(value);
+  }
+
+  if (timeData is String) {
+    final String raw = timeData.trim();
+    if (raw.isEmpty) {
+      return null;
+    }
+
+    final DateTime? iso = DateTime.tryParse(raw);
+    if (iso != null) {
+      return iso;
+    }
+
+    const List<String> patterns = <String>[
+      'dd/MM/yyyy HH:mm:ss',
+      'dd/MM/yyyy HH:mm',
+      'dd/MM/yyyy',
+      'dd-MM-yyyy HH:mm:ss',
+      'dd-MM-yyyy HH:mm',
+      'dd-MM-yyyy',
+      'd/M/yyyy HH:mm:ss',
+      'd/M/yyyy HH:mm',
+      'd/M/yyyy',
+      'd-M-yyyy HH:mm:ss',
+      'd-M-yyyy HH:mm',
+      'd-M-yyyy',
+      'yyyy-MM-dd HH:mm:ss',
+      'yyyy-MM-dd HH:mm',
+      'yyyy-MM-dd',
+    ];
+
+    for (final String pattern in patterns) {
+      try {
+        return DateFormat(pattern).parseStrict(raw);
+      } catch (_) {
+        // Try next known pattern.
+      }
+    }
+  }
+
+  return null;
+}
+
+DateTime? _extractTransactionTime(Map<String, dynamic> data) {
+  return parseTransactionTime(data['timestamp']) ??
+      parseTransactionTime(data['date']) ??
+      parseTransactionTime(data['createdAt']) ??
+      parseTransactionTime(data['updatedAt']) ??
+      parseTransactionTime(data['time']) ??
+      parseTransactionTime(data['paidAt']);
+}
+
+bool _isTimeInRange(DateTime? value, DateTimeRange range) {
+  if (value == null) {
+    return false;
+  }
+  return !value.isBefore(range.start) && value.isBefore(range.end);
+}
+
+String _transactionTypeFromCollection(String collectionName) {
+  switch (collectionName) {
+    case 'Shopping':
+    case 'shopping':
+      return 'Mua sắm';
+    case 'bill_payment':
+      return 'Thanh toán hóa đơn';
+    case 'pay_bill':
+    case 'paybill':
+      return 'Chi trả hóa đơn';
+    case 'phone_recharge':
+      return 'Nạp điện thoại';
+    case 'recent_tranfer':
+    case 'recent_transfer':
+    case 'recent_transfers':
+      return 'Chuyển khoản';
+    case 'withdraw':
+      return 'Rút tiền';
+    default:
+      return collectionName;
+  }
+}
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -20,6 +138,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   int _selectedTab = 0;
+  late Stream<int> _totalTransactionsCountStream;
 
   static const List<({IconData icon, String vi, String en})> _tabConfig =
       <({IconData icon, String vi, String en})>[
@@ -28,6 +147,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         (icon: Icons.price_change_rounded, vi: 'Dịch vụ', en: 'Services'),
         (icon: Icons.photo_library_rounded, vi: 'Banner', en: 'Banners'),
       ];
+
+  @override
+  void initState() {
+    super.initState();
+    _totalTransactionsCountStream = _allUsersTotalTransactionsCountStream()
+        .asBroadcastStream();
+  }
 
   String _t(String vi, String en) => AppText.tr(context, vi, en);
 
@@ -200,6 +326,838 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     }
 
     return double.tryParse(digitsOnly) ?? 0;
+  }
+
+  void _openUsersManagementTab() {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _selectedTab = 1;
+    });
+  }
+
+  DateTimeRange _rangeForFilter(
+    _AdminHistoryFilterType filterType,
+    DateTime selectedPoint,
+  ) {
+    final DateTime base = DateTime(
+      selectedPoint.year,
+      selectedPoint.month,
+      selectedPoint.day,
+    );
+
+    switch (filterType) {
+      case _AdminHistoryFilterType.day:
+        return DateTimeRange(
+          start: base,
+          end: base.add(const Duration(days: 1)),
+        );
+      case _AdminHistoryFilterType.month:
+        final DateTime monthStart = DateTime(base.year, base.month, 1);
+        final DateTime monthEnd = DateTime(base.year, base.month + 1, 1);
+        return DateTimeRange(start: monthStart, end: monthEnd);
+      case _AdminHistoryFilterType.year:
+        final DateTime yearStart = DateTime(base.year, 1, 1);
+        final DateTime yearEnd = DateTime(base.year + 1, 1, 1);
+        return DateTimeRange(start: yearStart, end: yearEnd);
+    }
+  }
+
+  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
+  _readUserSubCollectionDocs({
+    required DocumentReference<Map<String, dynamic>> userRef,
+    required String subCollection,
+  }) async {
+    try {
+      final QuerySnapshot<Map<String, dynamic>> snapshot = await userRef
+          .collection(subCollection)
+          .get();
+      return snapshot.docs;
+    } catch (_) {
+      return const <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _deepScanAllTransactions({
+    _AdminHistoryFilterType? filterType,
+    DateTime? selectedPoint,
+  }) async {
+    final DateTimeRange? range = (filterType != null && selectedPoint != null)
+        ? _rangeForFilter(filterType, selectedPoint)
+        : null;
+    final QuerySnapshot<Map<String, dynamic>> usersSnapshot = await _firestore
+        .collection('users')
+        .get();
+
+    final List<Future<List<Map<String, dynamic>>>> userTasks = usersSnapshot
+        .docs
+        .map((QueryDocumentSnapshot<Map<String, dynamic>> userDoc) async {
+          final String userName = _readUserName(userDoc.data());
+          final DocumentReference<Map<String, dynamic>> userRef =
+              userDoc.reference;
+
+          final List<Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>>>
+          subCollectionTasks = _kTransactionCollections
+              .map(
+                (String subCollection) => _readUserSubCollectionDocs(
+                  userRef: userRef,
+                  subCollection: subCollection,
+                ),
+              )
+              .toList(growable: false);
+
+          final List<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
+          subCollectionResults = await Future.wait(subCollectionTasks);
+
+          final List<Map<String, dynamic>> transactionsForUser =
+              <Map<String, dynamic>>[];
+
+          for (int i = 0; i < subCollectionResults.length; i++) {
+            final String subCollection = _kTransactionCollections[i];
+            final String transactionType = _transactionTypeFromCollection(
+              subCollection,
+            );
+
+            for (final QueryDocumentSnapshot<Map<String, dynamic>> txDoc
+                in subCollectionResults[i]) {
+              final Map<String, dynamic> txData = Map<String, dynamic>.from(
+                txDoc.data(),
+              );
+              final DateTime? parsedTime = _extractTransactionTime(txData);
+              if (range != null && !_isTimeInRange(parsedTime, range)) {
+                continue;
+              }
+
+              txData['userId'] = userDoc.id;
+              txData['userName'] = userName;
+              txData['transactionType'] = transactionType;
+              txData['_parsedTime'] = parsedTime;
+              txData['_sourceCollection'] = subCollection;
+              transactionsForUser.add(txData);
+            }
+          }
+
+          return transactionsForUser;
+        })
+        .toList(growable: false);
+
+    final List<List<Map<String, dynamic>>> userResults = await Future.wait(
+      userTasks,
+    );
+    final List<Map<String, dynamic>> allTransactions =
+        userResults
+            .expand((List<Map<String, dynamic>> userTx) => userTx)
+            .toList(growable: false)
+          ..sort((Map<String, dynamic> a, Map<String, dynamic> b) {
+            final DateTime? atA = a['_parsedTime'] as DateTime?;
+            final DateTime? atB = b['_parsedTime'] as DateTime?;
+            if (atA == null && atB == null) {
+              return 0;
+            }
+            if (atA == null) {
+              return 1;
+            }
+            if (atB == null) {
+              return -1;
+            }
+            return atB.compareTo(atA);
+          });
+
+    return allTransactions;
+  }
+
+  List<_AdminUserTransactionStat> _buildUserStatsFromTransactions(
+    List<Map<String, dynamic>> allTransactions,
+  ) {
+    final Map<String, ({String userName, int count})> byUser =
+        <String, ({String userName, int count})>{};
+
+    for (final Map<String, dynamic> tx in allTransactions) {
+      final String userId = (tx['userId'] ?? '').toString();
+      if (userId.isEmpty) {
+        continue;
+      }
+      final String userName = (tx['userName'] ?? '-').toString();
+      final ({String userName, int count}) current =
+          byUser[userId] ?? (userName: userName, count: 0);
+      byUser[userId] = (userName: current.userName, count: current.count + 1);
+    }
+
+    final List<_AdminUserTransactionStat> stats =
+        byUser.entries
+            .map(
+              (MapEntry<String, ({String userName, int count})> entry) =>
+                  _AdminUserTransactionStat(
+                    userId: entry.key,
+                    userName: entry.value.userName,
+                    count: entry.value.count,
+                  ),
+            )
+            .toList(growable: false)
+          ..sort((a, b) {
+            final int countDiff = b.count.compareTo(a.count);
+            if (countDiff != 0) {
+              return countDiff;
+            }
+            return a.userName.compareTo(b.userName);
+          });
+
+    return stats;
+  }
+
+  Stream<List<_AdminUserTransactionStat>> _allUsersTransactionStatsStream({
+    required _AdminHistoryFilterType filterType,
+    required DateTime selectedPoint,
+  }) {
+    final Stream<QuerySnapshot<Map<String, dynamic>>> usersTrigger = _firestore
+        .collection('users')
+        .snapshots(includeMetadataChanges: true);
+    final List<Stream<QuerySnapshot<Map<String, dynamic>>>> sourceTriggers =
+        _kTransactionCollections
+            .map(
+              (String source) => _firestore
+                  .collectionGroup(source)
+                  .snapshots(includeMetadataChanges: true),
+            )
+            .toList(growable: false);
+
+    return MergeStream<Object>(<Stream<Object>>[
+      usersTrigger,
+      ...sourceTriggers,
+    ]).startWith(const Object()).switchMap((Object _) {
+      return Stream.fromFuture(
+        _deepScanAllTransactions(
+          filterType: filterType,
+          selectedPoint: selectedPoint,
+        ).then(_buildUserStatsFromTransactions),
+      );
+    }).asBroadcastStream();
+  }
+
+  Stream<int> _allUsersTotalTransactionsCountStream() {
+    final Stream<QuerySnapshot<Map<String, dynamic>>> usersTrigger = _firestore
+        .collection('users')
+        .snapshots(includeMetadataChanges: true);
+    final List<Stream<QuerySnapshot<Map<String, dynamic>>>> sourceTriggers =
+        _kTransactionCollections
+            .map(
+              (String source) => _firestore
+                  .collectionGroup(source)
+                  .snapshots(includeMetadataChanges: true),
+            )
+            .toList(growable: false);
+
+    return MergeStream<Object>(<Stream<Object>>[
+      usersTrigger,
+      ...sourceTriggers,
+    ]).startWith(const Object()).switchMap((Object _) {
+      return Stream.fromFuture(
+        _deepScanAllTransactions().then(
+          (List<Map<String, dynamic>> allTransactions) =>
+              allTransactions.length,
+        ),
+      );
+    });
+  }
+
+  Future<void> _showSystemBalancesOverlay() async {
+    await showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'system-balance-overlay',
+      barrierColor: Colors.black.withValues(alpha: 0.2),
+      transitionDuration: const Duration(milliseconds: 220),
+      pageBuilder:
+          (
+            BuildContext dialogContext,
+            Animation<double> animation,
+            Animation<double> secondaryAnimation,
+          ) {
+            return Material(
+              type: MaterialType.transparency,
+              child: Stack(
+                children: <Widget>[
+                  Positioned.fill(
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                      child: Container(
+                        color: Colors.black.withValues(alpha: 0.12),
+                      ),
+                    ),
+                  ),
+                  Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        maxWidth: 860,
+                        maxHeight: 620,
+                      ),
+                      child: Container(
+                        margin: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(18),
+                          boxShadow: <BoxShadow>[
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.14),
+                              blurRadius: 28,
+                              offset: const Offset(0, 10),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          children: <Widget>[
+                            Row(
+                              children: <Widget>[
+                                Expanded(
+                                  child: Text(
+                                    _t(
+                                      'Tổng số dư hệ thống theo người dùng',
+                                      'System balances by user',
+                                    ),
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                                IconButton(
+                                  onPressed: () => Navigator.pop(dialogContext),
+                                  icon: const Icon(Icons.close_rounded),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Expanded(
+                              child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                                stream: _usersStream(),
+                                builder:
+                                    (
+                                      BuildContext context,
+                                      AsyncSnapshot<
+                                        QuerySnapshot<Map<String, dynamic>>
+                                      >
+                                      snapshot,
+                                    ) {
+                                      if (!snapshot.hasData) {
+                                        return const Center(
+                                          child: CircularProgressIndicator(),
+                                        );
+                                      }
+
+                                      final List<
+                                        QueryDocumentSnapshot<
+                                          Map<String, dynamic>
+                                        >
+                                      >
+                                      users =
+                                          snapshot.data!.docs.toList(
+                                            growable: false,
+                                          )..sort((a, b) {
+                                            final String aName = _readUserName(
+                                              a.data(),
+                                            );
+                                            final String bName = _readUserName(
+                                              b.data(),
+                                            );
+                                            return aName.compareTo(bName);
+                                          });
+
+                                      if (users.isEmpty) {
+                                        return Center(
+                                          child: Text(
+                                            _t(
+                                              'Chưa có user',
+                                              'No users found',
+                                            ),
+                                            style: GoogleFonts.poppins(
+                                              fontWeight: FontWeight.w500,
+                                              color: Colors.grey.shade600,
+                                            ),
+                                          ),
+                                        );
+                                      }
+
+                                      return StreamBuilder<
+                                        QuerySnapshot<Map<String, dynamic>>
+                                      >(
+                                        stream: _cardsStream(),
+                                        builder:
+                                            (
+                                              BuildContext context,
+                                              AsyncSnapshot<
+                                                QuerySnapshot<
+                                                  Map<String, dynamic>
+                                                >
+                                              >
+                                              cardsSnapshot,
+                                            ) {
+                                              final Map<
+                                                String,
+                                                _UserCardBalances
+                                              >
+                                              cardBalancesByUser =
+                                                  cardsSnapshot.hasData
+                                                  ? _buildCardBalancesByUser(
+                                                      cardsSnapshot.data!.docs,
+                                                    )
+                                                  : const <
+                                                      String,
+                                                      _UserCardBalances
+                                                    >{};
+
+                                              return SingleChildScrollView(
+                                                child: SingleChildScrollView(
+                                                  scrollDirection:
+                                                      Axis.horizontal,
+                                                  child: DataTable(
+                                                    columnSpacing: 22,
+                                                    headingRowHeight: 44,
+                                                    dataRowMinHeight: 50,
+                                                    dataRowMaxHeight: 56,
+                                                    columns: <DataColumn>[
+                                                      DataColumn(
+                                                        label: Text(
+                                                          _t('Tên', 'Name'),
+                                                          style:
+                                                              GoogleFonts.poppins(
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w700,
+                                                              ),
+                                                        ),
+                                                      ),
+                                                      DataColumn(
+                                                        label: Text(
+                                                          _t(
+                                                            'Số dư Thẻ thường',
+                                                            'Normal Card Balance',
+                                                          ),
+                                                          style:
+                                                              GoogleFonts.poppins(
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w700,
+                                                              ),
+                                                        ),
+                                                      ),
+                                                      DataColumn(
+                                                        label: Text(
+                                                          _t(
+                                                            'Số dư Thẻ VIP',
+                                                            'VIP Card Balance',
+                                                          ),
+                                                          style:
+                                                              GoogleFonts.poppins(
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w700,
+                                                              ),
+                                                        ),
+                                                      ),
+                                                    ],
+                                                    rows: users
+                                                        .map((
+                                                          QueryDocumentSnapshot<
+                                                            Map<String, dynamic>
+                                                          >
+                                                          doc,
+                                                        ) {
+                                                          final Map<
+                                                            String,
+                                                            dynamic
+                                                          >
+                                                          data = doc.data();
+                                                          final _UserCardBalances?
+                                                          cardData =
+                                                              cardBalancesByUser[doc
+                                                                  .id];
+                                                          final double
+                                                          normalBalance =
+                                                              cardData
+                                                                  ?.balanceNormal ??
+                                                              _readUserNormalBalance(
+                                                                data,
+                                                              );
+                                                          final double
+                                                          vipBalance =
+                                                              cardData
+                                                                  ?.balanceVip ??
+                                                              _readUserVipBalance(
+                                                                data,
+                                                              );
+
+                                                          return DataRow(
+                                                            cells: <DataCell>[
+                                                              DataCell(
+                                                                Text(
+                                                                  _readUserName(
+                                                                    data,
+                                                                  ),
+                                                                  style: GoogleFonts.poppins(
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w600,
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                              DataCell(
+                                                                Text(
+                                                                  _formatVndDouble(
+                                                                    normalBalance,
+                                                                  ),
+                                                                  style: GoogleFonts.poppins(
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w600,
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                              DataCell(
+                                                                Text(
+                                                                  _formatVndDouble(
+                                                                    vipBalance,
+                                                                  ),
+                                                                  style: GoogleFonts.poppins(
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w600,
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          );
+                                                        })
+                                                        .toList(
+                                                          growable: false,
+                                                        ),
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                      );
+                                    },
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+      transitionBuilder:
+          (BuildContext context, Animation<double> animation, _, Widget child) {
+            return FadeTransition(
+              opacity: CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+              ),
+              child: child,
+            );
+          },
+    );
+  }
+
+  Future<void> _showTodayTransactionsByUserDialog() async {
+    _AdminHistoryFilterType filterType = _AdminHistoryFilterType.day;
+    DateTime selectedPoint = DateTime.now();
+
+    await showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'today-transactions-overlay',
+      barrierColor: Colors.black.withValues(alpha: 0.2),
+      transitionDuration: const Duration(milliseconds: 220),
+      pageBuilder:
+          (
+            BuildContext dialogContext,
+            Animation<double> animation,
+            Animation<double> secondaryAnimation,
+          ) {
+            return StatefulBuilder(
+              builder: (BuildContext context, StateSetter setDialogState) {
+                String filterLabel() {
+                  if (filterType == _AdminHistoryFilterType.day) {
+                    return DateFormat('dd/MM/yyyy').format(selectedPoint);
+                  }
+                  if (filterType == _AdminHistoryFilterType.month) {
+                    return DateFormat('MM/yyyy').format(selectedPoint);
+                  }
+                  return DateFormat('yyyy').format(selectedPoint);
+                }
+
+                Future<void> pickDate() async {
+                  final DateTime now = DateTime.now();
+                  final DateTime? picked = await showDatePicker(
+                    context: dialogContext,
+                    initialDate: selectedPoint,
+                    firstDate: DateTime(2000, 1, 1),
+                    lastDate: DateTime(now.year + 2, 12, 31),
+                    helpText: _t('Chọn mốc thời gian', 'Pick date point'),
+                    cancelText: _t('Hủy', 'Cancel'),
+                    confirmText: _t('Chọn', 'Select'),
+                  );
+                  if (picked == null) {
+                    return;
+                  }
+                  setDialogState(() {
+                    if (filterType == _AdminHistoryFilterType.day) {
+                      selectedPoint = DateTime(
+                        picked.year,
+                        picked.month,
+                        picked.day,
+                      );
+                    } else if (filterType == _AdminHistoryFilterType.month) {
+                      selectedPoint = DateTime(picked.year, picked.month, 1);
+                    } else {
+                      selectedPoint = DateTime(picked.year, 1, 1);
+                    }
+                  });
+                }
+
+                return Material(
+                  type: MaterialType.transparency,
+                  child: Stack(
+                    children: <Widget>[
+                      Positioned.fill(
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                          child: Container(
+                            color: Colors.black.withValues(alpha: 0.12),
+                          ),
+                        ),
+                      ),
+                      Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(
+                            maxWidth: 760,
+                            maxHeight: 640,
+                          ),
+                          child: Container(
+                            margin: const EdgeInsets.all(16),
+                            padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(18),
+                              boxShadow: <BoxShadow>[
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.14),
+                                  blurRadius: 28,
+                                  offset: const Offset(0, 10),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              children: <Widget>[
+                                Row(
+                                  children: <Widget>[
+                                    Expanded(
+                                      child: Text(
+                                        _t(
+                                          'Giao dịch theo User (đa nguồn)',
+                                          'Transactions by user (multi-source)',
+                                        ),
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      onPressed: () =>
+                                          Navigator.pop(dialogContext),
+                                      icon: const Icon(Icons.close_rounded),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: <Widget>[
+                                    ChoiceChip(
+                                      label: Text(
+                                        _t('Hôm nay', 'Today'),
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                      selected:
+                                          filterType ==
+                                          _AdminHistoryFilterType.day,
+                                      onSelected: (_) {
+                                        setDialogState(() {
+                                          filterType =
+                                              _AdminHistoryFilterType.day;
+                                        });
+                                      },
+                                    ),
+                                    ChoiceChip(
+                                      label: Text(
+                                        _t('Tháng này', 'This month'),
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                      selected:
+                                          filterType ==
+                                          _AdminHistoryFilterType.month,
+                                      onSelected: (_) {
+                                        setDialogState(() {
+                                          filterType =
+                                              _AdminHistoryFilterType.month;
+                                        });
+                                      },
+                                    ),
+                                    ChoiceChip(
+                                      label: Text(
+                                        _t('Năm nay', 'This year'),
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                      selected:
+                                          filterType ==
+                                          _AdminHistoryFilterType.year,
+                                      onSelected: (_) {
+                                        setDialogState(() {
+                                          filterType =
+                                              _AdminHistoryFilterType.year;
+                                        });
+                                      },
+                                    ),
+                                    OutlinedButton.icon(
+                                      onPressed: pickDate,
+                                      icon: const Icon(
+                                        Icons.event_rounded,
+                                        size: 17,
+                                      ),
+                                      label: Text(
+                                        filterLabel(),
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 10),
+                                Expanded(
+                                  child: StreamBuilder<List<_AdminUserTransactionStat>>(
+                                    stream: _allUsersTransactionStatsStream(
+                                      filterType: filterType,
+                                      selectedPoint: selectedPoint,
+                                    ),
+                                    builder:
+                                        (
+                                          BuildContext context,
+                                          AsyncSnapshot<
+                                            List<_AdminUserTransactionStat>
+                                          >
+                                          snapshot,
+                                        ) {
+                                          if (!snapshot.hasData) {
+                                            return const Center(
+                                              child:
+                                                  CircularProgressIndicator(),
+                                            );
+                                          }
+
+                                          final List<_AdminUserTransactionStat>
+                                          stats =
+                                              snapshot.data ??
+                                              const <
+                                                _AdminUserTransactionStat
+                                              >[];
+                                          if (stats.isEmpty) {
+                                            return Center(
+                                              child: Text(
+                                                _t(
+                                                  'Không có giao dịch trong khoảng thời gian đã chọn',
+                                                  'No transactions in selected range',
+                                                ),
+                                                style: GoogleFonts.poppins(
+                                                  color: Colors.grey.shade600,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                            );
+                                          }
+
+                                          return ListView.separated(
+                                            itemCount: stats.length,
+                                            separatorBuilder:
+                                                (
+                                                  BuildContext context,
+                                                  int index,
+                                                ) => const Divider(height: 1),
+                                            itemBuilder: (BuildContext context, int index) {
+                                              final _AdminUserTransactionStat
+                                              item = stats[index];
+                                              return ListTile(
+                                                title: Text(
+                                                  '${item.userName} - ${item.count} ${_t('giao dịch', 'transactions')}',
+                                                  style: GoogleFonts.poppins(
+                                                    fontWeight: FontWeight.w600,
+                                                    fontSize: 13,
+                                                  ),
+                                                ),
+                                                trailing: const Icon(
+                                                  Icons.chevron_right_rounded,
+                                                ),
+                                                onTap: () {
+                                                  Navigator.pop(dialogContext);
+                                                  if (!mounted) {
+                                                    return;
+                                                  }
+                                                  Navigator.push(
+                                                    context,
+                                                    MaterialPageRoute<void>(
+                                                      builder: (_) =>
+                                                          _AdminUserTransactionHistoryScreen(
+                                                            userId: item.userId,
+                                                            userName:
+                                                                item.userName,
+                                                            initialFilterType:
+                                                                filterType,
+                                                            initialSelectedPoint:
+                                                                selectedPoint,
+                                                          ),
+                                                    ),
+                                                  );
+                                                },
+                                              );
+                                            },
+                                          );
+                                        },
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+      transitionBuilder:
+          (BuildContext context, Animation<double> animation, _, Widget child) {
+            return FadeTransition(
+              opacity: CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+              ),
+              child: child,
+            );
+          },
+    );
   }
 
   List<_AdminUserSummary> _buildUserSummaries(
@@ -727,36 +1685,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-  Future<int> _fetchTodayTransactionsCount() async {
-    final DateTime now = DateTime.now();
-    final DateTime start = DateTime(now.year, now.month, now.day);
-    final Timestamp startTs = Timestamp.fromDate(start);
-
-    final List<String> collections = <String>[
-      'pay_bill',
-      'bill_payment',
-      'phone_recharge',
-      'recent_transfers',
-      'withdraw',
-      'Shopping',
-    ];
-
-    int total = 0;
-    for (final String name in collections) {
-      try {
-        final QuerySnapshot<Map<String, dynamic>> snap = await _firestore
-            .collectionGroup(name)
-            .where('createdAt', isGreaterThanOrEqualTo: startTs)
-            .get();
-        total += snap.docs.length;
-      } catch (_) {
-        // Ignore missing-index / permission errors per group and continue.
-      }
-    }
-
-    return total;
-  }
-
   Future<void> _toggleUserLock(
     DocumentReference<Map<String, dynamic>> ref,
     bool next,
@@ -1007,11 +1935,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       sum + user.totalBalance,
                 );
 
-                return FutureBuilder<int>(
-                  future: _fetchTodayTransactionsCount(),
+                return StreamBuilder<int>(
+                  stream: _totalTransactionsCountStream,
                   builder:
                       (BuildContext context, AsyncSnapshot<int> txSnapshot) {
-                        final int txToday = txSnapshot.data ?? 0;
+                        final String txCountText = txSnapshot.hasData
+                            ? '${txSnapshot.data ?? 0}'
+                            : '...';
 
                         return LayoutBuilder(
                           builder:
@@ -1033,6 +1963,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                     title: _t('Tổng User', 'Total users'),
                                     value: '$totalUsers',
                                     icon: Icons.people_alt_rounded,
+                                    onTap: _openUsersManagementTab,
                                   ),
                                   _metricCard(
                                     title: _t(
@@ -1041,14 +1972,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                     ),
                                     value: _formatVndDouble(totalBalance),
                                     icon: Icons.account_balance_wallet_rounded,
+                                    onTap: _showSystemBalancesOverlay,
                                   ),
                                   _metricCard(
-                                    title: _t(
-                                      'Giao dịch hôm nay',
-                                      'Transactions today',
-                                    ),
-                                    value: '$txToday',
+                                    title: _t('Giao dịch', 'Transactions'),
+                                    value: txCountText,
                                     icon: Icons.receipt_long_rounded,
+                                    onTap: _showTodayTransactionsByUserDialog,
                                   ),
                                 ];
 
@@ -1105,8 +2035,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     required String title,
     required String value,
     required IconData icon,
+    VoidCallback? onTap,
   }) {
-    return Container(
+    final Widget card = Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -1162,6 +2093,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             ),
           ),
         ],
+      ),
+    );
+
+    if (onTap == null) {
+      return card;
+    }
+
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: card,
       ),
     );
   }
@@ -1860,4 +2804,497 @@ class _AdminUserSummary {
   final double balanceNormal;
   final double balanceVip;
   final double totalBalance;
+}
+
+enum _AdminHistoryFilterType { day, month, year }
+
+class _AdminUserTransactionStat {
+  const _AdminUserTransactionStat({
+    required this.userId,
+    required this.userName,
+    required this.count,
+  });
+
+  final String userId;
+  final String userName;
+  final int count;
+}
+
+class _AdminMergedTransaction {
+  const _AdminMergedTransaction({
+    required this.sourceKey,
+    required this.typeLabel,
+    required this.amount,
+    required this.occurredAt,
+  });
+
+  final String sourceKey;
+  final String typeLabel;
+  final double amount;
+  final DateTime? occurredAt;
+}
+
+class _AdminUserTransactionHistoryScreen extends StatefulWidget {
+  const _AdminUserTransactionHistoryScreen({
+    required this.userId,
+    required this.userName,
+    required this.initialFilterType,
+    required this.initialSelectedPoint,
+  });
+
+  final String userId;
+  final String userName;
+  final _AdminHistoryFilterType initialFilterType;
+  final DateTime initialSelectedPoint;
+
+  @override
+  State<_AdminUserTransactionHistoryScreen> createState() =>
+      _AdminUserTransactionHistoryScreenState();
+}
+
+class _AdminUserTransactionHistoryScreenState
+    extends State<_AdminUserTransactionHistoryScreen> {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  late _AdminHistoryFilterType _filterType;
+  late DateTime _selectedDate;
+
+  @override
+  void initState() {
+    super.initState();
+    _filterType = widget.initialFilterType;
+    _selectedDate = widget.initialSelectedPoint;
+  }
+
+  String _t(String vi, String en) => AppText.tr(context, vi, en);
+
+  DateTimeRange _currentRange() {
+    final DateTime base = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day,
+    );
+    switch (_filterType) {
+      case _AdminHistoryFilterType.day:
+        return DateTimeRange(
+          start: base,
+          end: base.add(const Duration(days: 1)),
+        );
+      case _AdminHistoryFilterType.month:
+        final DateTime monthStart = DateTime(base.year, base.month, 1);
+        final DateTime monthEnd = DateTime(base.year, base.month + 1, 1);
+        return DateTimeRange(start: monthStart, end: monthEnd);
+      case _AdminHistoryFilterType.year:
+        final DateTime yearStart = DateTime(base.year, 1, 1);
+        final DateTime yearEnd = DateTime(base.year + 1, 1, 1);
+        return DateTimeRange(start: yearStart, end: yearEnd);
+    }
+  }
+
+  String _sourceLabel(String sourceKey) {
+    switch (sourceKey) {
+      case 'Shopping':
+      case 'shopping':
+        return _t('Mua sắm', 'Shopping');
+      case 'bill_payment':
+        return _t('Thanh toán hóa đơn', 'Bill payment');
+      case 'pay_bill':
+      case 'paybill':
+        return _t('Chi trả hóa đơn', 'Pay bill');
+      case 'phone_recharge':
+        return _t('Nạp điện thoại', 'Phone recharge');
+      case 'recent_tranfer':
+      case 'recent_transfer':
+      case 'recent_transfers':
+        return _t('Chuyển khoản', 'Transfer');
+      case 'withdraw':
+        return _t('Rút tiền', 'Withdraw');
+      default:
+        return sourceKey;
+    }
+  }
+
+  double _readAmount(Map<String, dynamic> data) {
+    final dynamic raw =
+        data['amount'] ??
+        data['money'] ??
+        data['transactionAmount'] ??
+        data['price'] ??
+        data['value'];
+    if (raw is num) {
+      return raw.toDouble();
+    }
+    if (raw is String) {
+      final String clean = raw.replaceAll(RegExp(r'[^0-9.-]'), '');
+      return double.tryParse(clean) ?? 0;
+    }
+    return 0;
+  }
+
+  Stream<List<_AdminMergedTransaction>> _userTransactionsStream() {
+    final DateTimeRange range = _currentRange();
+    final List<Stream<QuerySnapshot<Map<String, dynamic>>>> streams =
+        _kTransactionCollections
+            .map(
+              (String source) => _firestore
+                  .collection('users')
+                  .doc(widget.userId)
+                  .collection(source)
+                  .snapshots(includeMetadataChanges: true),
+            )
+            .toList(growable: false);
+
+    return CombineLatestStream.list<QuerySnapshot<Map<String, dynamic>>>(
+      streams,
+    ).map((List<QuerySnapshot<Map<String, dynamic>>> snapshots) {
+      final List<_AdminMergedTransaction> merged = <_AdminMergedTransaction>[];
+
+      for (int i = 0; i < snapshots.length; i++) {
+        final String sourceKey = _kTransactionCollections[i];
+        final QuerySnapshot<Map<String, dynamic>> sourceSnapshot = snapshots[i];
+
+        for (final QueryDocumentSnapshot<Map<String, dynamic>> doc
+            in sourceSnapshot.docs) {
+          final Map<String, dynamic> data = doc.data();
+          final DateTime? txTime = _extractTransactionTime(data);
+          if (!_isTimeInRange(txTime, range)) {
+            continue;
+          }
+
+          merged.add(
+            _AdminMergedTransaction(
+              sourceKey: sourceKey,
+              typeLabel: _sourceLabel(sourceKey),
+              amount: _readAmount(data),
+              occurredAt: txTime,
+            ),
+          );
+        }
+      }
+
+      merged.sort((a, b) {
+        final DateTime? atA = a.occurredAt;
+        final DateTime? atB = b.occurredAt;
+        if (atA == null && atB == null) {
+          return 0;
+        }
+        if (atA == null) {
+          return 1;
+        }
+        if (atB == null) {
+          return -1;
+        }
+        return atB.compareTo(atA);
+      });
+
+      return merged;
+    });
+  }
+
+  String _selectedDateText() {
+    switch (_filterType) {
+      case _AdminHistoryFilterType.day:
+        return DateFormat('dd/MM/yyyy').format(_selectedDate);
+      case _AdminHistoryFilterType.month:
+        return DateFormat('MM/yyyy').format(_selectedDate);
+      case _AdminHistoryFilterType.year:
+        return DateFormat('yyyy').format(_selectedDate);
+    }
+  }
+
+  Future<void> _pickDate() async {
+    final DateTime now = DateTime.now();
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(2000, 1, 1),
+      lastDate: DateTime(now.year + 2, 12, 31),
+      helpText: _t('Chọn mốc thời gian', 'Pick date point'),
+      cancelText: _t('Hủy', 'Cancel'),
+      confirmText: _t('Chọn', 'Select'),
+    );
+
+    if (picked == null || !mounted) {
+      return;
+    }
+
+    setState(() {
+      if (_filterType == _AdminHistoryFilterType.day) {
+        _selectedDate = DateTime(picked.year, picked.month, picked.day);
+      } else if (_filterType == _AdminHistoryFilterType.month) {
+        _selectedDate = DateTime(picked.year, picked.month, 1);
+      } else {
+        _selectedDate = DateTime(picked.year, 1, 1);
+      }
+    });
+  }
+
+  String _formatMoney(double value) {
+    return '${NumberFormat.decimalPattern('vi_VN').format(value.round())} VND';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F7FF),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        title: Text(
+          _t(
+            'Lịch sử giao dịch: ${widget.userName}',
+            'Transaction history: ${widget.userName}',
+          ),
+          style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 16),
+        ),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: <Widget>[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: <BoxShadow>[
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.04),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: <Widget>[
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: <Widget>[
+                      ChoiceChip(
+                        label: Text(
+                          _t('Ngày', 'Day'),
+                          style: GoogleFonts.poppins(fontSize: 12),
+                        ),
+                        selected: _filterType == _AdminHistoryFilterType.day,
+                        onSelected: (_) {
+                          setState(() {
+                            _filterType = _AdminHistoryFilterType.day;
+                          });
+                        },
+                      ),
+                      ChoiceChip(
+                        label: Text(
+                          _t('Tháng', 'Month'),
+                          style: GoogleFonts.poppins(fontSize: 12),
+                        ),
+                        selected: _filterType == _AdminHistoryFilterType.month,
+                        onSelected: (_) {
+                          setState(() {
+                            _filterType = _AdminHistoryFilterType.month;
+                          });
+                        },
+                      ),
+                      ChoiceChip(
+                        label: Text(
+                          _t('Năm', 'Year'),
+                          style: GoogleFonts.poppins(fontSize: 12),
+                        ),
+                        selected: _filterType == _AdminHistoryFilterType.year,
+                        onSelected: (_) {
+                          setState(() {
+                            _filterType = _AdminHistoryFilterType.year;
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Text(
+                          _t(
+                            'Mốc lọc: ${_selectedDateText()}',
+                            'Filter point: ${_selectedDateText()}',
+                          ),
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF334155),
+                          ),
+                        ),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: _pickDate,
+                        icon: const Icon(Icons.event_rounded, size: 18),
+                        label: Text(
+                          _t('Chọn ngày', 'Pick date'),
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: <BoxShadow>[
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.04),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: StreamBuilder<List<_AdminMergedTransaction>>(
+                  stream: _userTransactionsStream(),
+                  builder:
+                      (
+                        BuildContext context,
+                        AsyncSnapshot<List<_AdminMergedTransaction>> snapshot,
+                      ) {
+                        if (!snapshot.hasData) {
+                          return const Center(
+                            child: CircularProgressIndicator(),
+                          );
+                        }
+
+                        final List<_AdminMergedTransaction> docs =
+                            snapshot.data ?? const <_AdminMergedTransaction>[];
+
+                        if (docs.isEmpty) {
+                          return Center(
+                            child: Text(
+                              _t(
+                                'Không có giao dịch trong khoảng thời gian đã chọn',
+                                'No transactions in selected range',
+                              ),
+                              style: GoogleFonts.poppins(
+                                color: Colors.grey.shade600,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          );
+                        }
+
+                        return Column(
+                          children: <Widget>[
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(14, 12, 14, 4),
+                              child: Row(
+                                children: <Widget>[
+                                  Text(
+                                    _t(
+                                      'Tổng ${docs.length} giao dịch',
+                                      'Total ${docs.length} transactions',
+                                    ),
+                                    style: GoogleFonts.poppins(
+                                      fontWeight: FontWeight.w700,
+                                      color: const Color(0xFF1E293B),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const Divider(height: 8),
+                            Expanded(
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: SingleChildScrollView(
+                                  child: DataTable(
+                                    columnSpacing: 20,
+                                    headingRowHeight: 42,
+                                    dataRowMinHeight: 44,
+                                    dataRowMaxHeight: 52,
+                                    columns: <DataColumn>[
+                                      DataColumn(
+                                        label: Text(
+                                          _t(
+                                            'Loại giao dịch',
+                                            'Transaction type',
+                                          ),
+                                          style: GoogleFonts.poppins(
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ),
+                                      DataColumn(
+                                        label: Text(
+                                          _t('Số tiền', 'Amount'),
+                                          style: GoogleFonts.poppins(
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ),
+                                      DataColumn(
+                                        label: Text(
+                                          _t('Thời gian', 'Time'),
+                                          style: GoogleFonts.poppins(
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                    rows: docs
+                                        .map((_AdminMergedTransaction item) {
+                                          final String timeText =
+                                              item.occurredAt == null
+                                              ? '-'
+                                              : DateFormat(
+                                                  'dd/MM/yyyy HH:mm',
+                                                ).format(item.occurredAt!);
+                                          return DataRow(
+                                            cells: <DataCell>[
+                                              DataCell(
+                                                Text(
+                                                  item.typeLabel,
+                                                  style: GoogleFonts.poppins(
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                              ),
+                                              DataCell(
+                                                Text(
+                                                  _formatMoney(item.amount),
+                                                  style: GoogleFonts.poppins(
+                                                    fontWeight: FontWeight.w700,
+                                                    color: const Color(
+                                                      0xFF0F766E,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                              DataCell(
+                                                Text(
+                                                  timeText,
+                                                  style: GoogleFonts.poppins(
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          );
+                                        })
+                                        .toList(growable: false),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

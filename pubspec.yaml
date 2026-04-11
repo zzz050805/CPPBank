@@ -33,6 +33,7 @@ dependencies:
   geolocator: ^14.0.2
   crypto: ^3.0.7
   lucide_icons: ^0.257.0
+  rxdart: ^0.28.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
