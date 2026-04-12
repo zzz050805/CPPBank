@@ -161,34 +161,151 @@ class _NotificationScreenState extends State<NotificationScreen> {
     }
   }
 
-  String _resolveNotificationTitle(Map<String, dynamic> data) {
-    final String fallback =
-        (data['title'] ?? _t('Thông báo mới', 'New notification'))
-            .toString()
-            .trim();
+  Map<String, String> _readStringParams(dynamic raw) {
+    final Map<String, String> result = <String, String>{};
+    if (raw is! Map) {
+      return result;
+    }
 
-    final String titleKey = (data['titleKey'] ?? '').toString().trim();
+    raw.forEach((dynamic key, dynamic value) {
+      final String k = key.toString().trim();
+      if (k.isEmpty) {
+        return;
+      }
+      final String v = (value ?? '').toString().trim();
+      if (v.isEmpty) {
+        return;
+      }
+      result[k] = v;
+    });
+
+    return result;
+  }
+
+  String _derivePaymentServiceName(Map<String, dynamic> data) {
     final String serviceTypeKey = (data['serviceTypeKey'] ?? '').toString();
     final String billType = (data['billType'] ?? data['serviceType'] ?? '')
         .toString();
-
-    final bool isBillPaymentNotification =
-        (data['type'] ?? '').toString().trim().toLowerCase() == 'payment' &&
-        billType.trim().isNotEmpty;
-    final bool needsSpecificTitle =
-        titleKey == 'payment_success_specific' || isBillPaymentNotification;
-    if (!needsSpecificTitle) {
-      return fallback;
-    }
-
     final String resolvedServiceKey = serviceTypeKey.trim().isNotEmpty
         ? serviceTypeKey
         : _billTypeToTextKey(billType);
-    final String serviceName = AppText.text(context, resolvedServiceKey);
-    return AppText.paymentSuccessSpecificTitle(
-      context,
-      serviceName: serviceName,
+    return AppText.text(context, resolvedServiceKey);
+  }
+
+  Map<String, String> _titleParams(Map<String, dynamic> data, String titleKey) {
+    final Map<String, String> fromTitleParams = _readStringParams(
+      data['titleParams'],
     );
+    if (fromTitleParams.isNotEmpty) {
+      return fromTitleParams;
+    }
+
+    if (titleKey == 'payment_success_specific') {
+      return <String, String>{'serviceName': _derivePaymentServiceName(data)};
+    }
+
+    return _readStringParams(data['params']);
+  }
+
+  Map<String, String> _bodyParams(Map<String, dynamic> data, String bodyKey) {
+    final Map<String, String> fromBodyParams = _readStringParams(
+      data['bodyParams'],
+    );
+    if (fromBodyParams.isNotEmpty) {
+      return fromBodyParams;
+    }
+
+    final Map<String, String> fromCommonParams = _readStringParams(
+      data['params'],
+    );
+    if (fromCommonParams.isNotEmpty) {
+      return fromCommonParams;
+    }
+
+    final String amountText = _readAmount(data['amount']) > 0
+        ? '${_formatAmount(_readAmount(data['amount']))} VND'
+        : (data['amountText'] ?? '').toString().trim();
+
+    if (bodyKey == 'desc_transfer') {
+      return <String, String>{
+        if (amountText.isNotEmpty) 'amount': amountText,
+        'receiverName':
+            (data['receiverName'] ??
+                    data['recipientName'] ??
+                    data['serviceName'] ??
+                    '')
+                .toString()
+                .trim(),
+      };
+    }
+
+    if (bodyKey == 'desc_withdraw') {
+      return <String, String>{if (amountText.isNotEmpty) 'amount': amountText};
+    }
+
+    if (bodyKey == 'desc_shopping') {
+      return <String, String>{
+        if (amountText.isNotEmpty) 'amount': amountText,
+        'serviceName': (data['serviceName'] ?? '').toString().trim(),
+      };
+    }
+
+    return <String, String>{};
+  }
+
+  String _resolveNotificationTitle(Map<String, dynamic> data) {
+    final String fallbackRaw = (data['title'] ?? '').toString().trim();
+    final String fallback = fallbackRaw.isEmpty
+        ? _t('Thông báo mới', 'New notification')
+        : fallbackRaw;
+
+    final String titleKey = (data['titleKey'] ?? '').toString().trim();
+    if (titleKey.isNotEmpty) {
+      final String resolved = AppText.textWithParams(
+        context,
+        titleKey,
+        _titleParams(data, titleKey),
+      ).trim();
+      if (resolved.isNotEmpty && resolved != titleKey) {
+        return resolved;
+      }
+    }
+
+    final String billType = (data['billType'] ?? data['serviceType'] ?? '')
+        .toString();
+    final bool isBillPaymentNotification =
+        (data['type'] ?? '').toString().trim().toLowerCase() == 'payment' &&
+        billType.trim().isNotEmpty;
+    if (isBillPaymentNotification) {
+      return AppText.paymentSuccessSpecificTitle(
+        context,
+        serviceName: _derivePaymentServiceName(data),
+      );
+    }
+
+    return fallback;
+  }
+
+  String _resolveNotificationBody(Map<String, dynamic> data) {
+    final String fallbackRaw = (data['body'] ?? '').toString().trim();
+    final String fallback = fallbackRaw.isEmpty
+        ? _t('Không có mô tả', 'No description')
+        : fallbackRaw;
+
+    final String bodyKey = (data['bodyKey'] ?? '').toString().trim();
+    if (bodyKey.isEmpty) {
+      return fallback;
+    }
+
+    final String resolved = AppText.textWithParams(
+      context,
+      bodyKey,
+      _bodyParams(data, bodyKey),
+    ).trim();
+    if (resolved.isEmpty || resolved == bodyKey) {
+      return fallback;
+    }
+    return resolved;
   }
 
   IconData _iconForNotification({
@@ -366,10 +483,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
                 final bool isRead = data['isRead'] == true;
 
                 final String title = _resolveNotificationTitle(data);
-                final String body =
-                    (data['body'] ?? _t('Không có mô tả', 'No description'))
-                        .toString()
-                        .trim();
+                final String body = _resolveNotificationBody(data);
                 final num amount = _readAmount(data['amount']);
                 final bool hasAmount = amount > 0 && !promotionsOnly;
                 final bool isNegative = data['isNegative'] == true || hasAmount;

@@ -10,10 +10,12 @@ import 'service_model.dart';
 
 class ServicePackageOption {
   const ServicePackageOption({
+    this.title,
     required this.price,
     required this.discountPercent,
   });
 
+  final String? title;
   final int price;
   final int discountPercent;
 }
@@ -40,26 +42,36 @@ List<ServicePackageOption> _readPackageOptions(List<dynamic> rawPackages) {
 
   for (final dynamic item in rawPackages) {
     if (item is Map<String, dynamic>) {
+      final String title = (item['title'] ?? '').toString().trim();
       final int price = (item['price'] is num)
           ? (item['price'] as num).toInt()
           : (int.tryParse((item['price'] ?? '').toString()) ?? 0);
       final int discountPercent = _readDiscountPercent(item['discountPercent']);
       if (price > 0) {
         parsed.add(
-          ServicePackageOption(price: price, discountPercent: discountPercent),
+          ServicePackageOption(
+            title: title.isEmpty ? null : title,
+            price: price,
+            discountPercent: discountPercent,
+          ),
         );
       }
       continue;
     }
 
     if (item is Map) {
+      final String title = (item['title'] ?? '').toString().trim();
       final int price = (item['price'] is num)
           ? (item['price'] as num).toInt()
           : (int.tryParse((item['price'] ?? '').toString()) ?? 0);
       final int discountPercent = _readDiscountPercent(item['discountPercent']);
       if (price > 0) {
         parsed.add(
-          ServicePackageOption(price: price, discountPercent: discountPercent),
+          ServicePackageOption(
+            title: title.isEmpty ? null : title,
+            price: price,
+            discountPercent: discountPercent,
+          ),
         );
       }
       continue;
@@ -67,7 +79,9 @@ List<ServicePackageOption> _readPackageOptions(List<dynamic> rawPackages) {
 
     final int price = int.tryParse(item.toString()) ?? 0;
     if (price > 0) {
-      parsed.add(ServicePackageOption(price: price, discountPercent: 0));
+      parsed.add(
+        ServicePackageOption(title: null, price: price, discountPercent: 0),
+      );
     }
   }
 
@@ -258,8 +272,11 @@ class _ShoppingStoreScreenState extends State<ShoppingStoreScreen> {
     if (servicePricing == null || servicePricing.packages.isEmpty) {
       return service.packages
           .map(
-            (int price) =>
-                ServicePackageOption(price: price, discountPercent: 0),
+            (int price) => ServicePackageOption(
+              title: null,
+              price: price,
+              discountPercent: 0,
+            ),
           )
           .toList(growable: false);
     }
@@ -270,8 +287,14 @@ class _ShoppingStoreScreenState extends State<ShoppingStoreScreen> {
     BuildContext context,
     ServiceModel service,
     int index,
+    ServicePackageOption package,
     int amount,
   ) {
+    final String customTitle = (package.title ?? '').trim();
+    if (customTitle.isNotEmpty) {
+      return customTitle;
+    }
+
     switch (service.id) {
       case 'netflix':
         const List<String> plans = <String>[
@@ -555,6 +578,7 @@ class _ShoppingStoreScreenState extends State<ShoppingStoreScreen> {
       context,
       service,
       index,
+      package,
       originalPrice,
     );
     final bool isPopular = _isPopularPackage(index, packageName);
@@ -896,6 +920,7 @@ class _ShoppingStoreScreenState extends State<ShoppingStoreScreen> {
       context,
       service,
       index,
+      package,
       originalPrice,
     );
 

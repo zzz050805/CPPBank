@@ -3,7 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import '../core/app_translations.dart';
 import '../data/user_firestore_service.dart';
 import '../l10n/app_text.dart';
 import '../services/card_number_service.dart';
@@ -36,9 +35,9 @@ class ConfirmTransferScreen extends StatelessWidget {
     this.amountText = '',
     this.transferContent = '',
     this.recipientAccountNumber = '',
-    this.recipientAccountName = 'TRAN THANH B',
-    this.recipientBankName = 'MC-BANK',
-    this.recipientBankId = 'mc_bank',
+    this.recipientAccountName = '',
+    this.recipientBankName = '',
+    this.recipientBankId = '',
   });
 
   final String amountText;
@@ -124,17 +123,11 @@ class ConfirmTransferScreen extends StatelessWidget {
 
   String _safeRecipientName() {
     final String value = recipientAccountName.trim();
-    if (value.isEmpty) {
-      return 'TRAN THANH B';
-    }
-    return value.toUpperCase();
+    return value;
   }
 
   String _safeRecipientBank() {
     final String value = recipientBankName.trim();
-    if (value.isEmpty) {
-      return 'MC-BANK';
-    }
     return value;
   }
 
@@ -222,24 +215,31 @@ class ConfirmTransferScreen extends StatelessWidget {
     final int roundedAmount = amount.round();
     final String transferCode =
         'TRF${DateTime.now().millisecondsSinceEpoch.toString().substring(6)}';
-    final String languageCode = AppTranslations.currentLanguageCode(context);
-    final String notificationTitleRaw = AppTranslations.getTextByCode(
+    final String languageCode = AppText.currentLanguageCode(context);
+    final String transferAmountText = _formatAmount(roundedAmount.toString());
+    final Map<String, String> titleParams = <String, String>{};
+    final Map<String, String> bodyParams = <String, String>{
+      'amount': transferAmountText,
+      'receiverName': recipientName,
+    };
+
+    final String notificationTitleRaw = AppText.textByCodeWithParams(
       languageCode,
-      'transfer_success_title',
+      'title_transfer',
+      titleParams,
     );
-    final String notificationTitle =
-        notificationTitleRaw == 'transfer_success_title'
+    final String notificationTitle = notificationTitleRaw == 'title_transfer'
         ? 'Chuyển khoản thành công'
         : notificationTitleRaw;
-    final String notificationBodyRaw = AppTranslations.getTextByCodeWithParams(
+    final String notificationBodyRaw = AppText.textByCodeWithParams(
       languageCode,
-      'transfer_success_body',
-      <String, String>{'amount': '$roundedAmount', 'receiver': recipientName},
+      'desc_transfer',
+      bodyParams,
     );
-    final String notificationBody =
-        notificationBodyRaw == 'transfer_success_body'
-        ? 'Đã chuyển $roundedAmount VND đến $recipientName'
+    final String notificationBody = notificationBodyRaw == 'desc_transfer'
+        ? 'Bạn đã chuyển $transferAmountText đến $recipientName.'
         : notificationBodyRaw;
+    final DateTime transferCompletedAt = DateTime.now();
 
     await firestore.runTransaction((Transaction transaction) async {
       final DocumentSnapshot<Map<String, dynamic>> userSnap = await transaction
@@ -322,6 +322,12 @@ class ConfirmTransferScreen extends StatelessWidget {
       }, SetOptions(merge: true));
 
       transaction.set(notificationRef, <String, dynamic>{
+        'title': notificationTitle,
+        'titleKey': 'title_transfer',
+        'titleParams': titleParams,
+        'body': notificationBody,
+        'bodyKey': 'desc_transfer',
+        'bodyParams': bodyParams,
         'timestamp': FieldValue.serverTimestamp(),
         'createdAt': FieldValue.serverTimestamp(),
         'type': 'transfer',
@@ -354,7 +360,17 @@ class ConfirmTransferScreen extends StatelessWidget {
 
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (_) => const SuccessTransactionScreen()),
+      MaterialPageRoute(
+        builder: (_) => SuccessTransactionScreen(
+          receiverName: recipientName,
+          receiverCardNumber: recipientAccount,
+          bankName: recipientBankName,
+          transactionCode: transferCode,
+          transferContent: transferContent,
+          transferAmount: roundedAmount,
+          transferredAt: transferCompletedAt,
+        ),
+      ),
     );
   }
 
@@ -365,8 +381,12 @@ class ConfirmTransferScreen extends StatelessWidget {
         ? _t(context, 'CHUYỂN TIỀN', 'TRANSFER')
         : transferContent.trim();
     final String displayRecipientAccount = _safeRecipientAccount(context);
-    final String displayRecipientName = _safeRecipientName();
-    final String displayRecipientBank = _safeRecipientBank();
+    final String displayRecipientName = _safeRecipientName().trim().isEmpty
+        ? _t(context, 'Không xác định', 'Unknown')
+        : _safeRecipientName();
+    final String displayRecipientBank = _safeRecipientBank().trim().isEmpty
+        ? _t(context, 'Không xác định', 'Unknown')
+        : _safeRecipientBank();
     return Scaffold(
       backgroundColor: pageBackground,
       appBar: CCPAppBar(

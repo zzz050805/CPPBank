@@ -467,17 +467,23 @@ class _SettingScreenState extends State<SettingScreen> {
                 userData['balance_vip'] ??
                 userData['vipBalance'] ??
                 userData['balanceVip'];
+            final bool hasVipCard = userData['hasVipCard'] == true;
+            final bool isStandardLocked =
+                userData['is_standard_locked'] == true;
+            final bool isVipLocked = userData['is_vip_locked'] == true;
             final bool hasSplitBalance = rawNormal != null || rawVip != null;
             final double fallbackTotal = hasSplitBalance
-                ? _readBalance(rawNormal) + _readBalance(rawVip)
+                ? (isStandardLocked ? 0 : _readBalance(rawNormal)) +
+                      ((hasVipCard && !isVipLocked) ? _readBalance(rawVip) : 0)
                 : _readBalance(
-                    userData['balance'] ??
+                    userData['availableBalance'] ??
                         userData['totalBalance'] ??
-                        userData['availableBalance'],
+                        userData['balance'],
                   );
 
             final double totalBalance = hasCardData
-                ? standardBalance + vipBalance
+                ? (isStandardLocked ? 0 : standardBalance) +
+                      ((hasVipCard && !isVipLocked) ? vipBalance : 0)
                 : fallbackTotal;
 
             final _MembershipRankData rank = _resolveRankFromFirestore(

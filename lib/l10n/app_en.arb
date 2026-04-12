@@ -5,5 +5,11 @@
   "status_active": "Active",
   "status_locked": "Locked",
   "lock_card": "Lock card",
-  "unlock_card": "Unlock card"
+  "unlock_card": "Unlock card",
+  "title_transfer": "Transfer successful",
+  "desc_transfer": "You transferred {amount} to {receiverName}.",
+  "title_withdraw": "Withdrawal successful",
+  "desc_withdraw": "You withdrew {amount} at the service point.",
+  "title_shopping": "Shopping payment successful",
+  "desc_shopping": "You paid {amount} for the {serviceName} package."
 }

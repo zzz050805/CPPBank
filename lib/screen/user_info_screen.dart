@@ -720,18 +720,31 @@ class _UserInfoScreenState extends State<UserInfoScreen>
                               data['balance_vip'] ??
                               data['vipBalance'] ??
                               data['balanceVip'];
+                          final bool hasVipCard = data['hasVipCard'] == true;
+                          final bool isStandardLocked =
+                              data['is_standard_locked'] == true;
+                          final bool isVipLocked =
+                              data['is_vip_locked'] == true;
                           final bool hasSplitBalance =
                               rawNormal != null || rawVip != null;
                           final double fallbackTotal = hasSplitBalance
-                              ? _readBalance(rawNormal) + _readBalance(rawVip)
+                              ? (isStandardLocked
+                                        ? 0
+                                        : _readBalance(rawNormal)) +
+                                    ((hasVipCard && !isVipLocked)
+                                        ? _readBalance(rawVip)
+                                        : 0)
                               : _readBalance(
-                                  data['balance'] ??
+                                  data['availableBalance'] ??
                                       data['totalBalance'] ??
-                                      data['availableBalance'],
+                                      data['balance'],
                                 );
 
                           final double totalBalance = hasCardData
-                              ? standardBalance + vipBalance
+                              ? (isStandardLocked ? 0 : standardBalance) +
+                                    ((hasVipCard && !isVipLocked)
+                                        ? vipBalance
+                                        : 0)
                               : fallbackTotal;
 
                           final _MembershipRankData rank = _resolveRankFromData(

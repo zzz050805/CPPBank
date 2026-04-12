@@ -8,7 +8,6 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
-import '../core/app_translations.dart';
 import '../data/user_firestore_service.dart';
 import '../l10n/app_text.dart';
 import '../services/card_number_service.dart';
@@ -235,20 +234,27 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
       final DateTime expiresAt = createdAt.add(const Duration(minutes: 15));
       final String withdrawCode = _generateWithdrawCode();
       final String amountText = _formatIntAmount(amount);
-      final String successTitleRaw = AppTranslations.getText(
-        context,
-        'withdraw_success_title',
+      final String notificationAmountText = '$amountText VND';
+      final String languageCode = AppText.currentLanguageCode(context);
+      final Map<String, String> titleParams = <String, String>{};
+      final Map<String, String> bodyParams = <String, String>{
+        'amount': notificationAmountText,
+      };
+      final String successTitleRaw = AppText.textByCodeWithParams(
+        languageCode,
+        'title_withdraw',
+        titleParams,
       );
-      final String successTitle = successTitleRaw == 'withdraw_success_title'
+      final String successTitle = successTitleRaw == 'title_withdraw'
           ? 'Rút tiền thành công'
           : successTitleRaw;
-      final String successBodyRaw = AppTranslations.getTextWithParams(
-        context,
-        'withdraw_success_body',
-        <String, String>{'amount': amountText},
+      final String successBodyRaw = AppText.textByCodeWithParams(
+        languageCode,
+        'desc_withdraw',
+        bodyParams,
       );
-      final String successBody = successBodyRaw == 'withdraw_success_body'
-          ? 'Rút tiền mặt $amountText VND tại điểm giao dịch'
+      final String successBody = successBodyRaw == 'desc_withdraw'
+          ? 'Bạn đã rút $notificationAmountText tại điểm giao dịch.'
           : successBodyRaw;
       final DocumentReference<Map<String, dynamic>> withdrawRef = userRef
           .collection('withdraw')
@@ -348,6 +354,12 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
         });
 
         transaction.set(notificationRef, <String, dynamic>{
+          'title': successTitle,
+          'titleKey': 'title_withdraw',
+          'titleParams': titleParams,
+          'body': successBody,
+          'bodyKey': 'desc_withdraw',
+          'bodyParams': bodyParams,
           'timestamp': FieldValue.serverTimestamp(),
           'createdAt': FieldValue.serverTimestamp(),
           'type': 'withdraw',

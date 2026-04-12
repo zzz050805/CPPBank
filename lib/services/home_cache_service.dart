@@ -10,6 +10,8 @@ class HomeCacheData {
     this.standardBalance = 0,
     this.vipBalance = 0,
     this.hasVipCard = false,
+    this.isStandardLocked = false,
+    this.isVipLocked = false,
     this.isReady = false,
   });
 
@@ -18,10 +20,15 @@ class HomeCacheData {
   final double standardBalance;
   final double vipBalance;
   final bool hasVipCard;
+  final bool isStandardLocked;
+  final bool isVipLocked;
   final bool isReady;
 
-  double get totalBalance =>
-      hasVipCard ? standardBalance + vipBalance : standardBalance;
+  double get totalBalance {
+    final double visibleStandard = isStandardLocked ? 0 : standardBalance;
+    final double visibleVip = (hasVipCard && !isVipLocked) ? vipBalance : 0;
+    return visibleStandard + visibleVip;
+  }
 
   HomeCacheData copyWith({
     String? userId,
@@ -29,6 +36,8 @@ class HomeCacheData {
     double? standardBalance,
     double? vipBalance,
     bool? hasVipCard,
+    bool? isStandardLocked,
+    bool? isVipLocked,
     bool? isReady,
   }) {
     return HomeCacheData(
@@ -37,6 +46,8 @@ class HomeCacheData {
       standardBalance: standardBalance ?? this.standardBalance,
       vipBalance: vipBalance ?? this.vipBalance,
       hasVipCard: hasVipCard ?? this.hasVipCard,
+      isStandardLocked: isStandardLocked ?? this.isStandardLocked,
+      isVipLocked: isVipLocked ?? this.isVipLocked,
       isReady: isReady ?? this.isReady,
     );
   }
@@ -56,7 +67,7 @@ class HomeCacheService {
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _userSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _cardsSub;
 
-  bool _parseHasVipCard(dynamic value) {
+  bool _parseBool(dynamic value) {
     if (value is bool) return value;
     if (value is num) return value != 0;
     if (value is String) {
@@ -64,6 +75,10 @@ class HomeCacheService {
       return normalized == 'true' || normalized == '1' || normalized == 'yes';
     }
     return false;
+  }
+
+  bool _parseHasVipCard(dynamic value) {
+    return _parseBool(value);
   }
 
   double _readBalance(dynamic raw) {
@@ -95,6 +110,8 @@ class HomeCacheService {
     notifier.value = notifier.value.copyWith(
       userName: nextName,
       hasVipCard: _parseHasVipCard(data['hasVipCard']),
+      isStandardLocked: _parseBool(data['is_standard_locked']),
+      isVipLocked: _parseBool(data['is_vip_locked']),
     );
   }
 

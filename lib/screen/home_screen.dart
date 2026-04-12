@@ -161,13 +161,11 @@ class _HomeScreenState extends State<HomeScreen> {
               continue;
             }
 
-            final String title = (data['title'] ?? '').toString().trim();
-            final String body = (data['body'] ?? '').toString().trim();
+            final String title = _resolveHeadsUpTitle(data);
+            final String body = _resolveHeadsUpBody(data);
             NotificationService().showNotification(
-              title: title.isEmpty ? 'Uu dai moi' : title,
-              body: body.isEmpty
-                  ? 'Ban vua nhan duoc uu dai moi. Mo app de xem ngay.'
-                  : body,
+              title: title,
+              body: body,
               lightVibration: true,
             );
           }
@@ -243,6 +241,166 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
     return DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
+  String _billTypeToTextKey(String billType) {
+    switch (billType.trim().toLowerCase()) {
+      case 'electric':
+        return 'bill_type_electric';
+      case 'water':
+        return 'bill_type_water';
+      case 'internet':
+        return 'bill_type_internet';
+      case 'mobile':
+      case 'mobile_postpaid':
+        return 'bill_type_mobile';
+      default:
+        return 'service';
+    }
+  }
+
+  Map<String, String> _readNotificationParams(dynamic raw) {
+    final Map<String, String> result = <String, String>{};
+    if (raw is! Map) {
+      return result;
+    }
+
+    raw.forEach((dynamic key, dynamic value) {
+      final String k = key.toString().trim();
+      final String v = (value ?? '').toString().trim();
+      if (k.isEmpty || v.isEmpty) {
+        return;
+      }
+      result[k] = v;
+    });
+
+    return result;
+  }
+
+  num _readNotificationAmountValue(dynamic value) {
+    if (value is num) {
+      return value;
+    }
+    if (value is String) {
+      final String text = value.trim();
+      if (text.isEmpty) {
+        return 0;
+      }
+      final num? direct = num.tryParse(text);
+      if (direct != null) {
+        return direct;
+      }
+
+      final String digitsOnly = text.replaceAll(RegExp(r'[^0-9.-]'), '');
+      return digitsOnly.isEmpty ? 0 : (num.tryParse(digitsOnly) ?? 0);
+    }
+    return 0;
+  }
+
+  String _resolveHeadsUpTitle(Map<String, dynamic> data) {
+    final String type = (data['type'] ?? '').toString().trim().toLowerCase();
+    final String rawTitle = (data['title'] ?? '').toString().trim();
+    final String fallback = rawTitle.isNotEmpty
+        ? rawTitle
+        : (type == 'uu_dai'
+              ? _t('Ưu đãi mới', 'New offer')
+              : _t('Thông báo mới', 'New notification'));
+
+    final String titleKey = (data['titleKey'] ?? '').toString().trim();
+    if (titleKey.isEmpty) {
+      return fallback;
+    }
+
+    final Map<String, String> params = _readNotificationParams(
+      data['titleParams'],
+    );
+    final Map<String, String> resolvedParams = params.isNotEmpty
+        ? params
+        : (() {
+            if (titleKey == 'payment_success_specific') {
+              final String serviceTypeKey = (data['serviceTypeKey'] ?? '')
+                  .toString();
+              final String billType =
+                  (data['billType'] ?? data['serviceType'] ?? '').toString();
+              final String resolvedKey = serviceTypeKey.trim().isNotEmpty
+                  ? serviceTypeKey
+                  : _billTypeToTextKey(billType);
+              return <String, String>{
+                'serviceName': AppText.text(context, resolvedKey),
+              };
+            }
+            return _readNotificationParams(data['params']);
+          })();
+
+    final String resolved = AppText.textWithParams(
+      context,
+      titleKey,
+      resolvedParams,
+    ).trim();
+
+    if (resolved.isEmpty || resolved == titleKey) {
+      return fallback;
+    }
+
+    return resolved;
+  }
+
+  String _resolveHeadsUpBody(Map<String, dynamic> data) {
+    final String type = (data['type'] ?? '').toString().trim().toLowerCase();
+    final String rawBody = (data['body'] ?? '').toString().trim();
+    final String fallback = rawBody.isNotEmpty
+        ? rawBody
+        : (type == 'uu_dai'
+              ? _t('Bạn vừa nhận được ưu đãi mới.', 'You received a new offer.')
+              : _t('Không có mô tả', 'No description'));
+
+    final String bodyKey = (data['bodyKey'] ?? '').toString().trim();
+    if (bodyKey.isEmpty) {
+      return fallback;
+    }
+
+    Map<String, String> params = _readNotificationParams(data['bodyParams']);
+    if (params.isEmpty) {
+      params = _readNotificationParams(data['params']);
+    }
+
+    if (params.isEmpty) {
+      final String amount = _readNotificationAmountValue(data['amount']) > 0
+          ? '${_formatCurrency(_readNotificationAmountValue(data['amount']).toDouble())} VND'
+          : (data['amountText'] ?? '').toString().trim();
+
+      if (bodyKey == 'desc_transfer') {
+        params = <String, String>{
+          if (amount.isNotEmpty) 'amount': amount,
+          'receiverName':
+              (data['receiverName'] ??
+                      data['recipientName'] ??
+                      data['serviceName'] ??
+                      '')
+                  .toString()
+                  .trim(),
+        };
+      } else if (bodyKey == 'desc_withdraw') {
+        params = <String, String>{if (amount.isNotEmpty) 'amount': amount};
+      } else if (bodyKey == 'desc_shopping') {
+        params = <String, String>{
+          if (amount.isNotEmpty) 'amount': amount,
+          'serviceName': (data['serviceName'] ?? '').toString().trim(),
+        };
+      }
+    }
+
+    final String resolved = AppText.textWithParams(
+      context,
+      bodyKey,
+      params,
+    ).trim();
+
+    if (resolved.isEmpty || resolved == bodyKey) {
+      return fallback;
+    }
+
+    return resolved;
   }
 
   bool _resolveTransferIsNegative(Map<String, dynamic> data, String uid) {
@@ -1501,87 +1659,100 @@ class _HomeScreenState extends State<HomeScreen> {
         .collection('users')
         .doc(uid);
 
-    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: userRef
-          .collection('cards')
-          .snapshots(includeMetadataChanges: true),
-      builder: (context, cardsSnapshot) {
-        double normalBalance = 0;
-        double vipBalance = 0;
-        bool hasCardData = false;
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: userRef.snapshots(includeMetadataChanges: true),
+      builder: (context, userSnapshot) {
+        final Map<String, dynamic> userData =
+            userSnapshot.data?.data() ?? <String, dynamic>{};
+        final bool hasVipCard = userData['hasVipCard'] == true;
+        final bool isStandardLocked = userData['is_standard_locked'] == true;
+        final bool isVipLocked = userData['is_vip_locked'] == true;
 
-        for (final QueryDocumentSnapshot<Map<String, dynamic>> doc
-            in cardsSnapshot.data?.docs ??
-                <QueryDocumentSnapshot<Map<String, dynamic>>>[]) {
-          final String cardId = doc.id.toLowerCase();
-          final double balance = _readUserBalanceField(doc.data()['balance']);
+        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: userRef
+              .collection('cards')
+              .snapshots(includeMetadataChanges: true),
+          builder: (context, cardsSnapshot) {
+            double normalBalance = 0;
+            double vipBalance = 0;
+            bool hasCardData = false;
 
-          if (cardId == 'standard') {
-            normalBalance = balance;
-            hasCardData = true;
-          } else if (cardId == 'vip') {
-            vipBalance = balance;
-            hasCardData = true;
-          }
-        }
+            for (final QueryDocumentSnapshot<Map<String, dynamic>> doc
+                in cardsSnapshot.data?.docs ??
+                    <QueryDocumentSnapshot<Map<String, dynamic>>>[]) {
+              final String cardId = doc.id.toLowerCase();
+              final double balance = _readUserBalanceField(
+                doc.data()['balance'],
+              );
 
-        if (cardsSnapshot.connectionState == ConnectionState.waiting &&
-            !_hasLoadedBalance) {
-          if (!_isBalanceVisible) {
-            return _buildHiddenBalanceText();
-          }
+              if (cardId == 'standard') {
+                normalBalance = balance;
+                hasCardData = true;
+              } else if (cardId == 'vip') {
+                vipBalance = balance;
+                hasCardData = true;
+              }
+            }
 
-          if (_lastKnownTotalBalance > 0) {
-            return _buildBalanceText(_lastKnownTotalBalance);
-          }
+            if (cardsSnapshot.connectionState == ConnectionState.waiting &&
+                !_hasLoadedBalance) {
+              if (!_isBalanceVisible) {
+                return _buildHiddenBalanceText();
+              }
 
-          if (cachedHomeData.isReady) {
-            return _buildBalanceText(cachedHomeData.totalBalance);
-          }
+              if (_lastKnownTotalBalance > 0) {
+                return _buildBalanceText(_lastKnownTotalBalance);
+              }
 
-          return _buildBalanceSkeleton();
-        }
+              if (cachedHomeData.isReady) {
+                return _buildBalanceText(cachedHomeData.totalBalance);
+              }
 
-        if (hasCardData) {
-          _lastKnownTotalBalance = normalBalance + vipBalance;
-          _hasLoadedBalance = true;
-        }
+              return _buildBalanceSkeleton();
+            }
 
-        if (!_isBalanceVisible) {
-          return _buildHiddenBalanceText();
-        }
+            double resolvedTotal = 0;
 
-        if (_hasLoadedBalance) {
-          return _buildBalanceText(_lastKnownTotalBalance);
-        }
+            if (hasCardData) {
+              resolvedTotal =
+                  (isStandardLocked ? 0 : normalBalance) +
+                  ((hasVipCard && !isVipLocked) ? vipBalance : 0);
+            } else {
+              final dynamic rawNormal =
+                  userData['balance_normal'] ??
+                  userData['standardBalance'] ??
+                  userData['balanceNormal'];
+              final dynamic rawVip =
+                  userData['balance_vip'] ??
+                  userData['vipBalance'] ??
+                  userData['balanceVip'];
 
-        return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-          stream: userRef.snapshots(includeMetadataChanges: true),
-          builder: (context, userSnapshot) {
-            final Map<String, dynamic> userData =
-                userSnapshot.data?.data() ?? <String, dynamic>{};
-            final dynamic rawNormal =
-                userData['balance_normal'] ??
-                userData['standardBalance'] ??
-                userData['balanceNormal'];
-            final dynamic rawVip =
-                userData['balance_vip'] ??
-                userData['vipBalance'] ??
-                userData['balanceVip'];
+              final bool hasSplitBalance = rawNormal != null || rawVip != null;
+              if (hasSplitBalance) {
+                final double standardFallback = _readUserBalanceField(
+                  rawNormal,
+                );
+                final double vipFallback = _readUserBalanceField(rawVip);
+                resolvedTotal =
+                    (isStandardLocked ? 0 : standardFallback) +
+                    ((hasVipCard && !isVipLocked) ? vipFallback : 0);
+              } else {
+                resolvedTotal = _readUserBalanceField(
+                  userData['availableBalance'] ??
+                      userData['totalBalance'] ??
+                      userData['balance'],
+                );
+              }
+            }
 
-            final bool hasSplitBalance = rawNormal != null || rawVip != null;
-            final double fallbackTotal = hasSplitBalance
-                ? _readUserBalanceField(rawNormal) +
-                      _readUserBalanceField(rawVip)
-                : _readUserBalanceField(
-                    userData['balance'] ??
-                        userData['totalBalance'] ??
-                        userData['availableBalance'],
-                  );
-
-            _lastKnownTotalBalance = fallbackTotal;
+            _lastKnownTotalBalance = resolvedTotal;
             _hasLoadedBalance = true;
-            return _buildBalanceText(fallbackTotal);
+
+            if (!_isBalanceVisible) {
+              return _buildHiddenBalanceText();
+            }
+
+            return _buildBalanceText(_lastKnownTotalBalance);
           },
         );
       },

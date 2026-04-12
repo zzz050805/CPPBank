@@ -5,5 +5,11 @@
   "status_active": "Đang hoạt động",
   "status_locked": "Đã khóa",
   "lock_card": "Khóa thẻ",
-  "unlock_card": "Mở thẻ"
+  "unlock_card": "Mở thẻ",
+  "title_transfer": "Chuyển khoản thành công",
+  "desc_transfer": "Bạn đã chuyển {amount} đến {receiverName}.",
+  "title_withdraw": "Rút tiền thành công",
+  "desc_withdraw": "Bạn đã rút {amount} tại điểm giao dịch.",
+  "title_shopping": "Thanh toán mua sắm thành công",
+  "desc_shopping": "Bạn đã thanh toán {amount} cho gói {serviceName}."
 }

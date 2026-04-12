@@ -89,6 +89,30 @@ class AppText {
     'status_locked': <String, String>{'vi': 'Đã khóa', 'en': 'Locked'},
     'lock_card': <String, String>{'vi': 'Khóa thẻ', 'en': 'Lock card'},
     'unlock_card': <String, String>{'vi': 'Mở thẻ', 'en': 'Unlock card'},
+    'title_transfer': <String, String>{
+      'vi': 'Chuyển khoản thành công',
+      'en': 'Transfer successful',
+    },
+    'desc_transfer': <String, String>{
+      'vi': 'Bạn đã chuyển {amount} đến {receiverName}.',
+      'en': 'You transferred {amount} to {receiverName}.',
+    },
+    'title_withdraw': <String, String>{
+      'vi': 'Rút tiền thành công',
+      'en': 'Withdrawal successful',
+    },
+    'desc_withdraw': <String, String>{
+      'vi': 'Bạn đã rút {amount} tại điểm giao dịch.',
+      'en': 'You withdrew {amount} at the service point.',
+    },
+    'title_shopping': <String, String>{
+      'vi': 'Thanh toán mua sắm thành công',
+      'en': 'Shopping payment successful',
+    },
+    'desc_shopping': <String, String>{
+      'vi': 'Bạn đã thanh toán {amount} cho gói {serviceName}.',
+      'en': 'You paid {amount} for the {serviceName} package.',
+    },
   };
 
   static String tr(BuildContext context, String vi, String en) {

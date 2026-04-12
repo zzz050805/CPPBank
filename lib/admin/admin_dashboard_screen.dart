@@ -236,12 +236,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
     for (final dynamic item in raw) {
       if (item is Map<String, dynamic>) {
+        final String title = (item['title'] ?? '').toString().trim();
         final int price = _toDouble(item['price']).round();
         final int discountPercent = _sanitizeDiscountPercent(
           item['discountPercent'],
         );
         if (price > 0) {
           result.add(<String, dynamic>{
+            'title': title,
             'price': price,
             'discountPercent': discountPercent,
           });
@@ -253,12 +255,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         final Map<String, dynamic> map = item.map(
           (dynamic key, dynamic value) => MapEntry(key.toString(), value),
         );
+        final String title = (map['title'] ?? '').toString().trim();
         final int price = _toDouble(map['price']).round();
         final int discountPercent = _sanitizeDiscountPercent(
           map['discountPercent'],
         );
         if (price > 0) {
           result.add(<String, dynamic>{
+            'title': title,
             'price': price,
             'discountPercent': discountPercent,
           });
@@ -268,7 +272,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
       final int price = int.tryParse(item.toString()) ?? 0;
       if (price > 0) {
-        result.add(<String, dynamic>{'price': price, 'discountPercent': 0});
+        result.add(<String, dynamic>{
+          'title': '',
+          'price': price,
+          'discountPercent': 0,
+        });
       }
     }
 
@@ -1518,12 +1526,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               cardBalances?.balanceNormal ?? _readUserNormalBalance(data);
           final double balanceVip =
               cardBalances?.balanceVip ?? _readUserVipBalance(data);
-          final double totalBalance =
-              cardBalances?.totalBalance ?? _readUserTotalBalance(data);
+          final bool hasVipCard = data['hasVipCard'] == true;
+          final bool isStandardLocked = data['is_standard_locked'] == true;
+          final bool isVipLocked = data['is_vip_locked'] == true;
+          final double visibleNormalBalance = isStandardLocked
+              ? 0
+              : balanceNormal;
+          final double visibleVipBalance = (hasVipCard && !isVipLocked)
+              ? balanceVip
+              : 0;
+          final double totalBalance = visibleNormalBalance + visibleVipBalance;
           final String rawCardNumber = CardNumberService.readStoredCardNumber(
             data,
           );
-          final bool hasVipCard = data['hasVipCard'] == true;
 
           return _AdminUserSummary(
             id: doc.id,
@@ -1536,6 +1551,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             role: (data['role'] ?? 'user').toString(),
             isLocked: data['isLocked'] == true,
             hasVipCard: hasVipCard,
+            isStandardCardLocked: isStandardLocked,
+            isVipCardLocked: isVipLocked,
             balanceNormal: balanceNormal,
             balanceVip: balanceVip,
             totalBalance: totalBalance,
@@ -1680,7 +1697,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                         vipBalanceController.text,
                                       );
                                   final double nextTotalBalance =
-                                      nextNormalBalance + nextVipBalance;
+                                      (user.isStandardCardLocked
+                                          ? 0
+                                          : nextNormalBalance) +
+                                      ((user.hasVipCard &&
+                                              !user.isVipCardLocked)
+                                          ? nextVipBalance
+                                          : 0);
                                   final String currentCardRaw = user
                                       .cardNumberRaw
                                       .trim();
@@ -2195,191 +2218,319 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       (currentData['packages'] as List<dynamic>?) ?? <dynamic>[],
     );
 
-    final List<String> periodLabels = <String>[
-      '1 tháng',
-      '6 tháng',
-      '12 tháng',
-    ];
+    final List<Map<String, dynamic>> seedRows = initialPackages.isNotEmpty
+        ? initialPackages
+        : <Map<String, dynamic>>[
+            <String, dynamic>{'title': '', 'price': 0, 'discountPercent': 0},
+          ];
+
+    final List<TextEditingController> titleControllers =
+        List<TextEditingController>.generate(seedRows.length, (int index) {
+          final String title = (seedRows[index]['title'] ?? '')
+              .toString()
+              .trim();
+          return TextEditingController(text: title);
+        });
     final List<TextEditingController> priceControllers =
-        List<TextEditingController>.generate(3, (int index) {
-          final int price = index < initialPackages.length
-              ? (initialPackages[index]['price'] as num?)?.toInt() ?? 0
-              : 0;
+        List<TextEditingController>.generate(seedRows.length, (int index) {
+          final int price = (seedRows[index]['price'] as num?)?.toInt() ?? 0;
           return TextEditingController(text: price > 0 ? price.toString() : '');
         });
     final List<TextEditingController> discountControllers =
-        List<TextEditingController>.generate(3, (int index) {
-          final int discount = index < initialPackages.length
-              ? _sanitizeDiscountPercent(
-                  initialPackages[index]['discountPercent'],
-                )
-              : 0;
+        List<TextEditingController>.generate(seedRows.length, (int index) {
+          final int discount = _sanitizeDiscountPercent(
+            seedRows[index]['discountPercent'],
+          );
           return TextEditingController(
             text: discount > 0 ? discount.toString() : '',
           );
         });
 
+    String defaultPackageTitle(int index) {
+      return '${_t('Gói', 'Package')} ${index + 1}';
+    }
+
     await showDialog<void>(
       context: context,
       builder: (BuildContext dialogContext) {
-        return Stack(
-          children: <Widget>[
-            Positioned.fill(
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-                child: Container(color: Colors.black.withValues(alpha: 0.16)),
-              ),
-            ),
-            Center(
-              child: Dialog(
-                backgroundColor: Colors.white.withValues(alpha: 0.92),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(24),
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setDialogState) {
+            return Stack(
+              children: <Widget>[
+                Positioned.fill(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                    child: Container(
+                      color: Colors.black.withValues(alpha: 0.16),
+                    ),
+                  ),
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.all(18),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      Text(
-                        _t('Sửa gói giá', 'Edit package pricing'),
-                        style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 12),
-                      ...List<Widget>.generate(3, (int index) {
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF8FAFC),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: const Color(0xFFE5E7EB),
-                              ),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                Text(
-                                  '${_t('Gói', 'Package')} ${periodLabels[index]}',
-                                  style: GoogleFonts.poppins(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                TextField(
-                                  controller: priceControllers[index],
-                                  keyboardType: TextInputType.number,
-                                  decoration: InputDecoration(
-                                    labelText: _t('Giá gốc', 'Original price'),
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                TextField(
-                                  controller: discountControllers[index],
-                                  keyboardType: TextInputType.number,
-                                  decoration: InputDecoration(
-                                    labelText: _t(
-                                      '% Giảm giá (0-100)',
-                                      'Discount % (0-100)',
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      }),
-                      const SizedBox(height: 14),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
+                Center(
+                  child: Dialog(
+                    backgroundColor: Colors.white.withValues(alpha: 0.92),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(18),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: <Widget>[
-                          TextButton(
-                            onPressed: () => Navigator.pop(dialogContext),
-                            child: Text(
-                              _t('Đóng', 'Close'),
-                              style: GoogleFonts.poppins(
-                                fontWeight: FontWeight.w600,
+                          Text(
+                            _t('Sửa gói giá', 'Edit package pricing'),
+                            style: GoogleFonts.poppins(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxHeight: 400),
+                            child: SingleChildScrollView(
+                              child: Column(
+                                children: List<Widget>.generate(
+                                  titleControllers.length,
+                                  (int index) {
+                                    return Padding(
+                                      padding: const EdgeInsets.only(
+                                        bottom: 10,
+                                      ),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(10),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFF8FAFC),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          border: Border.all(
+                                            color: const Color(0xFFE5E7EB),
+                                          ),
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: <Widget>[
+                                            Row(
+                                              children: <Widget>[
+                                                Expanded(
+                                                  child: Text(
+                                                    '${_t('Gói', 'Package')} ${index + 1}',
+                                                    style: GoogleFonts.poppins(
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                      fontSize: 12,
+                                                    ),
+                                                  ),
+                                                ),
+                                                if (titleControllers.length > 1)
+                                                  IconButton(
+                                                    onPressed: () {
+                                                      final TextEditingController
+                                                      removedTitle =
+                                                          titleControllers
+                                                              .removeAt(index);
+                                                      final TextEditingController
+                                                      removedPrice =
+                                                          priceControllers
+                                                              .removeAt(index);
+                                                      final TextEditingController
+                                                      removedDiscount =
+                                                          discountControllers
+                                                              .removeAt(index);
+                                                      removedTitle.dispose();
+                                                      removedPrice.dispose();
+                                                      removedDiscount.dispose();
+                                                      setDialogState(() {});
+                                                    },
+                                                    icon: const Icon(
+                                                      Icons
+                                                          .delete_outline_rounded,
+                                                      size: 18,
+                                                    ),
+                                                    tooltip: _t(
+                                                      'Xóa gói',
+                                                      'Remove package',
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 8),
+                                            TextField(
+                                              controller:
+                                                  titleControllers[index],
+                                              decoration: InputDecoration(
+                                                labelText: _t(
+                                                  'Tên gói',
+                                                  'Package title',
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 8),
+                                            TextField(
+                                              controller:
+                                                  priceControllers[index],
+                                              keyboardType:
+                                                  TextInputType.number,
+                                              decoration: InputDecoration(
+                                                labelText: _t(
+                                                  'Giá gốc',
+                                                  'Original price',
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 8),
+                                            TextField(
+                                              controller:
+                                                  discountControllers[index],
+                                              keyboardType:
+                                                  TextInputType.number,
+                                              decoration: InputDecoration(
+                                                labelText: _t(
+                                                  '% Giảm giá (0-100)',
+                                                  'Discount % (0-100)',
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
                               ),
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          _gradientActionButton(
-                            label: _t('Lưu', 'Save'),
-                            icon: Icons.save_rounded,
-                            onPressed: () async {
-                              final List<Map<String, dynamic>> packages =
-                                  <Map<String, dynamic>>[];
-
-                              for (int i = 0; i < 3; i++) {
-                                final int price =
-                                    int.tryParse(
-                                      priceControllers[i].text
-                                          .trim()
-                                          .replaceAll(RegExp(r'[^0-9]'), ''),
-                                    ) ??
-                                    0;
-                                final int discountPercent =
-                                    _sanitizeDiscountPercent(
-                                      discountControllers[i].text.trim(),
-                                    );
-
-                                if (price > 0) {
-                                  packages.add(<String, dynamic>{
-                                    'price': price,
-                                    'discountPercent': discountPercent,
-                                  });
-                                }
-                              }
-
-                              if (packages.isEmpty) {
-                                if (!dialogContext.mounted) {
-                                  return;
-                                }
-                                ScaffoldMessenger.of(
-                                  dialogContext,
-                                ).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      _t(
-                                        'Vui lòng nhập ít nhất 1 mức giá hợp lệ',
-                                        'Please enter at least one valid price',
-                                      ),
-                                    ),
-                                  ),
+                          const SizedBox(height: 10),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: OutlinedButton.icon(
+                              onPressed: () {
+                                titleControllers.add(TextEditingController());
+                                priceControllers.add(TextEditingController());
+                                discountControllers.add(
+                                  TextEditingController(),
                                 );
-                                return;
-                              }
+                                setDialogState(() {});
+                              },
+                              icon: const Icon(Icons.add_rounded),
+                              label: Text(_t('Thêm gói', 'Add package')),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: <Widget>[
+                              TextButton(
+                                onPressed: () => Navigator.pop(dialogContext),
+                                child: Text(
+                                  _t('Đóng', 'Close'),
+                                  style: GoogleFonts.poppins(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              _gradientActionButton(
+                                label: _t('Lưu', 'Save'),
+                                icon: Icons.save_rounded,
+                                onPressed: () async {
+                                  final List<Map<String, dynamic>> packages =
+                                      <Map<String, dynamic>>[];
 
-                              await ref.set(<String, dynamic>{
-                                'packages': packages,
-                                'discountPercent': FieldValue.delete(),
-                                'updatedAt': FieldValue.serverTimestamp(),
-                              }, SetOptions(merge: true));
+                                  for (
+                                    int i = 0;
+                                    i < titleControllers.length;
+                                    i++
+                                  ) {
+                                    final int price =
+                                        int.tryParse(
+                                          priceControllers[i].text
+                                              .trim()
+                                              .replaceAll(
+                                                RegExp(r'[^0-9]'),
+                                                '',
+                                              ),
+                                        ) ??
+                                        0;
+                                    final int discountPercent =
+                                        _sanitizeDiscountPercent(
+                                          discountControllers[i].text.trim(),
+                                        );
 
-                              await _pushShoppingDiscountNotifications(
-                                serviceId: serviceId,
-                                serviceName: serviceName,
-                                packages: packages,
-                              );
+                                    if (price > 0) {
+                                      final String title =
+                                          titleControllers[i].text
+                                              .trim()
+                                              .isNotEmpty
+                                          ? titleControllers[i].text.trim()
+                                          : defaultPackageTitle(i);
+                                      packages.add(<String, dynamic>{
+                                        'title': title,
+                                        'price': price,
+                                        'discountPercent': discountPercent,
+                                      });
+                                    }
+                                  }
 
-                              if (!dialogContext.mounted) return;
-                              Navigator.pop(dialogContext);
-                            },
+                                  if (packages.isEmpty) {
+                                    if (!dialogContext.mounted) {
+                                      return;
+                                    }
+                                    ScaffoldMessenger.of(
+                                      dialogContext,
+                                    ).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          _t(
+                                            'Vui lòng nhập ít nhất 1 mức giá hợp lệ',
+                                            'Please enter at least one valid price',
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                    return;
+                                  }
+
+                                  await ref.set(<String, dynamic>{
+                                    'packages': packages,
+                                    'discountPercent': FieldValue.delete(),
+                                    'updatedAt': FieldValue.serverTimestamp(),
+                                  }, SetOptions(merge: true));
+
+                                  await _pushShoppingDiscountNotifications(
+                                    serviceId: serviceId,
+                                    serviceName: serviceName,
+                                    packages: packages,
+                                  );
+
+                                  if (!dialogContext.mounted) {
+                                    return;
+                                  }
+                                  Navigator.pop(dialogContext);
+                                },
+                              ),
+                            ],
                           ),
                         ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
-            ),
-          ],
+              ],
+            );
+          },
         );
       },
     );
+
+    for (final TextEditingController controller in titleControllers) {
+      controller.dispose();
+    }
+    for (final TextEditingController controller in priceControllers) {
+      controller.dispose();
+    }
+    for (final TextEditingController controller in discountControllers) {
+      controller.dispose();
+    }
   }
 
   Future<void> _editBanner(
@@ -3033,14 +3184,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ? _t('Chưa có mức giá', 'No prices yet')
                 : packageRows
                       .map((Map<String, dynamic> item) {
+                        final String title = (item['title'] ?? '')
+                            .toString()
+                            .trim();
                         final int price = (item['price'] as num?)?.toInt() ?? 0;
                         final int discountPercent = _sanitizeDiscountPercent(
                           item['discountPercent'],
                         );
+                        final String base = discountPercent <= 0
+                            ? _formatVnd(price)
+                            : '${_formatVnd(price)} (-$discountPercent%)';
                         if (discountPercent <= 0) {
-                          return _formatVnd(price);
+                          return title.isEmpty ? base : '$title: $base';
                         }
-                        return '${_formatVnd(price)} (-$discountPercent%)';
+                        return title.isEmpty ? base : '$title: $base';
                       })
                       .join(' | ');
 
@@ -3432,9 +3589,58 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     required bool newValue,
   }) async {
     try {
-      await _firestore.collection('users').doc(userId).update(<String, dynamic>{
-        fieldName: newValue,
-        'updatedAt': FieldValue.serverTimestamp(),
+      await _firestore.runTransaction((Transaction transaction) async {
+        final DocumentReference<Map<String, dynamic>> userRef = _firestore
+            .collection('users')
+            .doc(userId);
+        final DocumentReference<Map<String, dynamic>> standardCardRef = userRef
+            .collection('cards')
+            .doc('standard');
+        final DocumentReference<Map<String, dynamic>> vipCardRef = userRef
+            .collection('cards')
+            .doc('vip');
+
+        final DocumentSnapshot<Map<String, dynamic>> userSnapshot =
+            await transaction.get(userRef);
+        final DocumentSnapshot<Map<String, dynamic>> standardCardSnapshot =
+            await transaction.get(standardCardRef);
+        final DocumentSnapshot<Map<String, dynamic>> vipCardSnapshot =
+            await transaction.get(vipCardRef);
+
+        final Map<String, dynamic> userData =
+            userSnapshot.data() ?? <String, dynamic>{};
+        final bool hasVipCard = userData['hasVipCard'] == true;
+        final bool currentStandardLocked =
+            userData['is_standard_locked'] == true;
+        final bool currentVipLocked = userData['is_vip_locked'] == true;
+
+        final bool nextStandardLocked = fieldName == 'is_standard_locked'
+            ? newValue
+            : currentStandardLocked;
+        final bool nextVipLocked = fieldName == 'is_vip_locked'
+            ? newValue
+            : currentVipLocked;
+
+        final Map<String, dynamic> standardCardData =
+            standardCardSnapshot.data() ?? <String, dynamic>{};
+        final Map<String, dynamic> vipCardData =
+            vipCardSnapshot.data() ?? <String, dynamic>{};
+
+        final double standardBalance = _toDouble(standardCardData['balance']);
+        final double vipBalance = _toDouble(vipCardData['balance']);
+        final double availableBalance =
+            (nextStandardLocked ? 0 : standardBalance) +
+            ((hasVipCard && !nextVipLocked) ? vipBalance : 0);
+
+        transaction.set(userRef, <String, dynamic>{
+          fieldName: newValue,
+          'balance_normal': standardBalance,
+          'balance_vip': vipBalance,
+          'balance': availableBalance,
+          'totalBalance': availableBalance,
+          'availableBalance': availableBalance,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
       });
     } catch (_) {
       if (!mounted) {
@@ -3809,6 +4015,8 @@ class _AdminUserSummary {
     required this.role,
     required this.isLocked,
     required this.hasVipCard,
+    required this.isStandardCardLocked,
+    required this.isVipCardLocked,
     required this.balanceNormal,
     required this.balanceVip,
     required this.totalBalance,
@@ -3824,6 +4032,8 @@ class _AdminUserSummary {
   final String role;
   final bool isLocked;
   final bool hasVipCard;
+  final bool isStandardCardLocked;
+  final bool isVipCardLocked;
   final double balanceNormal;
   final double balanceVip;
   final double totalBalance;
