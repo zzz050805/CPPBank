@@ -9,6 +9,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
+import '../core/app_translations.dart';
 import '../data/user_firestore_service.dart';
 import '../l10n/app_text.dart';
 import '../widget/ccp_app_bar.dart';
@@ -86,9 +87,6 @@ class _TransferScreenState extends State<TransferScreen> {
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _messageController = TextEditingController();
   Timer? _lookupDebounce;
-  final Map<String, String> _mockAccountNameMap = const <String, String>{
-    '0364885351': 'NGUYEN VAN CHI',
-  };
   String _recipientName = '';
   String _recipientLookupMessage = '';
   bool _isSaveContactPressed = false;
@@ -294,7 +292,7 @@ class _TransferScreenState extends State<TransferScreen> {
       });
     }
     // ignore: avoid_print
-    print('Đang tìm kiếm cho số tài khoản: $accountNumber');
+    print('Đang tìm kiếm cho số thẻ: $accountNumber');
 
     _lookupDebounce?.cancel();
     _lookupDebounce = Timer(const Duration(milliseconds: 500), () {
@@ -327,6 +325,49 @@ class _TransferScreenState extends State<TransferScreen> {
     }
 
     // 2) Match by phone number.
+    final QuerySnapshot<Map<String, dynamic>> byCardSnake = await usersRef
+        .where('card_number', isEqualTo: normalizedAccount)
+        .limit(1)
+        .get();
+    if (byCardSnake.docs.isNotEmpty) {
+      final Map<String, dynamic> data = byCardSnake.docs.first.data();
+      final String name = (data['fullname'] ?? data['fullName'] ?? '')
+          .toString()
+          .trim();
+      if (name.isNotEmpty) {
+        return name;
+      }
+    }
+
+    final QuerySnapshot<Map<String, dynamic>> byCardCamel = await usersRef
+        .where('cardNumber', isEqualTo: normalizedAccount)
+        .limit(1)
+        .get();
+    if (byCardCamel.docs.isNotEmpty) {
+      final Map<String, dynamic> data = byCardCamel.docs.first.data();
+      final String name = (data['fullname'] ?? data['fullName'] ?? '')
+          .toString()
+          .trim();
+      if (name.isNotEmpty) {
+        return name;
+      }
+    }
+
+    final QuerySnapshot<Map<String, dynamic>> byLegacyAccount = await usersRef
+        .where('accountNumber', isEqualTo: normalizedAccount)
+        .limit(1)
+        .get();
+    if (byLegacyAccount.docs.isNotEmpty) {
+      final Map<String, dynamic> data = byLegacyAccount.docs.first.data();
+      final String name = (data['fullname'] ?? data['fullName'] ?? '')
+          .toString()
+          .trim();
+      if (name.isNotEmpty) {
+        return name;
+      }
+    }
+
+    // 3) Match by phone number.
     final QuerySnapshot<Map<String, dynamic>> byPhone = await usersRef
         .where('phoneNumber', isEqualTo: normalizedAccount)
         .limit(1)
@@ -341,7 +382,7 @@ class _TransferScreenState extends State<TransferScreen> {
       }
     }
 
-    // 3) Match by id number for legacy input behavior.
+    // 4) Match by id number for legacy input behavior.
     final QuerySnapshot<Map<String, dynamic>> byIdNumber = await usersRef
         .where('idNumber', isEqualTo: normalizedAccount)
         .limit(1)
@@ -394,8 +435,8 @@ class _TransferScreenState extends State<TransferScreen> {
       setState(() {
         _isLookingUpRecipient = true;
         _recipientLookupMessage = _t(
-          'Đang kiểm tra tên chủ tài khoản...',
-          'Looking up account holder name...',
+          'Đang kiểm tra tên chủ thẻ...',
+          'Looking up card holder name...',
         );
       });
 
@@ -422,7 +463,6 @@ class _TransferScreenState extends State<TransferScreen> {
 
     try {
       String accountName = '';
-      bool fromMockFallback = false;
       bool fromFirestoreFallback = false;
 
       if (selectedBin.isNotEmpty && !isMissingApiConfig) {
@@ -467,15 +507,6 @@ class _TransferScreenState extends State<TransferScreen> {
       }
 
       if (accountName.isEmpty) {
-        final String mockName =
-            _mockAccountNameMap[normalizedAccount]?.trim() ?? '';
-        if (mockName.isNotEmpty) {
-          accountName = mockName;
-          fromMockFallback = true;
-        }
-      }
-
-      if (accountName.isEmpty) {
         final String firestoreName = await _lookupRecipientFromFirestore(
           normalizedAccount,
         );
@@ -493,13 +524,8 @@ class _TransferScreenState extends State<TransferScreen> {
         _recipientName = accountName.toUpperCase();
         if (_recipientName.isEmpty) {
           _recipientLookupMessage = _t(
-            'Không tìm thấy tên chủ tài khoản cho số này.',
-            'Cannot find account holder name for this account number.',
-          );
-        } else if (fromMockFallback) {
-          _recipientLookupMessage = _t(
-            'Đang dùng tên mẫu (demo fallback).',
-            'Using demo fallback account name.',
+            'Không tìm thấy tên chủ thẻ cho số này.',
+            'Cannot find card holder name for this card number.',
           );
         } else if (fromFirestoreFallback) {
           _recipientLookupMessage = _t(
@@ -508,8 +534,8 @@ class _TransferScreenState extends State<TransferScreen> {
           );
         } else {
           _recipientLookupMessage = _t(
-            'Đã xác thực tên chủ tài khoản.',
-            'Account holder verified.',
+            'Đã xác thực tên chủ thẻ.',
+            'Card holder verified.',
           );
         }
       });
@@ -521,10 +547,9 @@ class _TransferScreenState extends State<TransferScreen> {
         return;
       }
 
-      final String mockName = _mockAccountNameMap[normalizedAccount] ?? '';
-      final String fallbackName = mockName.isNotEmpty
-          ? mockName
-          : await _lookupRecipientFromFirestore(normalizedAccount);
+      final String fallbackName = await _lookupRecipientFromFirestore(
+        normalizedAccount,
+      );
 
       setState(() {
         _recipientName = fallbackName.toUpperCase();
@@ -533,15 +558,10 @@ class _TransferScreenState extends State<TransferScreen> {
                 'VietQR timeout và không có dữ liệu dự phòng.',
                 'VietQR timeout and no fallback data found.',
               )
-            : (mockName.isNotEmpty
-                  ? _t(
-                      'VietQR timeout, đang dùng tên mẫu (demo).',
-                      'VietQR timeout, using demo fallback name.',
-                    )
-                  : _t(
-                      'VietQR timeout, đã dùng dữ liệu hệ thống.',
-                      'VietQR timeout, using internal system data.',
-                    ));
+            : _t(
+                'VietQR timeout, đã dùng dữ liệu hệ thống.',
+                'VietQR timeout, using internal system data.',
+              );
       });
     } catch (e) {
       // ignore: avoid_print
@@ -550,10 +570,9 @@ class _TransferScreenState extends State<TransferScreen> {
         return;
       }
 
-      final String mockName = _mockAccountNameMap[normalizedAccount] ?? '';
-      final String fallbackName = mockName.isNotEmpty
-          ? mockName
-          : await _lookupRecipientFromFirestore(normalizedAccount);
+      final String fallbackName = await _lookupRecipientFromFirestore(
+        normalizedAccount,
+      );
 
       setState(() {
         _recipientName = fallbackName.toUpperCase();
@@ -562,15 +581,10 @@ class _TransferScreenState extends State<TransferScreen> {
                 'Không tra cứu được từ VietQR và cũng không thấy trong hệ thống.',
                 'Lookup failed from VietQR and no matching user in system.',
               )
-            : (mockName.isNotEmpty
-                  ? _t(
-                      'Không tra cứu được VietQR, đang dùng tên mẫu (demo).',
-                      'VietQR lookup failed, using demo fallback name.',
-                    )
-                  : _t(
-                      'Không tra cứu được VietQR, đã dùng dữ liệu hệ thống.',
-                      'VietQR lookup failed, using internal system data.',
-                    ));
+            : _t(
+                'Không tra cứu được VietQR, đã dùng dữ liệu hệ thống.',
+                'VietQR lookup failed, using internal system data.',
+              );
       });
     } finally {
       if (mounted && requestId == _lookupRequestId) {
@@ -780,6 +794,8 @@ class _TransferScreenState extends State<TransferScreen> {
           .get(savedDocRef);
 
       final Map<String, dynamic> payload = <String, dynamic>{
+        'card_number': accountNumber,
+        'cardNumber': accountNumber,
         'accountNumber': accountNumber,
         'accountName': accountName,
         'bankName': bankName,
@@ -821,8 +837,8 @@ class _TransferScreenState extends State<TransferScreen> {
         SnackBar(
           content: Text(
             _t(
-              'Số tài khoản người nhận không được để trống.',
-              'Recipient account number cannot be empty.',
+              'Số thẻ người nhận không được để trống.',
+              'Recipient card number cannot be empty.',
             ),
           ),
           behavior: SnackBarBehavior.floating,
@@ -1422,7 +1438,10 @@ class _TransferScreenState extends State<TransferScreen> {
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        _t('Số tài khoản', 'Account number'),
+                                        AppTranslations.getText(
+                                          context,
+                                          'card_number_label',
+                                        ),
                                         style: GoogleFonts.poppins(
                                           color: const Color(0xFF5F6780),
                                           fontSize: 12,
@@ -1441,8 +1460,8 @@ class _TransferScreenState extends State<TransferScreen> {
                                         ],
                                         decoration: InputDecoration(
                                           hintText: _t(
-                                            'Nhập số tài khoản',
-                                            'Enter account number',
+                                            'Nhập số thẻ',
+                                            'Enter card number',
                                           ),
                                           hintStyle: GoogleFonts.poppins(
                                             color: const Color(0xFF9AA1B5),

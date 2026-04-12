@@ -680,7 +680,6 @@ class _UserInfoScreenState extends State<UserInfoScreen>
                       final String phoneNumber = _displayValue(
                         data['phoneNumber'],
                       );
-                      final String email = _displayValue(data['email']);
                       final String address = _displayValue(data['address']);
 
                       return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -829,14 +828,6 @@ class _UserInfoScreenState extends State<UserInfoScreen>
                                           'Số điện thoại',
                                           'Phone number',
                                         ),
-                                        editable: true,
-                                      ),
-                                      _buildInfoTile(
-                                        label: _t('Email', 'Email'),
-                                        value: email,
-                                        uid: uid,
-                                        fieldKey: 'email',
-                                        fieldLabel: _t('Email', 'Email'),
                                         editable: true,
                                       ),
                                       _buildInfoTile(

@@ -10,6 +10,7 @@ class CCPAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.actions,
     this.onBackPressed,
     this.backgroundColor,
+    this.bottom,
   });
 
   final String title;
@@ -17,11 +18,13 @@ class CCPAppBar extends StatelessWidget implements PreferredSizeWidget {
   final List<Widget>? actions;
   final VoidCallback? onBackPressed;
   final Color? backgroundColor;
+  final PreferredSizeWidget? bottom;
 
   static const Color _primaryBlue = Color(0xFF000DC0);
 
   @override
-  Size get preferredSize => const Size.fromHeight(60);
+  Size get preferredSize =>
+      Size.fromHeight(60 + (bottom?.preferredSize.height ?? 0));
 
   @override
   Widget build(BuildContext context) {
@@ -57,6 +60,7 @@ class CCPAppBar extends StatelessWidget implements PreferredSizeWidget {
         ),
       ),
       actions: actions,
+      bottom: bottom,
     );
   }
 }

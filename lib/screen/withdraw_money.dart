@@ -11,7 +11,9 @@ import 'package:intl/intl.dart';
 import '../core/app_translations.dart';
 import '../data/user_firestore_service.dart';
 import '../l10n/app_text.dart';
+import '../services/card_number_service.dart';
 import '../services/notification_service.dart';
+import '../widget/ccp_app_bar.dart';
 import '../widget/pin_popup.dart';
 import 'withdraw_receipt_screen.dart';
 
@@ -523,6 +525,60 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
     );
   }
 
+  Widget _buildSourceCardText() {
+    return StreamBuilder<UserProfileData?>(
+      stream: _profileStream,
+      initialData: UserFirestoreService.instance.latestProfile,
+      builder: (context, profileSnapshot) {
+        final UserProfileData? profile =
+            profileSnapshot.data ?? UserFirestoreService.instance.latestProfile;
+        final String uid = (profile?.uid ?? _resolveUid()).trim();
+
+        if (uid.isEmpty) {
+          return Text(
+            _t('Đang tải...', 'Loading...'),
+            style: GoogleFonts.poppins(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.1,
+            ),
+          );
+        }
+
+        return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+          stream: FirebaseFirestore.instance
+              .collection('users')
+              .doc(uid)
+              .snapshots(),
+          builder: (context, userSnapshot) {
+            String display = _t('Đang tải...', 'Loading...');
+            if (userSnapshot.hasData) {
+              final Map<String, dynamic> userData =
+                  userSnapshot.data?.data() ?? <String, dynamic>{};
+              final String rawCard = CardNumberService.readStoredCardNumber(
+                userData,
+              );
+              if (rawCard.isNotEmpty) {
+                display = CardNumberService.formatCardNumber(rawCard);
+              }
+            }
+
+            return Text(
+              display,
+              style: GoogleFonts.poppins(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.1,
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final ThemeData poppinsTheme = Theme.of(context).copyWith(
@@ -533,6 +589,7 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
       data: poppinsTheme,
       child: Scaffold(
         backgroundColor: bgColor,
+        appBar: CCPAppBar(title: _t('Rút tiền', 'Withdraw')),
         body: SingleChildScrollView(
           child: Column(
             children: [
@@ -601,43 +658,10 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
         ),
         borderRadius: const BorderRadius.vertical(bottom: Radius.circular(40)),
       ),
-      padding: const EdgeInsets.fromLTRB(20, 60, 20, 40),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 36),
       child: Column(
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.15),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.chevron_left,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    _t('Rút tiền', 'Withdraw'),
-                    style: GoogleFonts.poppins(
-                      color: Colors.white,
-                      fontSize: 21,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox.shrink(),
-            ],
-          ),
-          const SizedBox(height: 30),
+          const SizedBox(height: 4),
           // Thẻ tài khoản (Glassmorphism)
           Container(
             padding: const EdgeInsets.all(20),
@@ -678,15 +702,7 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        Text(
-                          '•••• •••• ••••',
-                          style: GoogleFonts.poppins(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 2,
-                          ),
-                        ),
+                        _buildSourceCardText(),
                       ],
                     ),
                   ],

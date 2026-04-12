@@ -4,6 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
+import '../services/card_number_service.dart';
+
 class UserProfileData {
   const UserProfileData({
     required this.uid,
@@ -49,17 +51,48 @@ class UserFirestoreService {
     return _digitsOnly(value) == '00000000';
   }
 
-  Map<String, dynamic> _standardCardPayload() => <String, dynamic>{
-    'balance': 0.0,
-    'cardNumber': '**** 1010',
-    'cardType': 'Standard',
-    'color': '#1A1A75',
-    'updatedAt': FieldValue.serverTimestamp(),
-  };
+  bool _parseHasVipCard(dynamic value) {
+    if (value is bool) {
+      return value;
+    }
+    if (value is num) {
+      return value != 0;
+    }
+    if (value is String) {
+      final String normalized = value.trim().toLowerCase();
+      return normalized == 'true' || normalized == '1' || normalized == 'yes';
+    }
+    return false;
+  }
 
-  Map<String, dynamic> _vipCardPayload() => <String, dynamic>{
+  String _resolveCardNumberFromData(
+    Map<String, dynamic> data, {
+    required bool isVip,
+  }) {
+    final String existing = CardNumberService.readStoredCardNumber(data);
+    if (existing.isNotEmpty) {
+      return existing;
+    }
+
+    final Map<String, dynamic> seed = Map<String, dynamic>.from(data)
+      ..['hasVipCard'] = isVip;
+    return CardNumberService.generatePermanentCardNumber(seed);
+  }
+
+  Map<String, dynamic> _standardCardPayload(String cardNumber) =>
+      <String, dynamic>{
+        'balance': 0.0,
+        'cardNumber': cardNumber,
+        'card_number': cardNumber,
+        'cardType': 'Standard',
+        'color': '#1A1A75',
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+  Map<String, dynamic> _vipCardPayload(String cardNumber) => <String, dynamic>{
     'balance': 0.0,
-    'cardNumber': '**** 2020',
+    'cardNumber': cardNumber,
+    'card_number': cardNumber,
     'cardType': 'VIP',
     'color': '#1A1A1A',
     'updatedAt': FieldValue.serverTimestamp(),
@@ -189,6 +222,7 @@ class UserFirestoreService {
 
       // Bước 1: chỉ thêm hasVipCard khi field này thực sự chưa tồn tại.
       if (!userDoc.exists) {
+        final bool createHasVipCard = _parseHasVipCard(userData['hasVipCard']);
         final Map<String, dynamic> sanitizedUserData =
             Map<String, dynamic>.from(userData)..remove('hasVipCard');
 
@@ -199,10 +233,24 @@ class UserFirestoreService {
             (_isAdminMarker(phoneNumber) || _isAdminMarker(cccd))
             ? 'admin'
             : 'user';
+        final bool payloadHasCardNumberField =
+            sanitizedUserData['card_number'] != null ||
+            sanitizedUserData['cardNumber'] != null;
+        final String incomingCardNumber =
+            CardNumberService.readStoredCardNumber(sanitizedUserData);
+        final String generatedCardNumber =
+            payloadHasCardNumberField && incomingCardNumber.isNotEmpty
+            ? incomingCardNumber
+            : _resolveCardNumberFromData(
+                sanitizedUserData,
+                isVip: createHasVipCard,
+              );
 
         await userRef.set(<String, dynamic>{
           ...sanitizedUserData,
-          'hasVipCard': false,
+          'card_number': generatedCardNumber,
+          'cardNumber': generatedCardNumber,
+          'hasVipCard': createHasVipCard,
           'role': role,
           'isLocked': false,
           'updatedAt': FieldValue.serverTimestamp(),
@@ -244,26 +292,84 @@ class UserFirestoreService {
           }, SetOptions(merge: true));
         }
 
+        final bool hasVipCard = _parseHasVipCard(existingData['hasVipCard']);
+        final String existingCardNumber =
+            CardNumberService.readStoredCardNumber(existingData);
+        final String normalizedCardNumber = existingCardNumber.isEmpty
+            ? _resolveCardNumberFromData(existingData, isVip: hasVipCard)
+            : existingCardNumber;
+
+        final bool shouldSyncCardNumber =
+            (existingData['card_number'] == null &&
+                existingData['cardNumber'] == null) ||
+            existingCardNumber.isEmpty;
+        if (shouldSyncCardNumber) {
+          await userRef.set(<String, dynamic>{
+            'card_number': normalizedCardNumber,
+            'cardNumber': normalizedCardNumber,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+        }
+
         if (userData.isNotEmpty) {
           final Map<String, dynamic> sanitizedUserData =
               Map<String, dynamic>.from(userData)..remove('hasVipCard');
+          // Preserve immutability: existing user updates must never overwrite card number.
+          sanitizedUserData.remove('card_number');
+          sanitizedUserData.remove('cardNumber');
           if (sanitizedUserData.isNotEmpty) {
             await userRef.set(sanitizedUserData, SetOptions(merge: true));
           }
         }
       }
 
+      final DocumentSnapshot<Map<String, dynamic>> refreshedUserDoc =
+          await userRef.get();
+      final Map<String, dynamic> refreshedUserData =
+          refreshedUserDoc.data() ?? <String, dynamic>{};
+      final bool refreshedHasVipCard = _parseHasVipCard(
+        refreshedUserData['hasVipCard'],
+      );
+      final String permanentCardNumber = _resolveCardNumberFromData(
+        refreshedUserData,
+        isVip: refreshedHasVipCard,
+      );
+
       // Bước 2: chỉ tạo cards khi document chưa tồn tại, không reset balance.
       final DocumentSnapshot<Map<String, dynamic>> standardCardDoc =
           await standardCardRef.get();
       if (!standardCardDoc.exists) {
-        await standardCardRef.set(_standardCardPayload());
+        await standardCardRef.set(_standardCardPayload(permanentCardNumber));
+      } else {
+        final String existingStandardCardNumber =
+            CardNumberService.readStoredCardNumber(
+              standardCardDoc.data() ?? <String, dynamic>{},
+            );
+        if (existingStandardCardNumber.isEmpty) {
+          await standardCardRef.set(<String, dynamic>{
+            'cardNumber': permanentCardNumber,
+            'card_number': permanentCardNumber,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+        }
       }
 
       final DocumentSnapshot<Map<String, dynamic>> vipCardDoc = await vipCardRef
           .get();
       if (!vipCardDoc.exists) {
-        await vipCardRef.set(_vipCardPayload());
+        await vipCardRef.set(_vipCardPayload(permanentCardNumber));
+      } else {
+        final String existingVipCardNumber =
+            CardNumberService.readStoredCardNumber(
+              vipCardDoc.data() ?? <String, dynamic>{},
+            );
+        if (existingVipCardNumber.isEmpty) {
+          await vipCardRef.set(<String, dynamic>{
+            'cardNumber': permanentCardNumber,
+            'card_number': permanentCardNumber,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+        }
       }
 
       return true;
@@ -288,6 +394,58 @@ class UserFirestoreService {
     if (docId == null || docId.isEmpty) return false;
 
     return ensureUserDataExists(userId: docId);
+  }
+
+  Future<int> backfillMissingCardNumbersForAllUsers() async {
+    final QuerySnapshot<Map<String, dynamic>> usersSnapshot =
+        await FirebaseFirestore.instance.collection('users').get();
+
+    int updatedUsers = 0;
+    WriteBatch batch = FirebaseFirestore.instance.batch();
+    int operations = 0;
+
+    Future<void> commitBatchIfNeeded({bool force = false}) async {
+      if (!force && operations < 350) {
+        return;
+      }
+      if (operations == 0) {
+        return;
+      }
+      await batch.commit();
+      batch = FirebaseFirestore.instance.batch();
+      operations = 0;
+    }
+
+    for (final QueryDocumentSnapshot<Map<String, dynamic>> userDoc
+        in usersSnapshot.docs) {
+      final Map<String, dynamic> data = userDoc.data();
+      final String existing = CardNumberService.readStoredCardNumber(data);
+      final bool hasVipCard = _parseHasVipCard(data['hasVipCard']);
+      final String resolved = existing.isEmpty
+          ? _resolveCardNumberFromData(data, isVip: hasVipCard)
+          : existing;
+
+      final bool needsUpdate =
+          existing.isEmpty ||
+          (data['card_number'] ?? '').toString().trim().isEmpty ||
+          (data['cardNumber'] ?? '').toString().trim().isEmpty;
+      if (!needsUpdate) {
+        continue;
+      }
+
+      updatedUsers += 1;
+      batch.set(userDoc.reference, <String, dynamic>{
+        'card_number': resolved,
+        'cardNumber': resolved,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      operations += 1;
+
+      await commitBatchIfNeeded();
+    }
+
+    await commitBatchIfNeeded(force: true);
+    return updatedUsers;
   }
 
   UserProfileData _mapDocToProfile(

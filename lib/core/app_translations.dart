@@ -19,6 +19,10 @@ class AppTranslations {
       'vi': 'Rà soát giao dịch',
       'en': 'Payment Review',
     },
+    'transaction_review': <String, String>{
+      'vi': 'Rà soát giao dịch',
+      'en': 'Transaction Review',
+    },
     'cancel': <String, String>{'vi': 'Hủy', 'en': 'Cancel'},
     'confirm': <String, String>{'vi': 'Xác nhận', 'en': 'Confirm'},
     'confirm_and_pay': <String, String>{
@@ -37,6 +41,10 @@ class AppTranslations {
       'vi': 'Vui lòng nhập email hợp lệ.',
       'en': 'Please enter a valid email address.',
     },
+    'enter_account_email': <String, String>{
+      'vi': 'Nhập email tài khoản {serviceName}',
+      'en': 'Enter {serviceName} account email',
+    },
     'invalid_icloud_email': <String, String>{
       'vi': 'Vui lòng nhập email iCloud hợp lệ.',
       'en': 'Please enter a valid iCloud email address.',
@@ -46,8 +54,8 @@ class AppTranslations {
       'en': 'Invalid input.',
     },
     'invalid_recipient_account': <String, String>{
-      'vi': 'Thông tin tài khoản thụ hưởng không hợp lệ.',
-      'en': 'Recipient account details are invalid.',
+      'vi': 'Thông tin số thẻ thụ hưởng không hợp lệ.',
+      'en': 'Recipient card details are invalid.',
     },
     'no_valid_login_session': <String, String>{
       'vi': 'Không tìm thấy phiên đăng nhập hợp lệ.',
@@ -148,28 +156,23 @@ class AppTranslations {
       'en': 'Transaction ID',
     },
     'destination_account_or_phone': <String, String>{
-      'vi': 'Tài khoản đích / SĐT',
-      'en': 'Destination account / Phone',
+      'vi': 'Số thẻ đích / SĐT',
+      'en': 'Destination card / Phone',
     },
     'from': <String, String>{'vi': 'Chuyển từ', 'en': 'From'},
-    'source_account': <String, String>{
-      'vi': 'Nguồn tiền',
-      'en': 'Source account',
-    },
-    'main_account': <String, String>{
-      'vi': 'Tài khoản chính',
-      'en': 'Main account',
-    },
+    'source_account': <String, String>{'vi': 'Thẻ nguồn', 'en': 'Source card'},
+    'main_account': <String, String>{'vi': 'Thẻ chính', 'en': 'Main card'},
     'payment_source_account': <String, String>{
-      'vi': 'Tài khoản thanh toán',
-      'en': 'Payment account',
+      'vi': 'Thẻ thanh toán',
+      'en': 'Payment card',
     },
     'service': <String, String>{'vi': 'Dịch vụ', 'en': 'Service'},
     'package': <String, String>{'vi': 'Gói cước', 'en': 'Package'},
     'recipient_account': <String, String>{
-      'vi': 'Tài khoản nhận',
-      'en': 'Recipient Account',
+      'vi': 'Số thẻ nhận',
+      'en': 'Recipient Card',
     },
+    'card_number_label': <String, String>{'vi': 'Số thẻ', 'en': 'Card number'},
     'fee': <String, String>{'vi': 'Phí', 'en': 'Fee'},
     'total': <String, String>{'vi': 'Tổng cộng', 'en': 'Total'},
     'time': <String, String>{'vi': 'Thời gian', 'en': 'Time'},
@@ -201,6 +204,24 @@ class AppTranslations {
       'en': 'Advanced Plan',
     },
     'ultra_plan': <String, String>{'vi': 'Gói Ultra', 'en': 'Ultra Plan'},
+    'on_sale': <String, String>{'vi': 'Đang giảm giá', 'en': 'On sale'},
+    'enter_amount': <String, String>{
+      'vi': 'Nhập số tiền',
+      'en': 'Enter amount',
+    },
+    'cancel_code': <String, String>{'vi': 'Hủy mã', 'en': 'Cancel code'},
+    'code_expires_in': <String, String>{
+      'vi': 'Mã của bạn có thời hạn trong',
+      'en': 'Your code expires in',
+    },
+    'code_expired_msg': <String, String>{
+      'vi': 'Mã QR của bạn đã hết hạn!',
+      'en': 'Your QR code has expired!',
+    },
+    'confirm_cancel_qr': <String, String>{
+      'vi': 'Bạn có chắc chắn muốn hủy mã QR này?',
+      'en': 'Are you sure you want to cancel this QR code?',
+    },
   };
 
   static String currentLanguageCode(BuildContext context) {

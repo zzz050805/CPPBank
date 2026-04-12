@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import '../data/user_firestore_service.dart';
 import '../l10n/app_text.dart';
+import '../services/card_number_service.dart';
 import '../widget/ccp_app_bar.dart';
 import 'enter_money.dart';
 
@@ -58,6 +59,8 @@ Map<String, dynamic> _recipientPayload({
   required String initials,
 }) {
   return <String, dynamic>{
+    'card_number': accountNumber,
+    'cardNumber': accountNumber,
     'accountNumber': accountNumber,
     'accountName': accountName,
     'bankName': bankName,
@@ -242,9 +245,9 @@ class _ContactListScreenState extends State<ContactListScreen>
           final String accountName = (data['accountName'] ?? '')
               .toString()
               .toLowerCase();
-          final String accountNumber = (data['accountNumber'] ?? '')
-              .toString()
-              .toLowerCase();
+          final String accountNumber = CardNumberService.readCardNumber(
+            data,
+          ).toLowerCase();
           final String bankName = (data['bankName'] ?? '')
               .toString()
               .toLowerCase();
@@ -329,8 +332,9 @@ class _ContactListScreenState extends State<ContactListScreen>
               final String name = (data['accountName'] ?? '').toString();
               final String bank = (data['bankName'] ?? '').toString();
               final String bankId = (data['bankId'] ?? '').toString();
-              final String accountNumber = (data['accountNumber'] ?? '')
-                  .toString();
+              final String accountNumber = CardNumberService.readCardNumber(
+                data,
+              );
               final String initials = (data['initials'] ?? '').toString();
               final String displayInitials = initials.trim().isNotEmpty
                   ? initials.trim().toUpperCase()
@@ -442,8 +446,10 @@ class _ContactListScreenState extends State<ContactListScreen>
           itemBuilder: (context, index) {
             final Map<String, dynamic> data = docs[index].data();
             final String name = (data['accountName'] ?? '').toString();
-            final String accountNumber = (data['accountNumber'] ?? '')
-                .toString();
+            final String accountNumber = CardNumberService.readCardNumber(data);
+            final String displayCardNumber = CardNumberService.formatCardNumber(
+              accountNumber,
+            );
             final double amount = _extractTransferAmount(data);
 
             return Container(
@@ -481,7 +487,9 @@ class _ContactListScreenState extends State<ContactListScreen>
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          accountNumber,
+                          displayCardNumber.isEmpty
+                              ? accountNumber
+                              : displayCardNumber,
                           style: GoogleFonts.poppins(
                             color: const Color(0xFF8B92A6),
                             fontSize: 12,

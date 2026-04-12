@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 import '../core/app_translations.dart';
+import '../services/card_number_service.dart';
 
 class TransactionDetailPopup {
   static const Color _primaryBlue = Color(0xFF000DC0);
@@ -38,6 +39,9 @@ class TransactionDetailPopup {
     ]);
     final String targetInfo = _firstNonEmpty(<dynamic>[
       transactionData['targetAccount'],
+      transactionData['toCardNumber'],
+      transactionData['card_number'],
+      transactionData['cardNumber'],
       transactionData['toAccountNumber'],
       transactionData['accountNumber'],
       transactionData['receiver'],
@@ -46,6 +50,10 @@ class TransactionDetailPopup {
       transactionData['phone'],
       tr('unknown'),
     ]);
+    final String displayTargetInfo =
+        CardNumberService.formatCardNumber(targetInfo).isEmpty
+        ? targetInfo
+        : CardNumberService.formatCardNumber(targetInfo);
     final String transactionCode = _buildTransactionCode(
       transactionData,
       timestamp,
@@ -241,7 +249,7 @@ class TransactionDetailPopup {
                               context: modalContext,
                               icon: Icons.credit_card_rounded,
                               label: tr('destination_account_or_phone'),
-                              value: targetInfo,
+                              value: displayTargetInfo,
                             ),
                           ],
                         ),

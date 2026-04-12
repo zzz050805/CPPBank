@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:rxdart/rxdart.dart';
 
 import '../l10n/app_text.dart';
+import '../services/card_number_service.dart';
 
 const List<String> _kTransactionCollections = <String>[
   'Shopping',
@@ -339,13 +340,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   String _readUserAccount(Map<String, dynamic> data) {
-    final String phone = (data['phoneNumber'] ?? '').toString().trim();
-    final String cccd = (data['cccd'] ?? '').toString().trim();
-    if (phone.isNotEmpty) {
-      return phone;
-    }
-    if (cccd.isNotEmpty) {
-      return cccd;
+    final String raw = CardNumberService.readCardNumber(data);
+    final String formatted = CardNumberService.formatCardNumber(raw);
+    if (formatted.isNotEmpty) {
+      return formatted;
     }
     return '-';
   }
@@ -1491,16 +1489,22 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               cardBalances?.balanceVip ?? _readUserVipBalance(data);
           final double totalBalance =
               cardBalances?.totalBalance ?? _readUserTotalBalance(data);
+          final String rawCardNumber = CardNumberService.readStoredCardNumber(
+            data,
+          );
+          final bool hasVipCard = data['hasVipCard'] == true;
 
           return _AdminUserSummary(
             id: doc.id,
             fullName: _readUserName(data),
             account: _readUserAccount(data),
+            cardNumberRaw: rawCardNumber,
             phoneNumber: _readUserPhone(data),
             cccd: _readUserCccd(data),
             address: _readUserAddress(data),
             role: (data['role'] ?? 'user').toString(),
             isLocked: data['isLocked'] == true,
+            hasVipCard: hasVipCard,
             balanceNormal: balanceNormal,
             balanceVip: balanceVip,
             totalBalance: totalBalance,
@@ -1511,6 +1515,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   Future<void> _showUserDetails(_AdminUserSummary user) async {
     final BuildContext parentContext = context;
+    bool nextHasVipCard = user.hasVipCard;
     final TextEditingController nameController = TextEditingController(
       text: user.fullName == '-' ? '' : user.fullName,
     );
@@ -1536,210 +1541,284 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (BuildContext sheetContext) {
-        return ClipRRect(
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-            child: Container(
-              padding: EdgeInsets.fromLTRB(
-                18,
-                8,
-                18,
-                22 + MediaQuery.of(sheetContext).viewInsets.bottom,
+        return StatefulBuilder(
+          builder: (BuildContext innerContext, StateSetter setSheetState) {
+            return ClipRRect(
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(28),
               ),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.94),
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(28),
-                ),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.85)),
-              ),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      _t('Thông tin người dùng', 'User details'),
-                      style: GoogleFonts.poppins(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF101828),
-                      ),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                child: Container(
+                  padding: EdgeInsets.fromLTRB(
+                    18,
+                    8,
+                    18,
+                    22 + MediaQuery.of(innerContext).viewInsets.bottom,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.94),
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(28),
                     ),
-                    const SizedBox(height: 10),
-                    _sheetTextField(
-                      controller: nameController,
-                      label: _t('Họ tên', 'Full name'),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.85),
                     ),
-                    const SizedBox(height: 8),
-                    _sheetTextField(
-                      controller: phoneController,
-                      label: _t('Số điện thoại', 'Phone number'),
-                      keyboardType: TextInputType.phone,
-                    ),
-                    const SizedBox(height: 8),
-                    _sheetTextField(
-                      controller: cccdController,
-                      label: _t('CCCD', 'Citizen ID'),
-                      keyboardType: TextInputType.number,
-                    ),
-                    const SizedBox(height: 8),
-                    _sheetTextField(
-                      controller: addressController,
-                      label: _t('Địa chỉ nhà', 'Home address'),
-                    ),
-                    const SizedBox(height: 8),
-                    _sheetTextField(
-                      controller: normalBalanceController,
-                      label: _t('Số dư Thẻ Thường', 'Normal Card Balance'),
-                      keyboardType: TextInputType.number,
-                    ),
-                    const SizedBox(height: 8),
-                    _sheetTextField(
-                      controller: vipBalanceController,
-                      label: _t('Số dư Thẻ VIP', 'VIP Card Balance'),
-                      keyboardType: TextInputType.number,
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
+                  ),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        Expanded(
-                          child: TextButton(
-                            onPressed: () => Navigator.pop(sheetContext),
-                            child: Text(
-                              _t('Đóng', 'Close'),
-                              style: GoogleFonts.poppins(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
+                        Text(
+                          _t('Thông tin người dùng', 'User details'),
+                          style: GoogleFonts.poppins(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF101828),
                           ),
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _gradientActionButton(
-                            label: _t('Lưu', 'Save'),
-                            icon: Icons.save_rounded,
-                            onPressed: () async {
-                              final String nextName = nameController.text
-                                  .trim();
-                              final String nextPhone = phoneController.text
-                                  .trim();
-                              final String nextCccd = cccdController.text
-                                  .trim();
-                              final String nextAddress = addressController.text
-                                  .trim();
-                              final double nextNormalBalance =
-                                  _parseBalanceInput(
-                                    normalBalanceController.text,
-                                  );
-                              final double nextVipBalance = _parseBalanceInput(
-                                vipBalanceController.text,
-                              );
-                              final double nextTotalBalance =
-                                  nextNormalBalance + nextVipBalance;
+                        const SizedBox(height: 10),
+                        _sheetTextField(
+                          controller: nameController,
+                          label: _t('Họ tên', 'Full name'),
+                        ),
+                        const SizedBox(height: 8),
+                        _sheetTextField(
+                          controller: phoneController,
+                          label: _t('Số điện thoại', 'Phone number'),
+                          keyboardType: TextInputType.phone,
+                        ),
+                        const SizedBox(height: 8),
+                        _sheetTextField(
+                          controller: cccdController,
+                          label: _t('CCCD', 'Citizen ID'),
+                          keyboardType: TextInputType.number,
+                        ),
+                        const SizedBox(height: 8),
+                        _sheetTextField(
+                          controller: addressController,
+                          label: _t('Địa chỉ nhà', 'Home address'),
+                        ),
+                        const SizedBox(height: 8),
+                        _sheetTextField(
+                          controller: normalBalanceController,
+                          label: _t('Số dư Thẻ Thường', 'Normal Card Balance'),
+                          keyboardType: TextInputType.number,
+                        ),
+                        const SizedBox(height: 8),
+                        _sheetTextField(
+                          controller: vipBalanceController,
+                          label: _t('Số dư Thẻ VIP', 'VIP Card Balance'),
+                          keyboardType: TextInputType.number,
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: <Widget>[
+                            Expanded(
+                              child: Text(
+                                _t('Loại thẻ VIP', 'VIP card type'),
+                                style: GoogleFonts.poppins(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF111827),
+                                ),
+                              ),
+                            ),
+                            Switch(
+                              value: nextHasVipCard,
+                              onChanged: (bool value) {
+                                setSheetState(() {
+                                  nextHasVipCard = value;
+                                });
+                              },
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: <Widget>[
+                            Expanded(
+                              child: TextButton(
+                                onPressed: () => Navigator.pop(sheetContext),
+                                child: Text(
+                                  _t('Đóng', 'Close'),
+                                  style: GoogleFonts.poppins(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: _gradientActionButton(
+                                label: _t('Lưu', 'Save'),
+                                icon: Icons.save_rounded,
+                                onPressed: () async {
+                                  final String nextName = nameController.text
+                                      .trim();
+                                  final String nextPhone = phoneController.text
+                                      .trim();
+                                  final String nextCccd = cccdController.text
+                                      .trim();
+                                  final String nextAddress = addressController
+                                      .text
+                                      .trim();
+                                  final double nextNormalBalance =
+                                      _parseBalanceInput(
+                                        normalBalanceController.text,
+                                      );
+                                  final double nextVipBalance =
+                                      _parseBalanceInput(
+                                        vipBalanceController.text,
+                                      );
+                                  final double nextTotalBalance =
+                                      nextNormalBalance + nextVipBalance;
+                                  final String currentCardRaw = user
+                                      .cardNumberRaw
+                                      .trim();
+                                  final String nextCardNumber =
+                                      currentCardRaw.isEmpty
+                                      ? CardNumberService.generatePermanentCardNumber(
+                                          <String, dynamic>{
+                                            'cccd': nextCccd,
+                                            'phoneNumber': nextPhone,
+                                            'hasVipCard': nextHasVipCard,
+                                          },
+                                        )
+                                      : currentCardRaw;
 
-                              if (nextName.isEmpty) {
-                                if (!parentContext.mounted) {
-                                  return;
-                                }
-                                ScaffoldMessenger.of(
-                                  parentContext,
-                                ).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      _t(
-                                        'Vui lòng nhập họ tên',
-                                        'Please enter full name',
+                                  if (nextName.isEmpty) {
+                                    if (!parentContext.mounted) {
+                                      return;
+                                    }
+                                    ScaffoldMessenger.of(
+                                      parentContext,
+                                    ).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          _t(
+                                            'Vui lòng nhập họ tên',
+                                            'Please enter full name',
+                                          ),
+                                        ),
                                       ),
-                                    ),
-                                  ),
-                                );
-                                return;
-                              }
+                                    );
+                                    return;
+                                  }
 
-                              try {
-                                final DocumentReference<Map<String, dynamic>>
-                                userRef = _firestore
-                                    .collection('users')
-                                    .doc(user.id);
-                                final WriteBatch batch = _firestore.batch();
+                                  try {
+                                    final DocumentReference<
+                                      Map<String, dynamic>
+                                    >
+                                    userRef = _firestore
+                                        .collection('users')
+                                        .doc(user.id);
+                                    final WriteBatch batch = _firestore.batch();
 
-                                batch.set(
-                                  userRef.collection('cards').doc('standard'),
-                                  <String, dynamic>{
-                                    'balance': nextNormalBalance,
-                                    'updatedAt': FieldValue.serverTimestamp(),
-                                  },
-                                  SetOptions(merge: true),
-                                );
+                                    batch.set(
+                                      userRef
+                                          .collection('cards')
+                                          .doc('standard'),
+                                      <String, dynamic>{
+                                        'balance': nextNormalBalance,
+                                        'card_number': nextCardNumber,
+                                        'cardNumber': nextCardNumber,
+                                        'updatedAt':
+                                            FieldValue.serverTimestamp(),
+                                      },
+                                      SetOptions(merge: true),
+                                    );
 
-                                batch.set(
-                                  userRef.collection('cards').doc('vip'),
-                                  <String, dynamic>{
-                                    'balance': nextVipBalance,
-                                    'updatedAt': FieldValue.serverTimestamp(),
-                                  },
-                                  SetOptions(merge: true),
-                                );
+                                    batch.set(
+                                      userRef.collection('cards').doc('vip'),
+                                      <String, dynamic>{
+                                        'balance': nextVipBalance,
+                                        'card_number': nextCardNumber,
+                                        'cardNumber': nextCardNumber,
+                                        'updatedAt':
+                                            FieldValue.serverTimestamp(),
+                                      },
+                                      SetOptions(merge: true),
+                                    );
 
-                                batch.set(userRef, <String, dynamic>{
-                                  'fullName': nextName,
-                                  'fullname': nextName,
-                                  'phoneNumber': nextPhone,
-                                  'cccd': nextCccd,
-                                  'idNumber': nextCccd,
-                                  'address': nextAddress,
-                                  'balance_normal': nextNormalBalance,
-                                  'balance_vip': nextVipBalance,
-                                  'balance': nextTotalBalance,
-                                  'totalBalance': nextTotalBalance,
-                                  'availableBalance': nextTotalBalance,
-                                  'updatedAt': FieldValue.serverTimestamp(),
-                                }, SetOptions(merge: true));
+                                    batch.set(userRef, <String, dynamic>{
+                                      'fullName': nextName,
+                                      'fullname': nextName,
+                                      'phoneNumber': nextPhone,
+                                      'cccd': nextCccd,
+                                      'idNumber': nextCccd,
+                                      'address': nextAddress,
+                                      'hasVipCard': nextHasVipCard,
+                                      'membershipTier': nextHasVipCard
+                                          ? 'prive'
+                                          : 'onyx',
+                                      'card_number': nextCardNumber,
+                                      'cardNumber': nextCardNumber,
+                                      'balance_normal': nextNormalBalance,
+                                      'balance_vip': nextVipBalance,
+                                      'balance': nextTotalBalance,
+                                      'totalBalance': nextTotalBalance,
+                                      'availableBalance': nextTotalBalance,
+                                      'updatedAt': FieldValue.serverTimestamp(),
+                                    }, SetOptions(merge: true));
 
-                                await batch.commit();
+                                    await batch.commit();
 
-                                if (sheetContext.mounted) {
-                                  Navigator.pop(sheetContext);
-                                }
+                                    if (sheetContext.mounted) {
+                                      Navigator.pop(sheetContext);
+                                    }
 
-                                if (!parentContext.mounted) {
-                                  return;
-                                }
-                                ScaffoldMessenger.of(
-                                  parentContext,
-                                ).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Cập nhật thành công!'),
-                                    backgroundColor: Color(0xFF16A34A),
-                                  ),
-                                );
-                              } catch (_) {
-                                if (!parentContext.mounted) {
-                                  return;
-                                }
-                                ScaffoldMessenger.of(
-                                  parentContext,
-                                ).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      _t('Cập nhật thất bại', 'Update failed'),
-                                    ),
-                                    backgroundColor: const Color(0xFFDC2626),
-                                  ),
-                                );
-                              }
-                            },
-                          ),
+                                    if (!parentContext.mounted) {
+                                      return;
+                                    }
+                                    ScaffoldMessenger.of(
+                                      parentContext,
+                                    ).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          _t(
+                                            'Cập nhật thành công!',
+                                            'Updated successfully!',
+                                          ),
+                                        ),
+                                        backgroundColor: const Color(
+                                          0xFF16A34A,
+                                        ),
+                                      ),
+                                    );
+                                  } catch (_) {
+                                    if (!parentContext.mounted) {
+                                      return;
+                                    }
+                                    ScaffoldMessenger.of(
+                                      parentContext,
+                                    ).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          _t(
+                                            'Cập nhật thất bại',
+                                            'Update failed',
+                                          ),
+                                        ),
+                                        backgroundColor: const Color(
+                                          0xFFDC2626,
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                },
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ),
+            );
+          },
         );
       },
     );
@@ -3529,11 +3608,13 @@ class _AdminUserSummary {
     required this.id,
     required this.fullName,
     required this.account,
+    required this.cardNumberRaw,
     required this.phoneNumber,
     required this.cccd,
     required this.address,
     required this.role,
     required this.isLocked,
+    required this.hasVipCard,
     required this.balanceNormal,
     required this.balanceVip,
     required this.totalBalance,
@@ -3542,11 +3623,13 @@ class _AdminUserSummary {
   final String id;
   final String fullName;
   final String account;
+  final String cardNumberRaw;
   final String phoneNumber;
   final String cccd;
   final String address;
   final String role;
   final bool isLocked;
+  final bool hasVipCard;
   final double balanceNormal;
   final double balanceVip;
   final double totalBalance;

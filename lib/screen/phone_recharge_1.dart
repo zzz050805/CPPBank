@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../core/app_translations.dart';
 import '../data/user_firestore_service.dart';
 import '../l10n/app_text.dart';
+import '../services/card_number_service.dart';
 import '../services/notification_service.dart';
 import '../widget/pin_popup.dart';
 
@@ -104,6 +105,66 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
     }
 
     return '';
+  }
+
+  Widget _buildSourceCardText(Color primaryColor) {
+    final String uid = _resolveTransactionUid();
+    if (uid.isEmpty) {
+      return _buildSourceCardRichText(
+        primaryColor: primaryColor,
+        cardDisplay: _t('Đang tải...', 'Loading...'),
+      );
+    }
+
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .snapshots(),
+      builder: (context, snapshot) {
+        String cardDisplay = _t('Đang tải...', 'Loading...');
+
+        if (snapshot.hasData) {
+          final Map<String, dynamic> userData =
+              snapshot.data?.data() ?? <String, dynamic>{};
+          final String rawCard = CardNumberService.readStoredCardNumber(
+            userData,
+          );
+          if (rawCard.isNotEmpty) {
+            cardDisplay = CardNumberService.formatCardNumber(rawCard);
+          }
+        }
+
+        return _buildSourceCardRichText(
+          primaryColor: primaryColor,
+          cardDisplay: cardDisplay,
+        );
+      },
+    );
+  }
+
+  Widget _buildSourceCardRichText({
+    required Color primaryColor,
+    required String cardDisplay,
+  }) {
+    return RichText(
+      text: TextSpan(
+        style: GoogleFonts.poppins(
+          color: const Color(0xFF222222),
+          fontSize: 14,
+        ),
+        children: [
+          TextSpan(text: '${_t('Số thẻ', 'Card number')}: '),
+          TextSpan(
+            text: cardDisplay,
+            style: GoogleFonts.poppins(
+              color: primaryColor,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _handleConfirmRecharge() async {
@@ -538,24 +599,7 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
                           ],
                         ),
                         const SizedBox(height: 10),
-                        RichText(
-                          text: TextSpan(
-                            style: GoogleFonts.poppins(
-                              color: const Color(0xFF222222),
-                              fontSize: 14,
-                            ),
-                            children: [
-                              TextSpan(text: "STK: "),
-                              TextSpan(
-                                text: "123 568 567 456",
-                                style: GoogleFonts.poppins(
-                                  color: primaryColor,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                        _buildSourceCardText(primaryColor),
                         const SizedBox(height: 6),
                         StreamBuilder<UserProfileData?>(
                           stream: UserFirestoreService.instance

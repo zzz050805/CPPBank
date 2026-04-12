@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../data/user_firestore_service.dart';
 import '../l10n/app_text.dart';
+import '../services/card_number_service.dart';
 import 'OTP_screen.dart';
 
 class RegisterPasswordScreen extends StatefulWidget {
@@ -156,6 +157,13 @@ class _RegisterPasswordScreenState extends State<RegisterPasswordScreen> {
         );
       }
 
+      final String generatedCardNumber =
+          CardNumberService.generatePermanentCardNumber(<String, dynamic>{
+            'cccd': widget.cccd,
+            'phoneNumber': widget.phoneNumber,
+            'hasVipCard': false,
+          });
+
       // Lưu dữ liệu user và khởi tạo cấu trúc Firestore chuẩn cho tài khoản mới.
       await UserFirestoreService.instance.initUserData(
         userId: uid,
@@ -174,6 +182,8 @@ class _RegisterPasswordScreenState extends State<RegisterPasswordScreen> {
           'cccd': widget.cccd,
           'issueDate': widget.issueDate,
           'address': widget.address,
+          'card_number': generatedCardNumber,
+          'cardNumber': generatedCardNumber,
           // Giữ tương thích luồng đăng nhập legacy đang kiểm tra password từ Firestore.
           'password': _passController.text,
           'authUid': usedAuthFallback ? null : uid,

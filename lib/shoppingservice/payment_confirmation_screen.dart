@@ -9,6 +9,7 @@ import '../app_preferences.dart';
 import '../core/app_translations.dart';
 import '../data/user_firestore_service.dart';
 import '../services/notification_service.dart';
+import '../services/card_number_service.dart';
 import '../widget/pin_popup.dart';
 import 'payment_success_screen.dart';
 import 'service_model.dart';
@@ -260,14 +261,14 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
 
       final Map<String, dynamic> userData =
           userDoc.data() ?? <String, dynamic>{};
-      final String userAccount = (userData['accountNumber'] ?? '').toString();
+      final String userAccount = CardNumberService.readCardNumber(userData);
 
       if (userAccount.trim().isNotEmpty) {
         if (!mounted) {
           return;
         }
         setState(() {
-          _sourceAccount = _maskAccount(userAccount);
+          _sourceAccount = CardNumberService.formatCardNumber(userAccount);
         });
         return;
       }
@@ -278,15 +279,17 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
           .collection('cards')
           .doc('standard')
           .get();
-      final String cardNumber = (cardDoc.data()?['cardNumber'] ?? '')
-          .toString()
-          .trim();
+      final String cardNumber = CardNumberService.readCardNumber(
+        cardDoc.data() ?? <String, dynamic>{},
+      );
 
       if (!mounted) {
         return;
       }
       setState(() {
-        _sourceAccount = cardNumber.isEmpty ? _maskAccount(uid) : cardNumber;
+        _sourceAccount = cardNumber.isEmpty
+            ? _maskAccount(uid)
+            : CardNumberService.formatCardNumber(cardNumber);
       });
     } catch (_) {
       if (!mounted) {
@@ -631,12 +634,11 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
         ),
       );
     } finally {
-      if (!mounted) {
-        return;
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
       }
-      setState(() {
-        _isProcessing = false;
-      });
     }
   }
 
@@ -703,12 +705,84 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
     );
   }
 
+  String _accountFieldHint(ServiceAccountField field) {
+    if (_isEmailType(field)) {
+      return AppTranslations.getTextByCodeWithParams(
+        _languageCode,
+        'enter_account_email',
+        <String, String>{
+          'serviceName': widget.service.localizedName(_languageCode),
+        },
+      );
+    }
+    return field.localizedHint(_languageCode);
+  }
+
   Widget _buildAccountField(ServiceAccountField field, int index) {
     final TextEditingController controller = _controllerOf(field);
     final bool isLast = index == _accountFields.length - 1;
+    final bool isEmailField = _isEmailType(field);
     final TextInputType keyboardType = _keyboardTypeFor(field);
     final List<TextInputFormatter>? inputFormatters = _formattersFor(field);
     final String? errorText = _errorOf(field);
+
+    final Widget input = TextField(
+      controller: controller,
+      focusNode: _focusNodes[field.id],
+      keyboardType: keyboardType,
+      inputFormatters: inputFormatters,
+      textInputAction: isLast ? TextInputAction.done : TextInputAction.next,
+      onSubmitted: (_) {
+        if (isLast) {
+          FocusScope.of(context).unfocus();
+        } else {
+          FocusScope.of(
+            context,
+          ).requestFocus(_focusNodes[_accountFields[index + 1].id]);
+        }
+      },
+      style: GoogleFonts.poppins(
+        fontSize: 14,
+        fontWeight: FontWeight.w500,
+        color: _primaryBlue,
+      ),
+      decoration: InputDecoration(
+        hintText: _accountFieldHint(field),
+        hintStyle: GoogleFonts.poppins(fontSize: 13, color: _silverGray),
+        filled: true,
+        fillColor: isEmailField ? Colors.white : const Color(0xFFF6F8FC),
+        prefixIcon: isEmailField
+            ? Icon(Icons.email_outlined, color: Colors.grey[500], size: 20)
+            : null,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 14,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(isEmailField ? 12 : 14),
+          borderSide: BorderSide(
+            color: isEmailField
+                ? const Color(0xFFE5E7EB)
+                : _silverGray.withOpacity(0.24),
+          ),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(isEmailField ? 12 : 14),
+          borderSide: BorderSide(
+            color: isEmailField
+                ? const Color(0xFFE5E7EB)
+                : _silverGray.withOpacity(0.24),
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(isEmailField ? 12 : 14),
+          borderSide: BorderSide(
+            color: isEmailField ? const Color(0xFFCBD5E1) : _primaryBlue,
+            width: isEmailField ? 1.2 : 1.4,
+          ),
+        ),
+      ),
+    );
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
@@ -724,51 +798,15 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
             ),
           ),
           const SizedBox(height: 8),
-          TextField(
-            controller: controller,
-            focusNode: _focusNodes[field.id],
-            keyboardType: keyboardType,
-            inputFormatters: inputFormatters,
-            textInputAction: isLast
-                ? TextInputAction.done
-                : TextInputAction.next,
-            onSubmitted: (_) {
-              if (isLast) {
-                FocusScope.of(context).unfocus();
-              } else {
-                FocusScope.of(
-                  context,
-                ).requestFocus(_focusNodes[_accountFields[index + 1].id]);
-              }
-            },
-            style: GoogleFonts.poppins(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: _primaryBlue,
-            ),
-            decoration: InputDecoration(
-              hintText: field.localizedHint(_languageCode),
-              hintStyle: GoogleFonts.poppins(fontSize: 13, color: _silverGray),
-              filled: true,
-              fillColor: const Color(0xFFF6F8FC),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 14,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(color: _silverGray.withOpacity(0.24)),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(color: _silverGray.withOpacity(0.24)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: _primaryBlue, width: 1.4),
-              ),
-            ),
-          ),
+          isEmailField
+              ? Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: input,
+                )
+              : input,
           if (errorText != null) ...<Widget>[
             const SizedBox(height: 6),
             Text(
@@ -873,16 +911,19 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
                         ),
                         boxShadow: <BoxShadow>[
                           BoxShadow(
-                            color: _primaryBlue.withOpacity(0.07),
-                            blurRadius: 24,
-                            offset: const Offset(0, 8),
+                            color: Colors.black.withOpacity(0.04),
+                            blurRadius: 20,
+                            offset: const Offset(0, 7),
                           ),
                         ],
                       ),
                       child: Column(
                         children: <Widget>[
                           Text(
-                            AppTranslations.getText(context, 'payment_review'),
+                            AppTranslations.getText(
+                              context,
+                              'transaction_review',
+                            ),
                             style: GoogleFonts.poppins(
                               fontSize: 18,
                               fontWeight: FontWeight.w700,
@@ -940,16 +981,36 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
                               ),
                             ),
                           ),
-                          Divider(color: _silverGray.withOpacity(0.22)),
-                          _detailRow(
-                            AppTranslations.getText(context, 'total'),
-                            Text(
-                              totalText,
-                              style: GoogleFonts.poppins(
-                                fontSize: 18,
-                                color: _primaryBlue,
-                                fontWeight: FontWeight.w800,
-                              ),
+                          const SizedBox(height: 4),
+                          _DashedDivider(color: _silverGray.withOpacity(0.35)),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                SizedBox(
+                                  width: 110,
+                                  child: Text(
+                                    AppTranslations.getText(context, 'total'),
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 16,
+                                      color: const Color(0xFF0F2A8A),
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    totalText,
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 22,
+                                      color: const Color(0xFF0F2A8A),
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
@@ -1015,6 +1076,39 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _DashedDivider extends StatelessWidget {
+  const _DashedDivider({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    const double thickness = 1;
+    const double dashWidth = 6;
+    const double dashGap = 4;
+
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final int dashCount = (constraints.maxWidth / (dashWidth + dashGap))
+            .floor();
+
+        return Row(
+          children: List<Widget>.generate(dashCount, (int index) {
+            return Container(
+              width: dashWidth,
+              height: thickness,
+              margin: EdgeInsets.only(
+                right: index == dashCount - 1 ? 0 : dashGap,
+              ),
+              color: color,
+            );
+          }),
+        );
+      },
     );
   }
 }

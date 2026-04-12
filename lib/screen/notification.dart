@@ -8,6 +8,7 @@ import '../data/notification_firestore_service.dart';
 import '../data/user_firestore_service.dart';
 import '../l10n/app_text.dart';
 import '../shoppingservice/shopping_store_screen.dart';
+import '../widget/ccp_app_bar.dart';
 import '../widget/transaction_detail_popup.dart';
 
 class NotificationScreen extends StatefulWidget {
@@ -130,7 +131,11 @@ class _NotificationScreenState extends State<NotificationScreen> {
     if (data['withdrawCode'] != null) {
       return 'withdraw';
     }
-    if (data['toAccountNumber'] != null || data['accountNumber'] != null) {
+    if (data['toCardNumber'] != null ||
+        data['card_number'] != null ||
+        data['cardNumber'] != null ||
+        data['toAccountNumber'] != null ||
+        data['accountNumber'] != null) {
       return 'transfer';
     }
     if (data['billType'] != null || data['customerCode'] != null) {
@@ -210,6 +215,9 @@ class _NotificationScreenState extends State<NotificationScreen> {
 
     final String targetAccount =
         (data['targetAccount'] ??
+                data['toCardNumber'] ??
+                data['card_number'] ??
+                data['cardNumber'] ??
                 data['toAccountNumber'] ??
                 data['accountNumber'] ??
                 data['phoneNumber'] ??
@@ -526,25 +534,10 @@ class _NotificationScreenState extends State<NotificationScreen> {
       initialIndex: initialTabIndex,
       child: Scaffold(
         backgroundColor: const Color(0xFFF3F4F6),
-        appBar: AppBar(
+        appBar: CCPAppBar(
+          title: _t('Thông báo', 'Notifications'),
+          onBackPressed: () => Navigator.of(context).pop(),
           backgroundColor: Colors.white,
-          elevation: 0,
-          scrolledUnderElevation: 0,
-          surfaceTintColor: Colors.white,
-          leading: IconButton(
-            icon: const Icon(Icons.chevron_left, color: Colors.black, size: 28),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-          title: Text(
-            _t('Thông báo', 'Notifications'),
-            style: GoogleFonts.poppins(
-              color: Colors.black,
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          centerTitle: false,
-          titleSpacing: 0,
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(46),
             child: Container(

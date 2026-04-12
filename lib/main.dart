@@ -84,9 +84,7 @@ class MyApp extends StatelessWidget {
             scaffoldBackgroundColor: const Color(
               0xFFF8F9FD,
             ), // Nền xám nhạt "quý tộc"
-            textTheme: GoogleFonts.poppinsTextTheme(
-              Theme.of(context).textTheme,
-            ),
+            textTheme: GoogleFonts.poppinsTextTheme(),
             // Hiệu ứng chuyển trang mượt mà bro đang dùng
             pageTransitionsTheme: const PageTransitionsTheme(
               builders: <TargetPlatform, PageTransitionsBuilder>{

@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../core/app_translations.dart';
 import '../data/user_firestore_service.dart';
 import '../l10n/app_text.dart';
+import '../services/card_number_service.dart';
 import '../services/notification_service.dart';
 import '../widget/pin_popup.dart';
 import '../widget/ccp_app_bar.dart';
@@ -62,12 +63,63 @@ class ConfirmTransferScreen extends StatelessWidget {
     return '${NumberFormat('#,###', 'en_US').format(value)} VND';
   }
 
-  String _safeRecipientAccount() {
+  String _safeRecipientAccount(BuildContext context) {
     final String value = recipientAccountNumber.trim();
     if (value.isEmpty) {
-      return '312 555 867';
+      return _t(context, 'Chưa nhập', 'Not provided');
     }
-    return value;
+    return CardNumberService.formatCardNumber(value);
+  }
+
+  Widget _buildSourceAccountCard(BuildContext context) {
+    return StreamBuilder<UserProfileData?>(
+      stream: UserFirestoreService.instance.currentUserProfileStream(),
+      initialData: UserFirestoreService.instance.latestProfile,
+      builder: (context, snapshot) {
+        final UserProfileData? profile =
+            snapshot.data ?? UserFirestoreService.instance.latestProfile;
+        final String senderName = snapshot.hasError
+            ? _t(context, 'Không tìm thấy user', 'User not found')
+            : ((profile?.fullname.isNotEmpty == true)
+                  ? profile!.fullname
+                  : _t(context, 'Khách hàng', 'Customer'));
+        final String uid = (profile?.uid ?? _resolveUid()).trim();
+
+        if (uid.isEmpty) {
+          return _buildAccountCard(
+            name: senderName.toUpperCase(),
+            id: _t(context, 'Đang tải...', 'Loading...'),
+            isSource: true,
+          );
+        }
+
+        return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+          stream: FirebaseFirestore.instance
+              .collection('users')
+              .doc(uid)
+              .snapshots(),
+          builder: (context, userSnapshot) {
+            String sourceCardDisplay = _t(context, 'Đang tải...', 'Loading...');
+            if (userSnapshot.hasData) {
+              final Map<String, dynamic> userData =
+                  userSnapshot.data?.data() ?? <String, dynamic>{};
+              final String raw = CardNumberService.readStoredCardNumber(
+                userData,
+              );
+              if (raw.isNotEmpty) {
+                sourceCardDisplay = CardNumberService.formatCardNumber(raw);
+              }
+            }
+
+            return _buildAccountCard(
+              name: senderName.toUpperCase(),
+              id: sourceCardDisplay,
+              isSource: true,
+            );
+          },
+        );
+      },
+    );
   }
 
   String _safeRecipientName() {
@@ -277,7 +329,12 @@ class ConfirmTransferScreen extends StatelessWidget {
         'isNegative': true,
         'relatedId': transferCode,
         'amount': roundedAmount,
+        'card_number': recipientAccount,
+        'cardNumber': recipientAccount,
+        'toCardNumber': recipientAccount,
         'targetAccount': recipientAccount,
+        'toAccountNumber': recipientAccount,
+        'accountNumber': recipientAccount,
         'receiverName': recipientName,
         'recipientName': recipientName,
         'serviceName': recipientName,
@@ -307,7 +364,7 @@ class ConfirmTransferScreen extends StatelessWidget {
     final String displayContent = transferContent.trim().isEmpty
         ? _t(context, 'CHUYỂN TIỀN', 'TRANSFER')
         : transferContent.trim();
-    final String displayRecipientAccount = _safeRecipientAccount();
+    final String displayRecipientAccount = _safeRecipientAccount(context);
     final String displayRecipientName = _safeRecipientName();
     final String displayRecipientBank = _safeRecipientBank();
     return Scaffold(
@@ -426,39 +483,14 @@ class ConfirmTransferScreen extends StatelessWidget {
                       children: [
                         _buildSectionLabel(
                           context,
-                          _t(context, 'Từ tài khoản', 'From account'),
+                          _t(context, 'Từ thẻ', 'From card'),
                         ),
                         const SizedBox(height: 10),
-                        StreamBuilder<UserProfileData?>(
-                          stream: UserFirestoreService.instance
-                              .currentUserProfileStream(),
-                          initialData:
-                              UserFirestoreService.instance.latestProfile,
-                          builder: (context, snapshot) {
-                            final UserProfileData? profile =
-                                snapshot.data ??
-                                UserFirestoreService.instance.latestProfile;
-                            final String senderName = snapshot.hasError
-                                ? _t(
-                                    context,
-                                    'Không tìm thấy user',
-                                    'User not found',
-                                  )
-                                : ((profile?.fullname.isNotEmpty == true)
-                                      ? profile!.fullname
-                                      : _t(context, 'Khách hàng', 'Customer'));
-
-                            return _buildAccountCard(
-                              name: senderName.toUpperCase(),
-                              id: '123 568 567 456',
-                              isSource: true,
-                            );
-                          },
-                        ),
+                        _buildSourceAccountCard(context),
                         const SizedBox(height: 16),
                         _buildSectionLabel(
                           context,
-                          _t(context, 'Đến tài khoản', 'To account'),
+                          _t(context, 'Đến thẻ', 'To card'),
                         ),
                         const SizedBox(height: 10),
                         _buildAccountCard(
@@ -565,7 +597,7 @@ class ConfirmTransferScreen extends StatelessWidget {
                           await _processConfirmedTransfer(
                             context: context,
                             amountText: amountText,
-                            recipientAccount: displayRecipientAccount,
+                            recipientAccount: recipientAccountNumber.trim(),
                             recipientName: displayRecipientName,
                             transferContent: displayContent,
                           );

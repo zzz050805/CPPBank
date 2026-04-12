@@ -1,4 +1,5 @@
-﻿import 'dart:ui';
+﻿import 'dart:async';
+import 'dart:ui';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -16,6 +17,7 @@ import '../shoppingservice/service_data.dart';
 import '../shoppingservice/service_model.dart';
 import '../shoppingservice/shopping_store_screen.dart';
 import '../services/home_cache_service.dart';
+import '../services/notification_service.dart';
 import '../widget/pressable_scale.dart';
 import '../widget/shimmer_box.dart';
 import '../widget/transaction_detail_popup.dart';
@@ -51,6 +53,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<List<_HomeTransactionModel>>? _recentTransactionsFutureCache;
   double _lastKnownTotalBalance = 0;
   bool _hasLoadedBalance = false;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
+  _promotionHeadsUpSubscription;
+  final Set<String> _seenPromotionNotificationIds = <String>{};
+  bool _promotionHeadsUpReady = false;
 
   String _t(String vi, String en) => AppText.tr(context, vi, en);
 
@@ -78,6 +84,7 @@ class _HomeScreenState extends State<HomeScreen> {
           fallbackName: UserFirestoreService.instance.latestProfile?.fullname,
         );
       }
+      _startPromotionHeadsUpListener(uid);
     }
   }
 
@@ -86,6 +93,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (uid.isNotEmpty) {
       HomeCacheService.instance.startRealtimeSync(uid);
       HomeCacheService.instance.refreshCurrent();
+      _startPromotionHeadsUpListener(uid);
     }
 
     if (!mounted) {
@@ -100,6 +108,70 @@ class _HomeScreenState extends State<HomeScreen> {
       _recentTransactionsLanguageCode = null;
       _recentTransactionsFutureCache = null;
     });
+  }
+
+  @override
+  void dispose() {
+    _promotionHeadsUpSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _startPromotionHeadsUpListener(String uid) {
+    _promotionHeadsUpSubscription?.cancel();
+    _seenPromotionNotificationIds.clear();
+    _promotionHeadsUpReady = false;
+
+    _promotionHeadsUpSubscription = NotificationFirestoreService.instance
+        .userNotificationsRef(uid)
+        .orderBy('timestamp', descending: true)
+        .limit(40)
+        .snapshots()
+        .listen((QuerySnapshot<Map<String, dynamic>> snapshot) {
+          if (!_promotionHeadsUpReady) {
+            for (final QueryDocumentSnapshot<Map<String, dynamic>> doc
+                in snapshot.docs) {
+              _seenPromotionNotificationIds.add(doc.id);
+            }
+            _promotionHeadsUpReady = true;
+            return;
+          }
+
+          for (final DocumentChange<Map<String, dynamic>> change
+              in snapshot.docChanges) {
+            if (change.type != DocumentChangeType.added) {
+              continue;
+            }
+
+            final Map<String, dynamic>? data = change.doc.data();
+            if (data == null) {
+              continue;
+            }
+
+            final String notificationId = change.doc.id;
+            if (_seenPromotionNotificationIds.contains(notificationId)) {
+              continue;
+            }
+            _seenPromotionNotificationIds.add(notificationId);
+
+            final String type = (data['type'] ?? '')
+                .toString()
+                .trim()
+                .toLowerCase();
+            if (type != 'uu_dai') {
+              continue;
+            }
+
+            final String title = (data['title'] ?? '').toString().trim();
+            final String body = (data['body'] ?? '').toString().trim();
+            NotificationService().showNotification(
+              title: title.isEmpty ? 'Uu dai moi' : title,
+              body: body.isEmpty
+                  ? 'Ban vua nhan duoc uu dai moi. Mo app de xem ngay.'
+                  : body,
+              lightVibration: true,
+            );
+          }
+        });
   }
 
   void _pushPremium(Widget page, {bool refreshOnReturn = false}) {
@@ -634,6 +706,9 @@ class _HomeScreenState extends State<HomeScreen> {
           ]);
           final String targetAccount = _firstNonEmpty([
             data['targetAccount'],
+            data['toCardNumber'],
+            data['card_number'],
+            data['cardNumber'],
             data['accountNumber'],
             data['customerCode'],
             data['playerId'],
@@ -662,6 +737,9 @@ class _HomeScreenState extends State<HomeScreen> {
             data['receiverName'],
           ]);
           final String destinationAccount = _firstNonEmpty([
+            data['toCardNumber'],
+            data['card_number'],
+            data['cardNumber'],
             data['toAccountNumber'],
             data['accountNumber'],
             data['receiverAccount'],
@@ -802,41 +880,36 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildHeaderUserName() {
-    const double nameSlotWidth = 188;
-    const double nameSlotHeight = 28;
-
-    return SizedBox(
-      width: nameSlotWidth,
-      height: nameSlotHeight,
-      child: ValueListenableBuilder<HomeCacheData>(
-        valueListenable: HomeCacheService.instance.notifier,
-        builder: (context, cacheData, _) {
-          if (!cacheData.isReady && cacheData.userName.trim().isEmpty) {
-            return Align(
-              alignment: Alignment.centerLeft,
-              child: _buildNameSkeleton(),
-            );
-          }
-
-          final String name = cacheData.userName.trim().isEmpty
-              ? _t('Khách hàng', 'Customer')
-              : cacheData.userName;
-
+    return ValueListenableBuilder<HomeCacheData>(
+      valueListenable: HomeCacheService.instance.notifier,
+      builder: (context, cacheData, _) {
+        if (!cacheData.isReady && cacheData.userName.trim().isEmpty) {
           return Align(
             alignment: Alignment.centerLeft,
-            child: Text(
-              name.toUpperCase(),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.poppins(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+            child: _buildNameSkeleton(),
           );
-        },
-      ),
+        }
+
+        final String name = cacheData.userName.trim().isEmpty
+            ? _t('Khách hàng', 'Customer')
+            : cacheData.userName;
+
+        return Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            name.toUpperCase(),
+            maxLines: 2,
+            overflow: TextOverflow.fade,
+            softWrap: true,
+            style: GoogleFonts.poppins(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              height: 1.05,
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -886,7 +959,74 @@ class _HomeScreenState extends State<HomeScreen> {
         });
   }
 
-  Stream<Map<String, int>> _shoppingPricePreviewStream() {
+  int _readDiscountPercent(dynamic raw) {
+    if (raw is num) {
+      return raw.round();
+    }
+    if (raw is String) {
+      return int.tryParse(raw.trim()) ?? 0;
+    }
+    return 0;
+  }
+
+  bool _hasVoucherValue(dynamic raw) {
+    if (raw == null) {
+      return false;
+    }
+    if (raw is bool) {
+      return raw;
+    }
+    if (raw is String) {
+      return raw.trim().isNotEmpty;
+    }
+    if (raw is Iterable) {
+      for (final dynamic item in raw) {
+        if (_hasVoucherValue(item)) {
+          return true;
+        }
+      }
+      return false;
+    }
+    if (raw is Map) {
+      for (final dynamic value in raw.values) {
+        if (_hasVoucherValue(value)) {
+          return true;
+        }
+      }
+      return false;
+    }
+    return false;
+  }
+
+  bool _serviceHasPromotion(Map<String, dynamic> data) {
+    if (_readDiscountPercent(data['discountPercent']) > 0) {
+      return true;
+    }
+
+    final List<dynamic> packages =
+        (data['packages'] as List<dynamic>?) ?? <dynamic>[];
+    for (final dynamic item in packages) {
+      if (item is Map<String, dynamic>) {
+        if (_readDiscountPercent(item['discountPercent']) > 0) {
+          return true;
+        }
+      } else if (item is Map) {
+        if (_readDiscountPercent(item['discountPercent']) > 0) {
+          return true;
+        }
+      }
+    }
+
+    return _hasVoucherValue(data['voucher']) ||
+        _hasVoucherValue(data['voucherCode']) ||
+        _hasVoucherValue(data['voucherCodes']) ||
+        _hasVoucherValue(data['vouchers']) ||
+        _hasVoucherValue(data['coupon']) ||
+        _hasVoucherValue(data['couponCode']) ||
+        _hasVoucherValue(data['couponCodes']);
+  }
+
+  Stream<Map<String, bool>> _shoppingPromotionPreviewStream() {
     return FirebaseFirestore.instance
         .collection('admin')
         .doc('settings')
@@ -894,35 +1034,15 @@ class _HomeScreenState extends State<HomeScreen> {
         .where('kind', isEqualTo: 'shopping_bundle')
         .snapshots()
         .map((QuerySnapshot<Map<String, dynamic>> snapshot) {
-          final Map<String, int> prices = <String, int>{};
+          final Map<String, bool> promotions = <String, bool>{};
 
           for (final QueryDocumentSnapshot<Map<String, dynamic>> doc
               in snapshot.docs) {
             final Map<String, dynamic> data = doc.data();
-            final List<dynamic> packages =
-                (data['packages'] as List<dynamic>?) ?? <dynamic>[];
-            if (packages.isEmpty) {
-              continue;
-            }
-
-            int? firstPrice;
-            final dynamic firstItem = packages.first;
-            if (firstItem is Map<String, dynamic>) {
-              firstPrice = int.tryParse((firstItem['price'] ?? '').toString());
-            } else if (firstItem is Map) {
-              firstPrice = int.tryParse((firstItem['price'] ?? '').toString());
-            } else {
-              firstPrice = int.tryParse(firstItem.toString());
-            }
-
-            if (firstPrice == null || firstPrice <= 0) {
-              continue;
-            }
-
-            prices[doc.id] = firstPrice;
+            promotions[doc.id] = _serviceHasPromotion(data);
           }
 
-          return prices;
+          return promotions;
         });
   }
 
@@ -970,21 +1090,23 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                     const SizedBox(width: 14),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          _t("Xin chào,", "Hello,"),
-                          style: GoogleFonts.poppins(
-                            color: Colors.white70,
-                            fontSize: 16,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            _t("Xin chào,", "Hello,"),
+                            style: GoogleFonts.poppins(
+                              color: Colors.white70,
+                              fontSize: 16,
+                            ),
                           ),
-                        ),
-                        _buildHeaderUserName(),
-                      ],
+                          _buildHeaderUserName(),
+                        ],
+                      ),
                     ),
-                    const Spacer(),
+                    const SizedBox(width: 12),
                     _buildNotificationBell(),
                   ],
                 ),
@@ -1865,23 +1987,48 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildShoppingSection() {
-    return StreamBuilder<Map<String, int>>(
-      stream: _shoppingPricePreviewStream(),
+    return StreamBuilder<Map<String, bool>>(
+      stream: _shoppingPromotionPreviewStream(),
       builder:
-          (BuildContext context, AsyncSnapshot<Map<String, int>> snapshot) {
-            final Map<String, int> previewPrices =
-                snapshot.data ?? <String, int>{};
+          (BuildContext context, AsyncSnapshot<Map<String, bool>> snapshot) {
+            final Map<String, bool> promotionPreview =
+                snapshot.data ?? <String, bool>{};
 
             return Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    _t("Mua sắm - Giải trí", "Shopping - Entertainment"),
-                    style: GoogleFonts.poppins(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
+                  PressableScale(
+                    onTap: () => _pushPremium(const ShoppingStoreScreen()),
+                    borderRadius: BorderRadius.circular(10),
+                    splashColor: const Color(0xFF000DC0).withOpacity(0.08),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 2,
+                        vertical: 2,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            _t(
+                              "Mua sắm - Giải trí",
+                              "Shopping - Entertainment",
+                            ),
+                            style: GoogleFonts.poppins(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(width: 2),
+                          const Icon(
+                            Icons.chevron_right_rounded,
+                            size: 18,
+                            color: Color(0xFF000DC0),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -1901,14 +2048,15 @@ class _HomeScreenState extends State<HomeScreen> {
                                   crossAxisCount: crossAxisCount,
                                   crossAxisSpacing: 10,
                                   mainAxisSpacing: 12,
-                                  childAspectRatio: 0.84,
+                                  childAspectRatio: 0.80,
                                 ),
                             itemBuilder: (BuildContext context, int index) {
                               final ServiceModel service =
                                   shoppingServices[index];
                               return _buildShoppingPreviewItem(
                                 service,
-                                firstPrice: previewPrices[service.id],
+                                hasPromotion:
+                                    promotionPreview[service.id] ?? false,
                               );
                             },
                           );
@@ -1921,7 +2069,10 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildShoppingPreviewItem(ServiceModel service, {int? firstPrice}) {
+  Widget _buildShoppingPreviewItem(
+    ServiceModel service, {
+    required bool hasPromotion,
+  }) {
     final String languageCode = Localizations.localeOf(context).languageCode;
 
     return InkWell(
@@ -1975,20 +2126,23 @@ class _HomeScreenState extends State<HomeScreen> {
               height: 1.2,
             ),
           ),
-          if (firstPrice != null) ...<Widget>[
+          if (hasPromotion) ...<Widget>[
             const SizedBox(height: 2),
             Text(
-              '${_formatCurrency(firstPrice.toDouble())} VND',
+              _t('Đang giảm giá', 'On sale'),
               textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+              maxLines: 2,
+              softWrap: true,
               style: GoogleFonts.poppins(
-                fontSize: 10.5,
+                fontSize: 10,
                 fontWeight: FontWeight.w600,
-                color: const Color(0xFF000DC0),
+                fontStyle: FontStyle.italic,
+                color: const Color(0xFF16A34A),
+                height: 1.15,
               ),
             ),
-          ],
+          ] else
+            const SizedBox.shrink(),
         ],
       ),
     );

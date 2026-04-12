@@ -1,19 +1,40 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../data/user_firestore_service.dart';
 import '../l10n/app_text.dart';
+import '../services/card_number_service.dart';
 import '../widget/ccp_app_bar.dart';
 import 'QR.dart' as qr_scan;
 
-class QRCodeScreen extends StatelessWidget {
+class QRCodeScreen extends StatefulWidget {
   const QRCodeScreen({super.key});
 
+  @override
+  State<QRCodeScreen> createState() => _QRCodeScreenState();
+}
+
+class _QRCodeScreenState extends State<QRCodeScreen> {
   static const Color primaryBlue = Color(0xFF000DC0);
 
   String _t(BuildContext context, String vi, String en) {
     return AppText.tr(context, vi, en);
+  }
+
+  String _resolveUid() {
+    return UserFirestoreService.instance.currentUserDocId ??
+        UserFirestoreService.instance.latestProfile?.uid ??
+        '';
+  }
+
+  String _buildQrData(String cardNumber) {
+    const String base = 'https://example.com/pay/nguyenvana';
+    if (cardNumber.trim().isEmpty) {
+      return base;
+    }
+    return '$base?card=$cardNumber';
   }
 
   @override
@@ -132,75 +153,98 @@ class QRCodeScreen extends StatelessWidget {
                           },
                         ),
                         const SizedBox(height: 4),
-                        Text(
-                          '123 568 567 456',
-                          style: GoogleFonts.poppins(
-                            color: const Color(0xFF526091),
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF9FAFF),
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(color: const Color(0xFFDCE3FF)),
-                          ),
-                          child: Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              QrImageView(
-                                data: 'https://example.com/pay/nguyenvana',
-                                version: QrVersions.auto,
-                                size: 210,
-                                eyeStyle: const QrEyeStyle(
-                                  eyeShape: QrEyeShape.square,
-                                  color: Color(0xFF0F1D5C),
+                        StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                          stream: _resolveUid().isEmpty
+                              ? null
+                              : FirebaseFirestore.instance
+                                    .collection('users')
+                                    .doc(_resolveUid())
+                                    .snapshots(),
+                          builder: (context, snapshot) {
+                            final Map<String, dynamic> data =
+                                snapshot.data?.data() ?? <String, dynamic>{};
+                            final String cardNumberRaw =
+                                CardNumberService.readCardNumber(data);
+                            final String cardNumberDisplay =
+                                CardNumberService.formatCardNumber(
+                                  cardNumberRaw,
+                                );
+
+                            return Column(
+                              children: <Widget>[
+                                Text(
+                                  cardNumberDisplay.isEmpty
+                                      ? _t(
+                                          context,
+                                          'Số thẻ chưa có',
+                                          'No card yet',
+                                        )
+                                      : cardNumberDisplay,
+                                  style: GoogleFonts.poppins(
+                                    color: const Color(0xFF526091),
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
-                                dataModuleStyle: const QrDataModuleStyle(
-                                  dataModuleShape: QrDataModuleShape.square,
-                                  color: Color(0xFF0F1D5C),
-                                ),
-                              ),
-                              Container(
-                                width: 44,
-                                height: 44,
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(12),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.08),
-                                      blurRadius: 10,
+                                const SizedBox(height: 16),
+                                Container(
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF9FAFF),
+                                    borderRadius: BorderRadius.circular(18),
+                                    border: Border.all(
+                                      color: const Color(0xFFDCE3FF),
                                     ),
-                                  ],
+                                  ),
+                                  child: Stack(
+                                    alignment: Alignment.center,
+                                    children: [
+                                      QrImageView(
+                                        data: _buildQrData(cardNumberRaw),
+                                        version: QrVersions.auto,
+                                        size: 210,
+                                        eyeStyle: const QrEyeStyle(
+                                          eyeShape: QrEyeShape.square,
+                                          color: Color(0xFF0F1D5C),
+                                        ),
+                                        dataModuleStyle:
+                                            const QrDataModuleStyle(
+                                              dataModuleShape:
+                                                  QrDataModuleShape.square,
+                                              color: Color(0xFF0F1D5C),
+                                            ),
+                                      ),
+                                      Container(
+                                        width: 44,
+                                        height: 44,
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withOpacity(
+                                                0.08,
+                                              ),
+                                              blurRadius: 10,
+                                            ),
+                                          ],
+                                        ),
+                                        child: const Icon(
+                                          Icons.person,
+                                          color: primaryBlue,
+                                          size: 28,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                                child: const Icon(
-                                  Icons.person,
-                                  color: primaryBlue,
-                                  size: 28,
-                                ),
-                              ),
-                            ],
-                          ),
+                              ],
+                            );
+                          },
                         ),
                         const SizedBox(height: 12),
-                        TextButton.icon(
-                          onPressed: () {},
-                          icon: const Icon(Icons.add_circle_outline_rounded),
-                          label: Text(
-                            _t(context, 'Thêm số tiền', 'Add amount'),
-                          ),
-                          style: TextButton.styleFrom(
-                            foregroundColor: primaryBlue,
-                            textStyle: GoogleFonts.poppins(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
                       ],
                     ),
                   ),
