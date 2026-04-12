@@ -226,27 +226,34 @@ class _NotificationScreenState extends State<NotificationScreen> {
         ? '${_formatAmount(_readAmount(data['amount']))} VND'
         : (data['amountText'] ?? '').toString().trim();
 
-    if (bodyKey == 'desc_transfer') {
+    if (bodyKey == 'desc_transfer' || bodyKey == 'notify_transfer_body') {
+      final String receiverName =
+          (data['receiver_name'] ??
+                  data['receiverName'] ??
+                  data['recipientName'] ??
+                  data['serviceName'] ??
+                  '')
+              .toString()
+              .trim();
       return <String, String>{
         if (amountText.isNotEmpty) 'amount': amountText,
-        'receiverName':
-            (data['receiverName'] ??
-                    data['recipientName'] ??
-                    data['serviceName'] ??
-                    '')
-                .toString()
-                .trim(),
+        if (receiverName.isNotEmpty) 'name': receiverName,
+        if (receiverName.isNotEmpty) 'receiverName': receiverName,
       };
     }
 
-    if (bodyKey == 'desc_withdraw') {
+    if (bodyKey == 'desc_withdraw' || bodyKey == 'notify_withdraw_body') {
       return <String, String>{if (amountText.isNotEmpty) 'amount': amountText};
     }
 
-    if (bodyKey == 'desc_shopping') {
+    if (bodyKey == 'desc_shopping' || bodyKey == 'notify_shopping_body') {
+      final String serviceName = (data['service'] ?? data['serviceName'] ?? '')
+          .toString()
+          .trim();
       return <String, String>{
         if (amountText.isNotEmpty) 'amount': amountText,
-        'serviceName': (data['serviceName'] ?? '').toString().trim(),
+        if (serviceName.isNotEmpty) 'service': serviceName,
+        if (serviceName.isNotEmpty) 'serviceName': serviceName,
       };
     }
 
@@ -259,28 +266,18 @@ class _NotificationScreenState extends State<NotificationScreen> {
         ? _t('Thông báo mới', 'New notification')
         : fallbackRaw;
 
-    final String titleKey = (data['titleKey'] ?? '').toString().trim();
-    if (titleKey.isNotEmpty) {
-      final String resolved = AppText.textWithParams(
-        context,
-        titleKey,
-        _titleParams(data, titleKey),
-      ).trim();
-      if (resolved.isNotEmpty && resolved != titleKey) {
-        return resolved;
-      }
+    String titleKey = (data['titleKey'] ?? '').toString().trim();
+    if (titleKey.isEmpty) {
+      return fallback;
     }
 
-    final String billType = (data['billType'] ?? data['serviceType'] ?? '')
-        .toString();
-    final bool isBillPaymentNotification =
-        (data['type'] ?? '').toString().trim().toLowerCase() == 'payment' &&
-        billType.trim().isNotEmpty;
-    if (isBillPaymentNotification) {
-      return AppText.paymentSuccessSpecificTitle(
-        context,
-        serviceName: _derivePaymentServiceName(data),
-      );
+    final String resolved = AppText.textWithParams(
+      context,
+      titleKey,
+      _titleParams(data, titleKey),
+    ).trim();
+    if (resolved.isNotEmpty && resolved != titleKey) {
+      return resolved;
     }
 
     return fallback;
@@ -292,7 +289,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
         ? _t('Không có mô tả', 'No description')
         : fallbackRaw;
 
-    final String bodyKey = (data['bodyKey'] ?? '').toString().trim();
+    String bodyKey = (data['bodyKey'] ?? '').toString().trim();
     if (bodyKey.isEmpty) {
       return fallback;
     }

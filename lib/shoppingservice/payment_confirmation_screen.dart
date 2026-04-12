@@ -8,8 +8,6 @@ import 'package:intl/intl.dart';
 import '../app_preferences.dart';
 import '../core/app_translations.dart';
 import '../data/user_firestore_service.dart';
-import '../l10n/app_text.dart';
-import '../services/notification_service.dart';
 import '../services/card_number_service.dart';
 import '../widget/pin_popup.dart';
 import 'payment_success_screen.dart';
@@ -420,27 +418,11 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
     final String amountText = _formatAmount(widget.selectedAmount);
     final String notificationAmountText =
         '${_formatNotificationAmount(widget.selectedAmount)} VND';
-    final Map<String, String> titleParams = <String, String>{};
     final Map<String, String> bodyParams = <String, String>{
+      'service': serviceName,
       'serviceName': serviceName,
       'amount': notificationAmountText,
     };
-    final String notificationTitleRaw = AppText.textByCodeWithParams(
-      _languageCode,
-      'title_shopping',
-      titleParams,
-    );
-    final String notificationTitle = notificationTitleRaw == 'title_shopping'
-        ? 'Thanh toán mua sắm thành công'
-        : notificationTitleRaw;
-    final String notificationBodyRaw = AppText.textByCodeWithParams(
-      _languageCode,
-      'desc_shopping',
-      bodyParams,
-    );
-    final String notificationBody = notificationBodyRaw == 'desc_shopping'
-        ? 'Bạn đã thanh toán $notificationAmountText cho gói $serviceName.'
-        : notificationBodyRaw;
 
     final DocumentReference<Map<String, dynamic>> userRef = firestore
         .collection('users')
@@ -560,15 +542,13 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
       });
 
       transaction.set(notificationRef, <String, dynamic>{
-        'title': notificationTitle,
-        'titleKey': 'title_shopping',
-        'titleParams': titleParams,
-        'body': notificationBody,
-        'bodyKey': 'desc_shopping',
+        'titleKey': 'notify_shopping_title',
+        'bodyKey': 'notify_shopping_body',
         'bodyParams': bodyParams,
         'timestamp': FieldValue.serverTimestamp(),
         'createdAt': FieldValue.serverTimestamp(),
         'type': 'shopping',
+        'service': serviceName,
         'serviceName': serviceName,
         'targetAccount': targetAccount,
         'amount': widget.selectedAmount,
@@ -607,42 +587,6 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
 
       if (!mounted) {
         return;
-      }
-
-      try {
-        final String serviceName = widget.service.localizedName(_languageCode);
-        final String notificationAmountText =
-            '${_formatNotificationAmount(widget.selectedAmount)} VND';
-        final String notificationTitleRaw = AppText.textByCodeWithParams(
-          _languageCode,
-          'title_shopping',
-          <String, String>{},
-        );
-        final String notificationTitle =
-            notificationTitleRaw == 'title_shopping'
-            ? 'Thanh toán mua sắm thành công'
-            : notificationTitleRaw;
-        final String notificationBodyRaw = AppText.textByCodeWithParams(
-          _languageCode,
-          'desc_shopping',
-          <String, String>{
-            'serviceName': serviceName,
-            'amount': notificationAmountText,
-          },
-        );
-        final String notificationBody = notificationBodyRaw == 'desc_shopping'
-            ? 'Bạn đã thanh toán $notificationAmountText cho gói $serviceName.'
-            : notificationBodyRaw;
-
-        await NotificationService().showNotification(
-          title: notificationTitle,
-          body: notificationBody,
-        );
-      } catch (notificationError) {
-        // Payment already succeeded; notification delivery should not fail UX.
-        debugPrint(
-          'Notification error after successful payment: $notificationError',
-        );
       }
 
       Navigator.pushReplacement(

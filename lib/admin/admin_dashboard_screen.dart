@@ -145,6 +145,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   late Stream<QuerySnapshot<Map<String, dynamic>>> _servicesPricingStream;
   late Stream<QuerySnapshot<Map<String, dynamic>>> _bannersStream;
   late Stream<int> _totalTransactionsCountStream;
+  final Map<String, bool> _cardLockOverrides = <String, bool>{};
+  final Set<String> _pendingCardLockUpdates = <String>{};
 
   static const List<({IconData icon, String vi, String en, String? textKey})>
   _tabConfig = <({IconData icon, String vi, String en, String? textKey})>[
@@ -3474,9 +3476,26 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
             final bool isStandardLocked = data['is_standard_locked'] == true;
             final bool isVipLocked = data['is_vip_locked'] == true;
+            final bool hasVipCard = data['hasVipCard'] == true;
             final String userName = _readUserName(data);
             final String userPhone = _readUserPhone(data);
             final String cardNumber = _readUserAccount(data);
+            final String standardKey = _cardLockUpdateKey(
+              userId: doc.id,
+              fieldName: 'is_standard_locked',
+            );
+            final String vipKey = _cardLockUpdateKey(
+              userId: doc.id,
+              fieldName: 'is_vip_locked',
+            );
+            final bool effectiveStandardLocked =
+                _cardLockOverrides[standardKey] ?? isStandardLocked;
+            final bool effectiveVipLocked =
+                _cardLockOverrides[vipKey] ?? isVipLocked;
+            final bool standardUpdating = _pendingCardLockUpdates.contains(
+              standardKey,
+            );
+            final bool vipUpdating = _pendingCardLockUpdates.contains(vipKey);
 
             return Card(
               margin: const EdgeInsets.only(bottom: 10),
@@ -3522,14 +3541,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     userId: doc.id,
                     fieldName: 'is_standard_locked',
                     cardName: AppText.text(context, 'card_standard'),
-                    isLocked: isStandardLocked,
+                    isLocked: effectiveStandardLocked,
+                    isUpdating: standardUpdating,
                   ),
                   const Divider(height: 1),
                   _buildCardLockTile(
                     userId: doc.id,
                     fieldName: 'is_vip_locked',
                     cardName: AppText.text(context, 'card_vip'),
-                    isLocked: isVipLocked,
+                    isLocked: effectiveVipLocked,
+                    isUpdating: vipUpdating,
+                    isEnabled: hasVipCard,
                   ),
                 ],
               ),
@@ -3545,7 +3567,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     required String fieldName,
     required String cardName,
     required bool isLocked,
+    required bool isUpdating,
+    bool isEnabled = true,
   }) {
+    final String statusText = !isEnabled
+        ? _t('Chưa có thẻ VIP', 'No VIP card')
+        : isLocked
+        ? AppText.text(context, 'status_locked')
+        : AppText.text(context, 'status_active');
+    final Color statusColor = !isEnabled
+        ? const Color(0xFF64748B)
+        : isLocked
+        ? const Color(0xFFB91C1C)
+        : const Color(0xFF166534);
+
     return ListTile(
       dense: true,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
@@ -3556,13 +3591,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       subtitle: Padding(
         padding: const EdgeInsets.only(top: 4),
         child: Text(
-          isLocked
-              ? AppText.text(context, 'status_locked')
-              : AppText.text(context, 'status_active'),
+          statusText,
           style: GoogleFonts.poppins(
             fontSize: 12,
             fontWeight: FontWeight.w600,
-            color: isLocked ? const Color(0xFFB91C1C) : const Color(0xFF166534),
+            color: statusColor,
           ),
         ),
       ),
@@ -3570,7 +3603,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           Text(
-            isLocked
+            !isEnabled
+                ? _t('Không khả dụng', 'Unavailable')
+                : isLocked
                 ? AppText.text(context, 'unlock_card')
                 : AppText.text(context, 'lock_card'),
             style: GoogleFonts.poppins(
@@ -3580,26 +3615,63 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             ),
           ),
           const SizedBox(width: 8),
+          if (isUpdating)
+            const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          if (isUpdating) const SizedBox(width: 8),
           Switch(
             value: isLocked,
-            onChanged: (bool newValue) {
-              _updateCardLockState(
-                userId: userId,
-                fieldName: fieldName,
-                newValue: newValue,
-              );
-            },
+            onChanged: (!isEnabled || isUpdating)
+                ? null
+                : (bool newValue) {
+                    _updateCardLockState(
+                      userId: userId,
+                      fieldName: fieldName,
+                      currentValue: isLocked,
+                      newValue: newValue,
+                    );
+                  },
           ),
         ],
       ),
     );
   }
 
+  String _cardLockUpdateKey({
+    required String userId,
+    required String fieldName,
+  }) {
+    return '$userId::$fieldName';
+  }
+
   Future<void> _updateCardLockState({
     required String userId,
     required String fieldName,
+    required bool currentValue,
     required bool newValue,
   }) async {
+    if (currentValue == newValue) {
+      return;
+    }
+
+    final String updateKey = _cardLockUpdateKey(
+      userId: userId,
+      fieldName: fieldName,
+    );
+    if (_pendingCardLockUpdates.contains(updateKey)) {
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _pendingCardLockUpdates.add(updateKey);
+        _cardLockOverrides[updateKey] = newValue;
+      });
+    }
+
     try {
       await _firestore.runTransaction((Transaction transaction) async {
         final DocumentReference<Map<String, dynamic>> userRef = _firestore
@@ -3654,10 +3726,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           'updatedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
       });
+
+      if (mounted) {
+        setState(() {
+          _pendingCardLockUpdates.remove(updateKey);
+        });
+      }
     } catch (_) {
       if (!mounted) {
         return;
       }
+      setState(() {
+        _pendingCardLockUpdates.remove(updateKey);
+        _cardLockOverrides[updateKey] = currentValue;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(

@@ -6,7 +6,6 @@ import 'package:intl/intl.dart';
 import '../data/user_firestore_service.dart';
 import '../l10n/app_text.dart';
 import '../services/card_number_service.dart';
-import '../services/notification_service.dart';
 import '../widget/pin_popup.dart';
 import '../widget/ccp_app_bar.dart';
 import 'tranfer_bill.dart';
@@ -215,30 +214,12 @@ class ConfirmTransferScreen extends StatelessWidget {
     final int roundedAmount = amount.round();
     final String transferCode =
         'TRF${DateTime.now().millisecondsSinceEpoch.toString().substring(6)}';
-    final String languageCode = AppText.currentLanguageCode(context);
     final String transferAmountText = _formatAmount(roundedAmount.toString());
-    final Map<String, String> titleParams = <String, String>{};
     final Map<String, String> bodyParams = <String, String>{
       'amount': transferAmountText,
+      'name': recipientName,
       'receiverName': recipientName,
     };
-
-    final String notificationTitleRaw = AppText.textByCodeWithParams(
-      languageCode,
-      'title_transfer',
-      titleParams,
-    );
-    final String notificationTitle = notificationTitleRaw == 'title_transfer'
-        ? 'Chuyển khoản thành công'
-        : notificationTitleRaw;
-    final String notificationBodyRaw = AppText.textByCodeWithParams(
-      languageCode,
-      'desc_transfer',
-      bodyParams,
-    );
-    final String notificationBody = notificationBodyRaw == 'desc_transfer'
-        ? 'Bạn đã chuyển $transferAmountText đến $recipientName.'
-        : notificationBodyRaw;
     final DateTime transferCompletedAt = DateTime.now();
 
     await firestore.runTransaction((Transaction transaction) async {
@@ -322,11 +303,8 @@ class ConfirmTransferScreen extends StatelessWidget {
       }, SetOptions(merge: true));
 
       transaction.set(notificationRef, <String, dynamic>{
-        'title': notificationTitle,
-        'titleKey': 'title_transfer',
-        'titleParams': titleParams,
-        'body': notificationBody,
-        'bodyKey': 'desc_transfer',
+        'titleKey': 'notify_transfer_title',
+        'bodyKey': 'notify_transfer_body',
         'bodyParams': bodyParams,
         'timestamp': FieldValue.serverTimestamp(),
         'createdAt': FieldValue.serverTimestamp(),
@@ -341,6 +319,7 @@ class ConfirmTransferScreen extends StatelessWidget {
         'targetAccount': recipientAccount,
         'toAccountNumber': recipientAccount,
         'accountNumber': recipientAccount,
+        'receiver_name': recipientName,
         'receiverName': recipientName,
         'recipientName': recipientName,
         'serviceName': recipientName,
@@ -348,11 +327,6 @@ class ConfirmTransferScreen extends StatelessWidget {
         'transferContent': transferContent,
       });
     });
-
-    await NotificationService().showNotification(
-      title: notificationTitle,
-      body: notificationBody,
-    );
 
     if (!context.mounted) {
       return;

@@ -153,11 +153,11 @@ class _HomeScreenState extends State<HomeScreen> {
             }
             _seenPromotionNotificationIds.add(notificationId);
 
-            final String type = (data['type'] ?? '')
-                .toString()
-                .trim()
-                .toLowerCase();
-            if (type != 'uu_dai') {
+            if (!_shouldShowHeadsUp(data)) {
+              continue;
+            }
+
+            if (!mounted) {
               continue;
             }
 
@@ -306,38 +306,21 @@ class _HomeScreenState extends State<HomeScreen> {
               ? _t('Ưu đãi mới', 'New offer')
               : _t('Thông báo mới', 'New notification'));
 
-    final String titleKey = (data['titleKey'] ?? '').toString().trim();
+    String titleKey = (data['titleKey'] ?? '').toString().trim();
     if (titleKey.isEmpty) {
       return fallback;
     }
 
-    final Map<String, String> params = _readNotificationParams(
-      data['titleParams'],
-    );
-    final Map<String, String> resolvedParams = params.isNotEmpty
-        ? params
-        : (() {
-            if (titleKey == 'payment_success_specific') {
-              final String serviceTypeKey = (data['serviceTypeKey'] ?? '')
-                  .toString();
-              final String billType =
-                  (data['billType'] ?? data['serviceType'] ?? '').toString();
-              final String resolvedKey = serviceTypeKey.trim().isNotEmpty
-                  ? serviceTypeKey
-                  : _billTypeToTextKey(billType);
-              return <String, String>{
-                'serviceName': AppText.text(context, resolvedKey),
-              };
-            }
-            return _readNotificationParams(data['params']);
-          })();
+    Map<String, String> params = _readNotificationParams(data['titleParams']);
+    if (params.isEmpty) {
+      params = _readNotificationParams(data['params']);
+    }
 
     final String resolved = AppText.textWithParams(
       context,
       titleKey,
-      resolvedParams,
+      params,
     ).trim();
-
     if (resolved.isEmpty || resolved == titleKey) {
       return fallback;
     }
@@ -354,7 +337,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ? _t('Bạn vừa nhận được ưu đãi mới.', 'You received a new offer.')
               : _t('Không có mô tả', 'No description'));
 
-    final String bodyKey = (data['bodyKey'] ?? '').toString().trim();
+    String bodyKey = (data['bodyKey'] ?? '').toString().trim();
     if (bodyKey.isEmpty) {
       return fallback;
     }
@@ -369,25 +352,23 @@ class _HomeScreenState extends State<HomeScreen> {
           ? '${_formatCurrency(_readNotificationAmountValue(data['amount']).toDouble())} VND'
           : (data['amountText'] ?? '').toString().trim();
 
-      if (bodyKey == 'desc_transfer') {
-        params = <String, String>{
-          if (amount.isNotEmpty) 'amount': amount,
-          'receiverName':
-              (data['receiverName'] ??
-                      data['recipientName'] ??
-                      data['serviceName'] ??
-                      '')
-                  .toString()
-                  .trim(),
-        };
-      } else if (bodyKey == 'desc_withdraw') {
-        params = <String, String>{if (amount.isNotEmpty) 'amount': amount};
-      } else if (bodyKey == 'desc_shopping') {
-        params = <String, String>{
-          if (amount.isNotEmpty) 'amount': amount,
-          'serviceName': (data['serviceName'] ?? '').toString().trim(),
-        };
-      }
+      final String receiverName = _firstNonEmpty(<dynamic>[
+        data['receiver_name'],
+        data['receiverName'],
+        data['recipientName'],
+      ]);
+      final String serviceName = _firstNonEmpty(<dynamic>[
+        data['service'],
+        data['serviceName'],
+      ]);
+
+      params = <String, String>{
+        if (amount.isNotEmpty) 'amount': amount,
+        if (receiverName.isNotEmpty) 'name': receiverName,
+        if (receiverName.isNotEmpty) 'receiverName': receiverName,
+        if (serviceName.isNotEmpty) 'service': serviceName,
+        if (serviceName.isNotEmpty) 'serviceName': serviceName,
+      };
     }
 
     final String resolved = AppText.textWithParams(
@@ -395,12 +376,26 @@ class _HomeScreenState extends State<HomeScreen> {
       bodyKey,
       params,
     ).trim();
-
     if (resolved.isEmpty || resolved == bodyKey) {
       return fallback;
     }
 
     return resolved;
+  }
+
+  bool _shouldShowHeadsUp(Map<String, dynamic> data) {
+    final String type = (data['type'] ?? '').toString().trim().toLowerCase();
+    final String category = (data['category'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
+    return type == 'uu_dai' ||
+        type == 'promotion' ||
+        type == 'shopping_discount' ||
+        type == 'transfer' ||
+        type == 'withdraw' ||
+        type == 'shopping' ||
+        category == 'promotion';
   }
 
   bool _resolveTransferIsNegative(Map<String, dynamic> data, String uid) {

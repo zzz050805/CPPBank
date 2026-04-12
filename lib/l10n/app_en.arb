@@ -8,8 +8,31 @@
   "unlock_card": "Unlock card",
   "title_transfer": "Transfer successful",
   "desc_transfer": "You transferred {amount} to {receiverName}.",
+  "notify_transfer_title": "Transfer successful",
+  "notify_transfer_body": "You transferred {amount} to {name}",
+  "@notify_transfer_body": {
+    "placeholders": {
+      "amount": {},
+      "name": {}
+    }
+  },
   "title_withdraw": "Withdrawal successful",
   "desc_withdraw": "You withdrew {amount} at the service point.",
+  "notify_withdraw_title": "Withdrawal successful",
+  "notify_withdraw_body": "{amount} has been withdrawn to the linked account",
+  "@notify_withdraw_body": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
   "title_shopping": "Shopping payment successful",
-  "desc_shopping": "You paid {amount} for the {serviceName} package."
+  "desc_shopping": "You paid {amount} for the {serviceName} package.",
+  "notify_shopping_title": "Payment successful",
+  "notify_shopping_body": "Paid {amount} for service {service}",
+  "@notify_shopping_body": {
+    "placeholders": {
+      "amount": {},
+      "service": {}
+    }
+  }
 }

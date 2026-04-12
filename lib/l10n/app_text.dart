@@ -93,11 +93,23 @@ class AppText {
       'vi': 'Chuyển khoản thành công',
       'en': 'Transfer successful',
     },
+    'notify_transfer_title': <String, String>{
+      'vi': 'Chuyển tiền thành công',
+      'en': 'Transfer successful',
+    },
     'desc_transfer': <String, String>{
       'vi': 'Bạn đã chuyển {amount} đến {receiverName}.',
       'en': 'You transferred {amount} to {receiverName}.',
     },
+    'notify_transfer_body': <String, String>{
+      'vi': 'Bạn đã chuyển {amount} đến {name}',
+      'en': 'You transferred {amount} to {name}',
+    },
     'title_withdraw': <String, String>{
+      'vi': 'Rút tiền thành công',
+      'en': 'Withdrawal successful',
+    },
+    'notify_withdraw_title': <String, String>{
       'vi': 'Rút tiền thành công',
       'en': 'Withdrawal successful',
     },
@@ -105,13 +117,25 @@ class AppText {
       'vi': 'Bạn đã rút {amount} tại điểm giao dịch.',
       'en': 'You withdrew {amount} at the service point.',
     },
+    'notify_withdraw_body': <String, String>{
+      'vi': 'Số tiền {amount} đã được rút về tài khoản liên kết',
+      'en': '{amount} has been withdrawn to the linked account',
+    },
     'title_shopping': <String, String>{
       'vi': 'Thanh toán mua sắm thành công',
       'en': 'Shopping payment successful',
     },
+    'notify_shopping_title': <String, String>{
+      'vi': 'Thanh toán thành công',
+      'en': 'Payment successful',
+    },
     'desc_shopping': <String, String>{
       'vi': 'Bạn đã thanh toán {amount} cho gói {serviceName}.',
       'en': 'You paid {amount} for the {serviceName} package.',
+    },
+    'notify_shopping_body': <String, String>{
+      'vi': 'Đã thanh toán {amount} cho dịch vụ {service}',
+      'en': 'Paid {amount} for service {service}',
     },
   };
 

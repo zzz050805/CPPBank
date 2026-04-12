@@ -8,8 +8,31 @@
   "unlock_card": "Mở thẻ",
   "title_transfer": "Chuyển khoản thành công",
   "desc_transfer": "Bạn đã chuyển {amount} đến {receiverName}.",
+  "notify_transfer_title": "Chuyển tiền thành công",
+  "notify_transfer_body": "Bạn đã chuyển {amount} đến {name}",
+  "@notify_transfer_body": {
+    "placeholders": {
+      "amount": {},
+      "name": {}
+    }
+  },
   "title_withdraw": "Rút tiền thành công",
   "desc_withdraw": "Bạn đã rút {amount} tại điểm giao dịch.",
+  "notify_withdraw_title": "Rút tiền thành công",
+  "notify_withdraw_body": "Số tiền {amount} đã được rút về tài khoản liên kết",
+  "@notify_withdraw_body": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
   "title_shopping": "Thanh toán mua sắm thành công",
-  "desc_shopping": "Bạn đã thanh toán {amount} cho gói {serviceName}."
+  "desc_shopping": "Bạn đã thanh toán {amount} cho gói {serviceName}.",
+  "notify_shopping_title": "Thanh toán thành công",
+  "notify_shopping_body": "Đã thanh toán {amount} cho dịch vụ {service}",
+  "@notify_shopping_body": {
+    "placeholders": {
+      "amount": {},
+      "service": {}
+    }
+  }
 }
