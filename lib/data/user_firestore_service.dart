@@ -253,6 +253,8 @@ class UserFirestoreService {
           'hasVipCard': createHasVipCard,
           'role': role,
           'isLocked': false,
+          'is_standard_locked': false,
+          'is_vip_locked': false,
           'updatedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
       } else {
@@ -288,6 +290,16 @@ class UserFirestoreService {
         if (existingData['isLocked'] == null) {
           await userRef.set(<String, dynamic>{
             'isLocked': false,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+        }
+
+        if (existingData['is_standard_locked'] == null ||
+            existingData['is_vip_locked'] == null) {
+          await userRef.set(<String, dynamic>{
+            if (existingData['is_standard_locked'] == null)
+              'is_standard_locked': false,
+            if (existingData['is_vip_locked'] == null) 'is_vip_locked': false,
             'updatedAt': FieldValue.serverTimestamp(),
           }, SetOptions(merge: true));
         }

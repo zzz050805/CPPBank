@@ -148,6 +148,9 @@ class CreditCardScreen extends StatelessWidget {
                             'CCPBANK USER')
                         .toString()
                         .toUpperCase();
+                final bool isStandardLocked =
+                    userData['is_standard_locked'] == true;
+                final bool isVipLocked = userData['is_vip_locked'] == true;
 
                 return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                   stream: FirebaseFirestore.instance
@@ -185,96 +188,122 @@ class CreditCardScreen extends StatelessWidget {
                       preferredId: 'vip',
                     );
 
+                    final bool showStandardCard = !isStandardLocked;
+                    final bool showVipCard = !isVipLocked;
+
+                    if (!showStandardCard && !showVipCard) {
+                      return _StatusBox(
+                        message: _t(
+                          context,
+                          'Hiện chưa có thẻ khả dụng.',
+                          'No available cards at the moment.',
+                        ),
+                      );
+                    }
+
+                    final List<Widget> cardSections = <Widget>[];
+                    int staggeredIndex = 0;
+
+                    void addEntry(Widget child) {
+                      cardSections.add(
+                        _StaggeredEntry(index: staggeredIndex, child: child),
+                      );
+                      staggeredIndex += 1;
+                    }
+
+                    void addGap(double height) {
+                      cardSections.add(SizedBox(height: height));
+                    }
+
+                    if (showStandardCard) {
+                      addEntry(
+                        _SectionTitle(
+                          text: _t(context, 'Thẻ Thường', 'Regular Card'),
+                        ),
+                      );
+                      addGap(10);
+                      addEntry(
+                        _RegularCardVisual(
+                          holderName: holderName,
+                          cardNumber: userCardNumberDisplay,
+                          isLocked: false,
+                          cardTypeLabel: _t(
+                            context,
+                            'THẺ THƯỜNG',
+                            'REGULAR CARD',
+                          ),
+                        ),
+                      );
+                      addGap(12);
+                      addEntry(
+                        _BalanceRow(
+                          label: _t(context, 'Số dư:', 'Balance:'),
+                          amount: regularCard.balance,
+                        ),
+                      );
+                      addGap(10);
+                      addEntry(
+                        _TopUpAtBranchButton(
+                          title: _t(
+                            context,
+                            'Nạp tiền tại quầy',
+                            'Top up at branch',
+                          ),
+                        ),
+                      );
+                    }
+
+                    if (showVipCard) {
+                      if (showStandardCard) {
+                        addGap(20);
+                        addEntry(
+                          _SmallHintTitle(
+                            text: _t(
+                              context,
+                              'Danh sách thẻ của bạn',
+                              'Your card list',
+                            ),
+                          ),
+                        );
+                        addGap(10);
+                      }
+
+                      addEntry(
+                        _SectionTitle(text: _t(context, 'Thẻ VIP', 'VIP Card')),
+                      );
+                      addGap(10);
+                      addEntry(
+                        _VipCardVisual(
+                          holderName: holderName,
+                          cardNumber: userCardNumberDisplay,
+                          isLocked: false,
+                          cardTypeLabel: _t(context, 'THẺ VIP', 'VIP CARD'),
+                        ),
+                      );
+                      addGap(12);
+                      addEntry(
+                        _BalanceRow(
+                          label: _t(context, 'Số dư:', 'Balance:'),
+                          amount: vipCard.balance,
+                        ),
+                      );
+                      addGap(10);
+                      addEntry(
+                        _TopUpAtBranchButton(
+                          title: _t(
+                            context,
+                            'Nạp tiền tại quầy',
+                            'Top up at branch',
+                          ),
+                        ),
+                      );
+                    }
+
                     return SingleChildScrollView(
                       padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _StaggeredEntry(
-                            index: 0,
-                            child: _SectionTitle(
-                              text: _t(context, 'Thẻ Thường', 'Regular Card'),
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          _StaggeredEntry(
-                            index: 1,
-                            child: _RegularCardVisual(
-                              holderName: holderName,
-                              cardNumber: userCardNumberDisplay,
-                              cardTypeLabel: _t(
-                                context,
-                                'THẺ THƯỜNG',
-                                'REGULAR CARD',
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          _StaggeredEntry(
-                            index: 2,
-                            child: _BalanceRow(
-                              label: _t(context, 'Số dư:', 'Balance:'),
-                              amount: regularCard.balance,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          _StaggeredEntry(
-                            index: 3,
-                            child: _TopUpAtBranchButton(
-                              title: _t(
-                                context,
-                                'Nạp tiền tại quầy',
-                                'Top up at branch',
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          _StaggeredEntry(
-                            index: 4,
-                            child: _SmallHintTitle(
-                              text: _t(
-                                context,
-                                'Danh sách thẻ của bạn',
-                                'Your card list',
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          _StaggeredEntry(
-                            index: 5,
-                            child: _SectionTitle(
-                              text: _t(context, 'Thẻ VIP', 'VIP Card'),
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          _StaggeredEntry(
-                            index: 6,
-                            child: _VipCardVisual(
-                              holderName: holderName,
-                              cardNumber: userCardNumberDisplay,
-                              cardTypeLabel: _t(context, 'THẺ VIP', 'VIP CARD'),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          _StaggeredEntry(
-                            index: 7,
-                            child: _BalanceRow(
-                              label: _t(context, 'Số dư:', 'Balance:'),
-                              amount: vipCard.balance,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          _StaggeredEntry(
-                            index: 8,
-                            child: _TopUpAtBranchButton(
-                              title: _t(
-                                context,
-                                'Nạp tiền tại quầy',
-                                'Top up at branch',
-                              ),
-                            ),
-                          ),
-                        ],
+                        children: cardSections,
                       ),
                     );
                   },
@@ -361,135 +390,142 @@ class _RegularCardVisual extends StatelessWidget {
   const _RegularCardVisual({
     required this.holderName,
     required this.cardNumber,
+    required this.isLocked,
     required this.cardTypeLabel,
   });
 
   final String holderName;
   final String cardNumber;
+  final bool isLocked;
   final String cardTypeLabel;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      height: 210,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(22),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF1C248B), Color(0xFF0A0F58)],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF000A6A).withValues(alpha: 0.35),
-            blurRadius: 18,
-            offset: const Offset(0, 10),
+    return Stack(
+      children: [
+        Container(
+          width: double.infinity,
+          height: 210,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(22),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF1C248B), Color(0xFF0A0F58)],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF000A6A).withValues(alpha: 0.35),
+                blurRadius: 18,
+                offset: const Offset(0, 10),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(22),
-        child: Stack(
-          children: [
-            Positioned(
-              right: -34,
-              top: -58,
-              child: Container(
-                width: 150,
-                height: 150,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withValues(alpha: 0.08),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(22),
+            child: Stack(
+              children: [
+                Positioned(
+                  right: -34,
+                  top: -58,
+                  child: Container(
+                    width: 150,
+                    height: 150,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withValues(alpha: 0.08),
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            Positioned(
-              left: -56,
-              bottom: -84,
-              child: Container(
-                width: 190,
-                height: 190,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.cyanAccent.withValues(alpha: 0.06),
+                Positioned(
+                  left: -56,
+                  bottom: -84,
+                  child: Container(
+                    width: 190,
+                    height: 190,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.cyanAccent.withValues(alpha: 0.06),
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        cardTypeLabel,
-                        style: GoogleFonts.poppins(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13,
-                          letterSpacing: 0.4,
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            cardTypeLabel,
+                            style: GoogleFonts.poppins(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                              letterSpacing: 0.4,
+                            ),
+                          ),
+                          Text(
+                            'CCPBANK',
+                            style: GoogleFonts.poppins(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      Container(
+                        width: 48,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(6),
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFF9D886), Color(0xFFE1B95A)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
                         ),
                       ),
+                      const Spacer(),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            cardNumber,
+                            style: GoogleFonts.poppins(
+                              color: Colors.white,
+                              fontSize: 21,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.4,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
                       Text(
-                        'CCPBANK',
+                        holderName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.poppins(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
+                          color: Colors.white70,
                           fontSize: 12,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 18),
-                  Container(
-                    width: 48,
-                    height: 34,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(6),
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFFF9D886), Color(0xFFE1B95A)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                    ),
-                  ),
-                  const Spacer(),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        cardNumber,
-                        style: GoogleFonts.poppins(
-                          color: Colors.white,
-                          fontSize: 21,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.4,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    holderName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.poppins(
-                      color: Colors.white70,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
-      ),
+        if (isLocked) const _CardLockOverlay(),
+      ],
     );
   }
 }
@@ -498,132 +534,175 @@ class _VipCardVisual extends StatelessWidget {
   const _VipCardVisual({
     required this.holderName,
     required this.cardNumber,
+    required this.isLocked,
     required this.cardTypeLabel,
   });
 
   final String holderName;
   final String cardNumber;
+  final bool isLocked;
   final String cardTypeLabel;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      height: 210,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(22),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF3E3520), Color(0xFFB68A2A), Color(0xFF2C2414)],
-          stops: [0.0, 0.48, 1.0],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF7D5A15).withValues(alpha: 0.35),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
+    return Stack(
+      children: [
+        Container(
+          width: double.infinity,
+          height: 210,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(22),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF3E3520), Color(0xFFB68A2A), Color(0xFF2C2414)],
+              stops: [0.0, 0.48, 1.0],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF7D5A15).withValues(alpha: 0.35),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(22),
-        child: Stack(
-          children: [
-            Positioned(
-              top: -32,
-              right: -20,
-              child: Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withValues(alpha: 0.15),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(22),
+            child: Stack(
+              children: [
+                Positioned(
+                  top: -32,
+                  right: -20,
+                  child: Container(
+                    width: 120,
+                    height: 120,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withValues(alpha: 0.15),
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            Positioned(
-              left: -24,
-              bottom: -40,
-              child: Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.black.withValues(alpha: 0.16),
+                Positioned(
+                  left: -24,
+                  bottom: -40,
+                  child: Container(
+                    width: 120,
+                    height: 120,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.black.withValues(alpha: 0.16),
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        cardTypeLabel,
-                        style: GoogleFonts.poppins(
-                          color: const Color(0xFFFFF6D8),
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13,
-                          letterSpacing: 0.5,
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            cardTypeLabel,
+                            style: GoogleFonts.poppins(
+                              color: const Color(0xFFFFF6D8),
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          Text(
+                            'CCPBANK PREMIUM',
+                            style: GoogleFonts.poppins(
+                              color: const Color(0xFFFFF6D8),
+                              fontWeight: FontWeight.w700,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      Container(
+                        width: 48,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(6),
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFF9ECB9), Color(0xFFD4B469)],
+                          ),
                         ),
                       ),
+                      const Spacer(),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            cardNumber,
+                            style: GoogleFonts.poppins(
+                              color: const Color(0xFFFFF6D8),
+                              fontSize: 21,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.4,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
                       Text(
-                        'CCPBANK PREMIUM',
+                        holderName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.poppins(
-                          color: const Color(0xFFFFF6D8),
-                          fontWeight: FontWeight.w700,
-                          fontSize: 11,
+                          color: const Color(
+                            0xFFFFF6D8,
+                          ).withValues(alpha: 0.92),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 18),
-                  Container(
-                    width: 48,
-                    height: 34,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(6),
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFFF9ECB9), Color(0xFFD4B469)],
-                      ),
-                    ),
-                  ),
-                  const Spacer(),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        cardNumber,
-                        style: GoogleFonts.poppins(
-                          color: const Color(0xFFFFF6D8),
-                          fontSize: 21,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.4,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    holderName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.poppins(
-                      color: const Color(0xFFFFF6D8).withValues(alpha: 0.92),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
+          ),
+        ),
+        if (isLocked) const _CardLockOverlay(),
+      ],
+    );
+  }
+}
+
+class _CardLockOverlay extends StatelessWidget {
+  const _CardLockOverlay();
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned.fill(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(22),
+        child: Container(
+          color: Colors.black.withValues(alpha: 0.5),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                const Icon(Icons.lock_rounded, size: 58, color: Colors.white),
+                const SizedBox(height: 10),
+                Text(
+                  AppText.text(context, 'status_locked').toUpperCase(),
+                  style: GoogleFonts.poppins(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                    letterSpacing: 1,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

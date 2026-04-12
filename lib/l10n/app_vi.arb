@@ -1,0 +1,9 @@
+{
+  "tab_cards": "Thẻ",
+  "card_standard": "Thẻ Thường",
+  "card_vip": "Thẻ VIP",
+  "status_active": "Đang hoạt động",
+  "status_locked": "Đã khóa",
+  "lock_card": "Khóa thẻ",
+  "unlock_card": "Mở thẻ"
+}

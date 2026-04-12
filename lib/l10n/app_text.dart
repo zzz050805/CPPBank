@@ -79,6 +79,16 @@ class AppText {
       'vi': 'Không tìm thấy tài khoản người dùng.',
       'en': 'User account does not exist.',
     },
+    'tab_cards': <String, String>{'vi': 'Thẻ', 'en': 'Cards'},
+    'card_standard': <String, String>{
+      'vi': 'Thẻ Thường',
+      'en': 'Standard Card',
+    },
+    'card_vip': <String, String>{'vi': 'Thẻ VIP', 'en': 'VIP Card'},
+    'status_active': <String, String>{'vi': 'Đang hoạt động', 'en': 'Active'},
+    'status_locked': <String, String>{'vi': 'Đã khóa', 'en': 'Locked'},
+    'lock_card': <String, String>{'vi': 'Khóa thẻ', 'en': 'Lock card'},
+    'unlock_card': <String, String>{'vi': 'Mở thẻ', 'en': 'Unlock card'},
   };
 
   static String tr(BuildContext context, String vi, String en) {

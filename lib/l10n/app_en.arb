@@ -1,0 +1,9 @@
+{
+  "tab_cards": "Cards",
+  "card_standard": "Standard Card",
+  "card_vip": "VIP Card",
+  "status_active": "Active",
+  "status_locked": "Locked",
+  "lock_card": "Lock card",
+  "unlock_card": "Unlock card"
+}

@@ -146,13 +146,34 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   late Stream<QuerySnapshot<Map<String, dynamic>>> _bannersStream;
   late Stream<int> _totalTransactionsCountStream;
 
-  static const List<({IconData icon, String vi, String en})> _tabConfig =
-      <({IconData icon, String vi, String en})>[
-        (icon: Icons.dashboard_rounded, vi: 'Dashboard', en: 'Dashboard'),
-        (icon: Icons.people_alt_rounded, vi: 'Người dùng', en: 'Users'),
-        (icon: Icons.price_change_rounded, vi: 'Dịch vụ', en: 'Services'),
-        (icon: Icons.photo_library_rounded, vi: 'Banner', en: 'Banners'),
-      ];
+  static const List<({IconData icon, String vi, String en, String? textKey})>
+  _tabConfig = <({IconData icon, String vi, String en, String? textKey})>[
+    (
+      icon: Icons.dashboard_rounded,
+      vi: 'Dashboard',
+      en: 'Dashboard',
+      textKey: null,
+    ),
+    (
+      icon: Icons.people_alt_rounded,
+      vi: 'Người dùng',
+      en: 'Users',
+      textKey: null,
+    ),
+    (
+      icon: Icons.price_change_rounded,
+      vi: 'Dịch vụ',
+      en: 'Services',
+      textKey: null,
+    ),
+    (
+      icon: Icons.photo_library_rounded,
+      vi: 'Banner',
+      en: 'Banners',
+      textKey: null,
+    ),
+    (icon: Icons.credit_card, vi: 'Thẻ', en: 'Cards', textKey: 'tab_cards'),
+  ];
 
   @override
   void initState() {
@@ -172,6 +193,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   String _t(String vi, String en) => AppText.tr(context, vi, en);
+
+  String _tabLabel(
+    ({IconData icon, String vi, String en, String? textKey}) tab,
+  ) {
+    final String? textKey = tab.textKey;
+    if (textKey != null && textKey.isNotEmpty) {
+      return AppText.text(context, textKey);
+    }
+    return _t(tab.vi, tab.en);
+  }
 
   CollectionReference<Map<String, dynamic>> _adminCollection(String path) {
     return _firestore.collection('admin').doc('settings').collection(path);
@@ -1515,7 +1546,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   Future<void> _showUserDetails(_AdminUserSummary user) async {
     final BuildContext parentContext = context;
-    bool nextHasVipCard = user.hasVipCard;
     final TextEditingController nameController = TextEditingController(
       text: user.fullName == '-' ? '' : user.fullName,
     );
@@ -1542,7 +1572,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       backgroundColor: Colors.transparent,
       builder: (BuildContext sheetContext) {
         return StatefulBuilder(
-          builder: (BuildContext innerContext, StateSetter setSheetState) {
+          builder: (BuildContext innerContext, StateSetter _) {
             return ClipRRect(
               borderRadius: const BorderRadius.vertical(
                 top: Radius.circular(28),
@@ -1612,29 +1642,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           label: _t('Số dư Thẻ VIP', 'VIP Card Balance'),
                           keyboardType: TextInputType.number,
                         ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: <Widget>[
-                            Expanded(
-                              child: Text(
-                                _t('Loại thẻ VIP', 'VIP card type'),
-                                style: GoogleFonts.poppins(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: const Color(0xFF111827),
-                                ),
-                              ),
-                            ),
-                            Switch(
-                              value: nextHasVipCard,
-                              onChanged: (bool value) {
-                                setSheetState(() {
-                                  nextHasVipCard = value;
-                                });
-                              },
-                            ),
-                          ],
-                        ),
                         const SizedBox(height: 12),
                         Row(
                           children: <Widget>[
@@ -1683,7 +1690,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                           <String, dynamic>{
                                             'cccd': nextCccd,
                                             'phoneNumber': nextPhone,
-                                            'hasVipCard': nextHasVipCard,
+                                            'hasVipCard': user.hasVipCard,
                                           },
                                         )
                                       : currentCardRaw;
@@ -1749,10 +1756,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                       'cccd': nextCccd,
                                       'idNumber': nextCccd,
                                       'address': nextAddress,
-                                      'hasVipCard': nextHasVipCard,
-                                      'membershipTier': nextHasVipCard
-                                          ? 'prive'
-                                          : 'onyx',
                                       'card_number': nextCardNumber,
                                       'cardNumber': nextCardNumber,
                                       'balance_normal': nextNormalBalance,
@@ -3270,6 +3273,187 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
+  Widget _buildCardsTab() {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: _usersStream(),
+      builder: (BuildContext context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final List<QueryDocumentSnapshot<Map<String, dynamic>>> docs =
+            snapshot.data!.docs;
+
+        if (docs.isEmpty) {
+          return Center(
+            child: Text(
+              _t('Chưa có người dùng', 'No users found'),
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Colors.grey.shade600,
+              ),
+            ),
+          );
+        }
+
+        return ListView.builder(
+          itemCount: docs.length,
+          itemBuilder: (BuildContext context, int index) {
+            final QueryDocumentSnapshot<Map<String, dynamic>> doc = docs[index];
+            final Map<String, dynamic> data = doc.data();
+
+            final bool isStandardLocked = data['is_standard_locked'] == true;
+            final bool isVipLocked = data['is_vip_locked'] == true;
+            final String userName = _readUserName(data);
+            final String userPhone = _readUserPhone(data);
+            final String cardNumber = _readUserAccount(data);
+
+            return Card(
+              margin: const EdgeInsets.only(bottom: 10),
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: Color(0xFFE5E7EB)),
+              ),
+              child: ExpansionTile(
+                tilePadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 2,
+                ),
+                childrenPadding: const EdgeInsets.only(bottom: 8),
+                leading: CircleAvatar(
+                  backgroundColor: const Color(0xFFE7EEFF),
+                  child: Icon(
+                    Icons.person_rounded,
+                    color: _primaryBlue,
+                    size: 20,
+                  ),
+                ),
+                title: Text(
+                  userName,
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF0F172A),
+                  ),
+                ),
+                subtitle: Text(
+                  '$userPhone • $cardNumber',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    color: const Color(0xFF667085),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                children: <Widget>[
+                  _buildCardLockTile(
+                    userId: doc.id,
+                    fieldName: 'is_standard_locked',
+                    cardName: AppText.text(context, 'card_standard'),
+                    isLocked: isStandardLocked,
+                  ),
+                  const Divider(height: 1),
+                  _buildCardLockTile(
+                    userId: doc.id,
+                    fieldName: 'is_vip_locked',
+                    cardName: AppText.text(context, 'card_vip'),
+                    isLocked: isVipLocked,
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildCardLockTile({
+    required String userId,
+    required String fieldName,
+    required String cardName,
+    required bool isLocked,
+  }) {
+    return ListTile(
+      dense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+      title: Text(
+        cardName,
+        style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w700),
+      ),
+      subtitle: Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Text(
+          isLocked
+              ? AppText.text(context, 'status_locked')
+              : AppText.text(context, 'status_active'),
+          style: GoogleFonts.poppins(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: isLocked ? const Color(0xFFB91C1C) : const Color(0xFF166534),
+          ),
+        ),
+      ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Text(
+            isLocked
+                ? AppText.text(context, 'unlock_card')
+                : AppText.text(context, 'lock_card'),
+            style: GoogleFonts.poppins(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF344054),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Switch(
+            value: isLocked,
+            onChanged: (bool newValue) {
+              _updateCardLockState(
+                userId: userId,
+                fieldName: fieldName,
+                newValue: newValue,
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _updateCardLockState({
+    required String userId,
+    required String fieldName,
+    required bool newValue,
+  }) async {
+    try {
+      await _firestore.collection('users').doc(userId).update(<String, dynamic>{
+        fieldName: newValue,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _t(
+              'Không thể cập nhật trạng thái thẻ',
+              'Unable to update card status',
+            ),
+            style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+          ),
+        ),
+      );
+    }
+  }
+
   Widget _buildContent() {
     return IndexedStack(
       index: _selectedTab,
@@ -3289,6 +3473,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         KeyedSubtree(
           key: const PageStorageKey<String>('admin-tab-banners'),
           child: _buildBannersTab(),
+        ),
+        KeyedSubtree(
+          key: const PageStorageKey<String>('admin-tab-cards'),
+          child: _buildCardsTab(),
         ),
       ],
     );
@@ -3397,7 +3585,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         scrollDirection: Axis.horizontal,
         child: Row(
           children: List<Widget>.generate(_tabConfig.length, (int index) {
-            final ({IconData icon, String vi, String en}) tab =
+            final ({IconData icon, String vi, String en, String? textKey}) tab =
                 _tabConfig[index];
 
             return Padding(
@@ -3407,7 +3595,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               child: _mobileTabChip(
                 index: index,
                 icon: tab.icon,
-                label: _t(tab.vi, tab.en),
+                label: _tabLabel(tab),
               ),
             );
           }),
@@ -3520,6 +3708,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             index: 3,
             icon: Icons.photo_library_rounded,
             label: _t('Banner', 'Banners'),
+            compact: !wide,
+          ),
+          _sidebarItem(
+            index: 4,
+            icon: Icons.credit_card,
+            label: AppText.text(context, 'tab_cards'),
             compact: !wide,
           ),
         ],
