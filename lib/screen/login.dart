@@ -161,10 +161,7 @@ class _LoginScreenState extends State<LoginScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            _t(
-              'Tài khoản của bạn đang bị khóa. Vui lòng liên hệ hỗ trợ.',
-              'Your account is locked. Please contact support.',
-            ),
+            _t('Tài khoản đang bị khóa.', 'Your account is locked.'),
           ),
           backgroundColor: Colors.red,
         ),

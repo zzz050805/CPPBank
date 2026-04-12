@@ -42,7 +42,9 @@ List<ServicePackageOption> _readPackageOptions(List<dynamic> rawPackages) {
 
   for (final dynamic item in rawPackages) {
     if (item is Map<String, dynamic>) {
-      final String title = (item['title'] ?? '').toString().trim();
+      final String title = (item['title'] ?? item['name'] ?? '')
+          .toString()
+          .trim();
       final int price = (item['price'] is num)
           ? (item['price'] as num).toInt()
           : (int.tryParse((item['price'] ?? '').toString()) ?? 0);
@@ -60,7 +62,9 @@ List<ServicePackageOption> _readPackageOptions(List<dynamic> rawPackages) {
     }
 
     if (item is Map) {
-      final String title = (item['title'] ?? '').toString().trim();
+      final String title = (item['title'] ?? item['name'] ?? '')
+          .toString()
+          .trim();
       final int price = (item['price'] is num)
           ? (item['price'] as num).toInt()
           : (int.tryParse((item['price'] ?? '').toString()) ?? 0);
@@ -144,19 +148,14 @@ class _ShoppingStoreScreenState extends State<ShoppingStoreScreen> {
   static const double _estimatedSectionExtent = 220;
 
   final ScrollController _scrollController = ScrollController();
-  late final Map<String, GlobalKey> _serviceSectionKeys;
   String? _highlightedServiceId;
   bool _didConsumeRouteArgs = false;
   bool _didOpenTargetBottomSheet = false;
+  bool _isPackageSheetOpen = false;
 
   @override
   void initState() {
     super.initState();
-    _serviceSectionKeys = <String, GlobalKey>{
-      for (final ServiceModel service in shoppingServices)
-        service.id: GlobalKey(debugLabel: 'service_section_${service.id}'),
-    };
-
     _highlightedServiceId = widget.isFromNotification
         ? widget.targetServiceId?.trim()
         : null;
@@ -235,17 +234,6 @@ class _ShoppingStoreScreenState extends State<ShoppingStoreScreen> {
       return;
     }
 
-    final BuildContext? targetContext =
-        _serviceSectionKeys[targetId]?.currentContext;
-    if (targetContext != null) {
-      await Scrollable.ensureVisible(
-        targetContext,
-        duration: const Duration(milliseconds: 360),
-        curve: Curves.easeOut,
-        alignment: 0.18,
-      );
-    }
-
     await Future<void>.delayed(const Duration(milliseconds: 2600));
     if (!mounted || _highlightedServiceId != targetId) {
       return;
@@ -285,65 +273,15 @@ class _ShoppingStoreScreenState extends State<ShoppingStoreScreen> {
 
   String _packageName(
     BuildContext context,
-    ServiceModel service,
     int index,
     ServicePackageOption package,
-    int amount,
   ) {
     final String customTitle = (package.title ?? '').trim();
     if (customTitle.isNotEmpty) {
       return customTitle;
     }
-
-    switch (service.id) {
-      case 'netflix':
-        const List<String> plans = <String>[
-          'mobile_plan',
-          'basic_plan',
-          'premium_plan',
-        ];
-        return index < plans.length
-            ? AppTranslations.getText(context, plans[index])
-            : _formatAmount(amount);
-      case 'spotify':
-        const List<String> plans = <String>[
-          'mini_plan',
-          'individual_plan',
-          'family_plan',
-        ];
-        return index < plans.length
-            ? AppTranslations.getText(context, plans[index])
-            : _formatAmount(amount);
-      case 'apple_music':
-        const List<String> plans = <String>[
-          'student_plan',
-          'individual_plan',
-          'family_plan',
-        ];
-        return index < plans.length
-            ? AppTranslations.getText(context, plans[index])
-            : _formatAmount(amount);
-      case 'chatgpt':
-        const List<String> plans = <String>[
-          'basic_plan',
-          'plus_plan',
-          'pro_plan',
-        ];
-        return index < plans.length
-            ? AppTranslations.getText(context, plans[index])
-            : _formatAmount(amount);
-      case 'gemini':
-        const List<String> plans = <String>[
-          'starter_plan',
-          'advanced_plan',
-          'ultra_plan',
-        ];
-        return index < plans.length
-            ? AppTranslations.getText(context, plans[index])
-            : _formatAmount(amount);
-      default:
-        return _formatAmount(amount);
-    }
+    final String packageLabel = AppTranslations.getText(context, 'package');
+    return '$packageLabel ${index + 1}';
   }
 
   IconData _packageIcon(ServiceModel service) {
@@ -449,7 +387,7 @@ class _ShoppingStoreScreenState extends State<ShoppingStoreScreen> {
     return InkWell(
       borderRadius: BorderRadius.circular(16),
       onTap: () {
-        _showServicePackagesSheet(service, packageOptions);
+        _showServicePackagesSheet(service);
       },
       child: Container(
         padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
@@ -574,13 +512,7 @@ class _ShoppingStoreScreenState extends State<ShoppingStoreScreen> {
     final int originalPrice = package.price;
     final int discountPercent = package.discountPercent;
     final int finalPrice = discountedPrice(originalPrice, discountPercent);
-    final String packageName = _packageName(
-      context,
-      service,
-      index,
-      package,
-      originalPrice,
-    );
+    final String packageName = _packageName(context, index, package);
     final bool isPopular = _isPopularPackage(index, packageName);
     final Color borderColor = isPopular
         ? const Color(0xFF86A8FF)
@@ -596,11 +528,7 @@ class _ShoppingStoreScreenState extends State<ShoppingStoreScreen> {
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
         onTap: () {
-          Navigator.of(context).pop();
-          _goToPaymentConfirmation(
-            service: service,
-            selectedAmount: finalPrice,
-          );
+          Navigator.of(context).pop<int>(finalPrice);
         },
         child: Stack(
           clipBehavior: Clip.none,
@@ -733,123 +661,178 @@ class _ShoppingStoreScreenState extends State<ShoppingStoreScreen> {
     );
   }
 
-  void _showServicePackagesSheet(
-    ServiceModel service,
-    List<ServicePackageOption> packageOptions,
-  ) {
+  Future<void> _showServicePackagesSheet(ServiceModel service) async {
+    if (!mounted || _isPackageSheetOpen) {
+      return;
+    }
+    _isPackageSheetOpen = true;
+
     final String languageCode = AppTranslations.currentLanguageCode(context);
 
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      barrierColor: Colors.black.withOpacity(0.35),
-      builder: (BuildContext sheetContext) {
-        return Container(
-          height: MediaQuery.of(sheetContext).size.height * 0.76,
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.98),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: Column(
-            children: <Widget>[
-              const SizedBox(height: 10),
-              Container(
-                width: 52,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFD1D9EE),
-                  borderRadius: BorderRadius.circular(99),
-                ),
+    int? selectedAmount;
+    try {
+      selectedAmount = await showModalBottomSheet<int>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        backgroundColor: Colors.transparent,
+        barrierColor: Colors.black.withOpacity(0.35),
+        builder: (BuildContext sheetContext) {
+          return Container(
+            height: MediaQuery.of(sheetContext).size.height * 0.76,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.98),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(24),
               ),
-              const SizedBox(height: 14),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: <Widget>[
-                    Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        boxShadow: <BoxShadow>[
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.08),
-                            blurRadius: 10,
-                            offset: const Offset(0, 3),
-                          ),
-                        ],
-                      ),
-                      child: ClipOval(
-                        child: Image.asset(
-                          service.logoPath,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              color: const Color(0xFFF2F4F7),
-                              alignment: Alignment.center,
-                              child: const Icon(
-                                Icons.image_not_supported_outlined,
-                                size: 18,
-                                color: Color(0xFF98A2B3),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        service.localizedName(languageCode),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.poppins(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          color: _primaryBlue,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Text(
-                  _bottomSheetTagline(sheetContext),
-                  style: GoogleFonts.poppins(
-                    fontSize: 11,
-                    color: Colors.grey[600],
-                    fontStyle: FontStyle.italic,
-                    height: 1.35,
+            ),
+            child: Column(
+              children: <Widget>[
+                const SizedBox(height: 10),
+                Container(
+                  width: 52,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFD1D9EE),
+                    borderRadius: BorderRadius.circular(99),
                   ),
                 ),
-              ),
-              const SizedBox(height: 10),
-              Divider(color: Colors.grey[200], thickness: 1, height: 1),
-              Expanded(
-                child: ListView.builder(
-                  physics: const BouncingScrollPhysics(),
-                  itemCount: packageOptions.length,
-                  itemBuilder: (BuildContext context, int index) {
-                    return _buildBottomSheetPackageCard(
-                      context,
-                      service,
-                      index,
-                      packageOptions[index],
-                      packageOptions.length,
-                    );
-                  },
+                const SizedBox(height: 14),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: <Widget>[
+                      Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          boxShadow: <BoxShadow>[
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.08),
+                              blurRadius: 10,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: ClipOval(
+                          child: Image.asset(
+                            service.logoPath,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                color: const Color(0xFFF2F4F7),
+                                alignment: Alignment.center,
+                                child: const Icon(
+                                  Icons.image_not_supported_outlined,
+                                  size: 18,
+                                  color: Color(0xFF98A2B3),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          service.localizedName(languageCode),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.poppins(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: _primaryBlue,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
+                const SizedBox(height: 12),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    _bottomSheetTagline(sheetContext),
+                    style: GoogleFonts.poppins(
+                      fontSize: 11,
+                      color: Colors.grey[600],
+                      fontStyle: FontStyle.italic,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Divider(color: Colors.grey[200], thickness: 1, height: 1),
+                Expanded(
+                  child: StreamBuilder<Map<String, ServicePricingData>>(
+                    stream: shoppingPricingStream(),
+                    builder:
+                        (
+                          BuildContext itemContext,
+                          AsyncSnapshot<Map<String, ServicePricingData>>
+                          snapshot,
+                        ) {
+                          final Map<String, ServicePricingData> pricing =
+                              snapshot.data ?? <String, ServicePricingData>{};
+                          final List<ServicePackageOption> packageOptions =
+                              _effectivePackages(service, pricing);
+
+                          if (packageOptions.isEmpty) {
+                            return Center(
+                              child: Text(
+                                AppTranslations.getText(
+                                  itemContext,
+                                  'service_not_found',
+                                ),
+                                style: GoogleFonts.poppins(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                  color: const Color(0xFF64748B),
+                                ),
+                              ),
+                            );
+                          }
+
+                          return ListView.builder(
+                            physics: const BouncingScrollPhysics(),
+                            itemCount: packageOptions.length,
+                            itemBuilder: (BuildContext cardContext, int index) {
+                              return _buildBottomSheetPackageCard(
+                                cardContext,
+                                service,
+                                index,
+                                packageOptions[index],
+                                packageOptions.length,
+                              );
+                            },
+                          );
+                        },
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    } finally {
+      _isPackageSheetOpen = false;
+    }
+
+    if (!mounted || selectedAmount == null) {
+      return;
+    }
+    final int resolvedAmount = selectedAmount;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _goToPaymentConfirmation(
+        service: service,
+        selectedAmount: resolvedAmount,
+      );
+    });
   }
 
   Widget _buildServiceHeader(ServiceModel service) {
@@ -916,13 +899,7 @@ class _ShoppingStoreScreenState extends State<ShoppingStoreScreen> {
     final int originalPrice = package.price;
     final int discountPercent = package.discountPercent;
     final int finalPrice = discountedPrice(originalPrice, discountPercent);
-    final String packageName = _packageName(
-      context,
-      service,
-      index,
-      package,
-      originalPrice,
-    );
+    final String packageName = _packageName(context, index, package);
 
     return Container(
       width: 176,
@@ -1064,13 +1041,8 @@ class _ShoppingStoreScreenState extends State<ShoppingStoreScreen> {
                     if (!mounted) {
                       return;
                     }
-                    _showServicePackagesSheet(
-                      resolvedService,
-                      _effectivePackages(resolvedService, pricing),
-                    );
-                    setState(() {
-                      _highlightedServiceId = null;
-                    });
+                    _showServicePackagesSheet(resolvedService);
+                    _highlightedServiceId = null;
                   });
                 }
               }
@@ -1252,41 +1224,15 @@ class _ShoppingServiceDetailScreenState
 
   String _packageName(
     BuildContext context,
-    ServiceModel service,
     int index,
-    int amount,
+    ServicePackageOption package,
   ) {
-    switch (service.id) {
-      case 'netflix':
-        const List<String> plans = <String>[
-          'mobile_plan',
-          'basic_plan',
-          'premium_plan',
-        ];
-        return index < plans.length
-            ? AppTranslations.getText(context, plans[index])
-            : _formatAmount(amount);
-      case 'spotify':
-        const List<String> plans = <String>[
-          'mini_plan',
-          'individual_plan',
-          'family_plan',
-        ];
-        return index < plans.length
-            ? AppTranslations.getText(context, plans[index])
-            : _formatAmount(amount);
-      case 'apple_music':
-        const List<String> plans = <String>[
-          'student_plan',
-          'individual_plan',
-          'family_plan',
-        ];
-        return index < plans.length
-            ? AppTranslations.getText(context, plans[index])
-            : _formatAmount(amount);
-      default:
-        return _formatAmount(amount);
+    final String customTitle = (package.title ?? '').trim();
+    if (customTitle.isNotEmpty) {
+      return customTitle;
     }
+    final String packageLabel = AppTranslations.getText(context, 'package');
+    return '$packageLabel ${index + 1}';
   }
 
   void _goToPayment(ServiceModel service, int amount) {
@@ -1336,6 +1282,7 @@ class _ShoppingServiceDetailScreenState
                   : service.packages
                         .map(
                           (int amount) => ServicePackageOption(
+                            title: null,
                             price: amount,
                             discountPercent: 0,
                           ),
@@ -1386,12 +1333,7 @@ class _ShoppingServiceDetailScreenState
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: <Widget>[
                                 Text(
-                                  _packageName(
-                                    context,
-                                    service,
-                                    index,
-                                    originalPrice,
-                                  ),
+                                  _packageName(context, index, option),
                                   style: GoogleFonts.poppins(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w600,

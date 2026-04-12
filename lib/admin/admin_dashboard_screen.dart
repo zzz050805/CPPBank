@@ -2245,12 +2245,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             text: discount > 0 ? discount.toString() : '',
           );
         });
+    final List<TextEditingController> detachedControllers =
+        <TextEditingController>[];
 
     String defaultPackageTitle(int index) {
       return '${_t('Gói', 'Package')} ${index + 1}';
     }
 
-    await showDialog<void>(
+    final List<Map<String, dynamic>>?
+    nextPackages = await showDialog<List<Map<String, dynamic>>>(
       context: context,
       builder: (BuildContext dialogContext) {
         return StatefulBuilder(
@@ -2287,43 +2290,45 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                             constraints: const BoxConstraints(maxHeight: 400),
                             child: SingleChildScrollView(
                               child: Column(
-                                children: List<Widget>.generate(
-                                  titleControllers.length,
-                                  (int index) {
-                                    return Padding(
-                                      padding: const EdgeInsets.only(
-                                        bottom: 10,
-                                      ),
-                                      child: Container(
-                                        padding: const EdgeInsets.all(10),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFF8FAFC),
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                          border: Border.all(
-                                            color: const Color(0xFFE5E7EB),
-                                          ),
+                                children: List<Widget>.generate(titleControllers.length, (
+                                  int index,
+                                ) {
+                                  return Padding(
+                                    key: ValueKey<TextEditingController>(
+                                      titleControllers[index],
+                                    ),
+                                    padding: const EdgeInsets.only(bottom: 10),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFF8FAFC),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: const Color(0xFFE5E7EB),
                                         ),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: <Widget>[
-                                            Row(
-                                              children: <Widget>[
-                                                Expanded(
-                                                  child: Text(
-                                                    '${_t('Gói', 'Package')} ${index + 1}',
-                                                    style: GoogleFonts.poppins(
-                                                      fontWeight:
-                                                          FontWeight.w700,
-                                                      fontSize: 12,
-                                                    ),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: <Widget>[
+                                          Row(
+                                            children: <Widget>[
+                                              Expanded(
+                                                child: Text(
+                                                  '${_t('Gói', 'Package')} ${index + 1}',
+                                                  style: GoogleFonts.poppins(
+                                                    fontWeight: FontWeight.w700,
+                                                    fontSize: 12,
                                                   ),
                                                 ),
-                                                if (titleControllers.length > 1)
-                                                  IconButton(
-                                                    onPressed: () {
+                                              ),
+                                              if (titleControllers.length > 1)
+                                                IconButton(
+                                                  onPressed: () {
+                                                    FocusScope.of(
+                                                      dialogContext,
+                                                    ).unfocus();
+                                                    setDialogState(() {
                                                       final TextEditingController
                                                       removedTitle =
                                                           titleControllers
@@ -2336,66 +2341,70 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                                       removedDiscount =
                                                           discountControllers
                                                               .removeAt(index);
-                                                      removedTitle.dispose();
-                                                      removedPrice.dispose();
-                                                      removedDiscount.dispose();
-                                                      setDialogState(() {});
-                                                    },
-                                                    icon: const Icon(
-                                                      Icons
-                                                          .delete_outline_rounded,
-                                                      size: 18,
-                                                    ),
-                                                    tooltip: _t(
-                                                      'Xóa gói',
-                                                      'Remove package',
-                                                    ),
+
+                                                      // Dispose detached controllers after dialog closes
+                                                      // to avoid disposing while TextField tree is still rebuilding.
+                                                      detachedControllers.add(
+                                                        removedTitle,
+                                                      );
+                                                      detachedControllers.add(
+                                                        removedPrice,
+                                                      );
+                                                      detachedControllers.add(
+                                                        removedDiscount,
+                                                      );
+                                                    });
+                                                  },
+                                                  icon: const Icon(
+                                                    Icons
+                                                        .delete_outline_rounded,
+                                                    size: 18,
                                                   ),
-                                              ],
-                                            ),
-                                            const SizedBox(height: 8),
-                                            TextField(
-                                              controller:
-                                                  titleControllers[index],
-                                              decoration: InputDecoration(
-                                                labelText: _t(
-                                                  'Tên gói',
-                                                  'Package title',
+                                                  tooltip: _t(
+                                                    'Xóa gói',
+                                                    'Remove package',
+                                                  ),
                                                 ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 8),
+                                          TextField(
+                                            controller: titleControllers[index],
+                                            decoration: InputDecoration(
+                                              labelText: _t(
+                                                'Tên gói',
+                                                'Package title',
                                               ),
                                             ),
-                                            const SizedBox(height: 8),
-                                            TextField(
-                                              controller:
-                                                  priceControllers[index],
-                                              keyboardType:
-                                                  TextInputType.number,
-                                              decoration: InputDecoration(
-                                                labelText: _t(
-                                                  'Giá gốc',
-                                                  'Original price',
-                                                ),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          TextField(
+                                            controller: priceControllers[index],
+                                            keyboardType: TextInputType.number,
+                                            decoration: InputDecoration(
+                                              labelText: _t(
+                                                'Giá gốc',
+                                                'Original price',
                                               ),
                                             ),
-                                            const SizedBox(height: 8),
-                                            TextField(
-                                              controller:
-                                                  discountControllers[index],
-                                              keyboardType:
-                                                  TextInputType.number,
-                                              decoration: InputDecoration(
-                                                labelText: _t(
-                                                  '% Giảm giá (0-100)',
-                                                  'Discount % (0-100)',
-                                                ),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          TextField(
+                                            controller:
+                                                discountControllers[index],
+                                            keyboardType: TextInputType.number,
+                                            decoration: InputDecoration(
+                                              labelText: _t(
+                                                '% Giảm giá (0-100)',
+                                                'Discount % (0-100)',
                                               ),
                                             ),
-                                          ],
-                                        ),
+                                          ),
+                                        ],
                                       ),
-                                    );
-                                  },
-                                ),
+                                    ),
+                                  );
+                                }),
                               ),
                             ),
                           ),
@@ -2404,12 +2413,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                             alignment: Alignment.centerLeft,
                             child: OutlinedButton.icon(
                               onPressed: () {
-                                titleControllers.add(TextEditingController());
-                                priceControllers.add(TextEditingController());
-                                discountControllers.add(
-                                  TextEditingController(),
-                                );
-                                setDialogState(() {});
+                                setDialogState(() {
+                                  titleControllers.add(TextEditingController());
+                                  priceControllers.add(TextEditingController());
+                                  discountControllers.add(
+                                    TextEditingController(),
+                                  );
+                                });
                               },
                               icon: const Icon(Icons.add_rounded),
                               label: Text(_t('Thêm gói', 'Add package')),
@@ -2432,7 +2442,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               _gradientActionButton(
                                 label: _t('Lưu', 'Save'),
                                 icon: Icons.save_rounded,
-                                onPressed: () async {
+                                onPressed: () {
                                   final List<Map<String, dynamic>> packages =
                                       <Map<String, dynamic>>[];
 
@@ -2490,22 +2500,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                     return;
                                   }
 
-                                  await ref.set(<String, dynamic>{
-                                    'packages': packages,
-                                    'discountPercent': FieldValue.delete(),
-                                    'updatedAt': FieldValue.serverTimestamp(),
-                                  }, SetOptions(merge: true));
-
-                                  await _pushShoppingDiscountNotifications(
-                                    serviceId: serviceId,
-                                    serviceName: serviceName,
-                                    packages: packages,
-                                  );
-
-                                  if (!dialogContext.mounted) {
-                                    return;
-                                  }
-                                  Navigator.pop(dialogContext);
+                                  Navigator.pop(dialogContext, packages);
                                 },
                               ),
                             ],
@@ -2522,6 +2517,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       },
     );
 
+    if (nextPackages != null) {
+      await ref.set(<String, dynamic>{
+        'packages': nextPackages,
+        'discountPercent': FieldValue.delete(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      await _pushShoppingDiscountNotifications(
+        serviceId: serviceId,
+        serviceName: serviceName,
+        packages: nextPackages,
+      );
+    }
+
     for (final TextEditingController controller in titleControllers) {
       controller.dispose();
     }
@@ -2529,6 +2538,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       controller.dispose();
     }
     for (final TextEditingController controller in discountControllers) {
+      controller.dispose();
+    }
+    for (final TextEditingController controller in detachedControllers) {
       controller.dispose();
     }
   }

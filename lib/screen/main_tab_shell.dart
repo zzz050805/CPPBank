@@ -1,9 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../l10n/app_text.dart';
+import '../data/user_firestore_service.dart';
+import '../services/home_cache_service.dart';
 
 import 'chat_placeholder_screen.dart';
 import 'home_screen.dart';
+import 'login.dart';
 import 'search_screen.dart';
 import 'setting_screen.dart';
 
@@ -20,6 +27,11 @@ class _MainTabShellState extends State<MainTabShell> {
   late final PageController _pageController;
   late int _currentIndex;
   late final List<Widget> _pages;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
+  _lockStatusSubscription;
+  StreamSubscription<UserProfileData?>? _profileSubscription;
+  String _lockListeningUid = '';
+  bool _isHandlingLockFlow = false;
 
   String _t(String vi, String en) => AppText.tr(context, vi, en);
 
@@ -37,12 +49,116 @@ class _MainTabShellState extends State<MainTabShell> {
       ),
       const SettingScreen(showBottomNav: false),
     ];
+    _profileSubscription = UserFirestoreService.instance
+        .currentUserProfileStream()
+        .listen((_) => _startLockStatusListener());
+    _startLockStatusListener();
   }
 
   @override
   void dispose() {
+    _lockStatusSubscription?.cancel();
+    _profileSubscription?.cancel();
     _pageController.dispose();
     super.dispose();
+  }
+
+  String _resolveUid() {
+    final String? fromService = UserFirestoreService.instance.currentUserDocId;
+    if (fromService != null && fromService.isNotEmpty) {
+      return fromService;
+    }
+
+    final String? fromProfile =
+        UserFirestoreService.instance.latestProfile?.uid;
+    if (fromProfile != null && fromProfile.isNotEmpty) {
+      return fromProfile;
+    }
+
+    final String? fromAuth = FirebaseAuth.instance.currentUser?.uid;
+    if (fromAuth != null && fromAuth.isNotEmpty) {
+      return fromAuth;
+    }
+
+    return '';
+  }
+
+  void _startLockStatusListener() {
+    final String uid = _resolveUid();
+    if (uid.isEmpty) {
+      return;
+    }
+
+    if (_lockListeningUid == uid && _lockStatusSubscription != null) {
+      return;
+    }
+
+    _lockListeningUid = uid;
+
+    _lockStatusSubscription?.cancel();
+    _lockStatusSubscription = FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .snapshots()
+        .listen((DocumentSnapshot<Map<String, dynamic>> snapshot) {
+          if (!mounted || _isHandlingLockFlow || !snapshot.exists) {
+            return;
+          }
+
+          final Map<String, dynamic> data =
+              snapshot.data() ?? <String, dynamic>{};
+          final bool isLocked = data['isLocked'] == true;
+          final String role = (data['role'] ?? 'user').toString().toLowerCase();
+
+          if (!isLocked || role == 'admin') {
+            return;
+          }
+
+          _handleAccountLocked();
+        });
+  }
+
+  Future<void> _handleAccountLocked() async {
+    if (!mounted || _isHandlingLockFlow) {
+      return;
+    }
+
+    _isHandlingLockFlow = true;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: Text(_t('Thông báo', 'Notice')),
+          content: Text(
+            _t('Tài khoản bạn đã bị khóa', 'Your account has been locked'),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(_t('Đóng', 'Close')),
+            ),
+          ],
+        );
+      },
+    );
+
+    _lockStatusSubscription?.cancel();
+    _lockStatusSubscription = null;
+
+    await FirebaseAuth.instance.signOut();
+    UserFirestoreService.instance.setFallbackDocId(null);
+    await HomeCacheService.instance.clear();
+
+    if (!mounted) {
+      return;
+    }
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (Route<dynamic> route) => false,
+    );
   }
 
   void _onTapTab(int index) {
