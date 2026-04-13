@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -11,6 +13,7 @@ import 'effect/app_transitions.dart';
 import 'services/notification_service.dart';
 import 'screen/welcome.dart';
 import 'shoppingservice/shopping_store_screen.dart';
+import 'widget/ccp_logo.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -55,48 +58,101 @@ void _handleNotificationTapPayload(Map<String, dynamic> payload) {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await AppPreferences.instance.loadSavedLocale();
+  runApp(const _AppBootstrapGate());
+}
 
-  NotificationService().setOnNotificationTapHandler(
-    _handleNotificationTapPayload,
-  );
+class _AppBootstrapGate extends StatefulWidget {
+  const _AppBootstrapGate();
 
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.dark,
-    ),
-  );
+  @override
+  State<_AppBootstrapGate> createState() => _AppBootstrapGateState();
+}
 
-  try {
-    await dotenv.load(fileName: ".env");
-    print('Kiểm tra .env: ${dotenv.env.keys}');
-    debugPrint(
-      'DotEnv loaded: ${dotenv.env['VIETQR_CLIENT_ID']?.substring(0, 5)}***',
+class _AppBootstrapGateState extends State<_AppBootstrapGate> {
+  bool _ready = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_prepareStartup());
+  }
+
+  Future<void> _prepareStartup() async {
+    try {
+      await AppPreferences.instance.loadSavedLocale().timeout(
+        const Duration(seconds: 2),
+      );
+    } catch (e) {
+      debugPrint('Load locale failed: $e');
+    }
+
+    NotificationService().setOnNotificationTapHandler(
+      _handleNotificationTapPayload,
     );
-  } catch (e) {
-    debugPrint('Error loading .env: $e');
+
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.dark,
+      ),
+    );
+
+    try {
+      await dotenv.load(fileName: '.env').timeout(const Duration(seconds: 2));
+      final String? clientId = dotenv.env['VIETQR_CLIENT_ID'];
+      if (clientId != null && clientId.isNotEmpty) {
+        final int previewLength = clientId.length < 5 ? clientId.length : 5;
+        debugPrint('DotEnv loaded: ${clientId.substring(0, previewLength)}***');
+      }
+    } catch (e) {
+      debugPrint('Error loading .env: $e');
+    }
+
+    try {
+      await FirebaseHelper.initializeFirebase().timeout(
+        const Duration(seconds: 6),
+      );
+    } catch (e) {
+      debugPrint('Firebase init failed: $e');
+    }
+
+    try {
+      await UserFirestoreService.instance.syncCurrentUserData().timeout(
+        const Duration(seconds: 6),
+      );
+    } catch (e) {
+      debugPrint('Initial user sync failed: $e');
+    }
+
+    try {
+      await NotificationService().init().timeout(const Duration(seconds: 4));
+    } catch (e) {
+      debugPrint('Local notification init failed: $e');
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _ready = true;
+    });
   }
 
-  try {
-    await FirebaseHelper.initializeFirebase();
-  } catch (e) {
-    debugPrint('Firebase init failed: $e');
-  }
+  @override
+  Widget build(BuildContext context) {
+    if (_ready) {
+      return const MyApp();
+    }
 
-  try {
-    await UserFirestoreService.instance.syncCurrentUserData();
-  } catch (e) {
-    debugPrint('Initial user sync failed: $e');
+    return const MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        backgroundColor: Colors.white,
+        body: Center(child: CCPLogoWidget()),
+      ),
+    );
   }
-
-  try {
-    await NotificationService().init();
-  } catch (e) {
-    debugPrint('Local notification init failed: $e');
-  }
-
-  runApp(const MyApp());
 }
 
 class MyApp extends StatefulWidget {

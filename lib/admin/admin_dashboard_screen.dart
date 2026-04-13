@@ -1832,7 +1832,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             cccd: _readUserCccd(data),
             address: _readUserAddress(data),
             role: (data['role'] ?? 'user').toString(),
-            isLocked: data['isLocked'] == true,
+            isLocked: data['isLocked'] == true || data['is_locked'] == true,
             hasVipCard: hasVipCard,
             isStandardCardLocked: isStandardLocked,
             isVipCardLocked: isVipLocked,
@@ -3896,7 +3896,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                               style: GoogleFonts.poppins(
                                                 fontSize: 12,
                                                 fontWeight: FontWeight.w600,
-                                                color: _primaryBlue,
+                                                color: user.isLocked
+                                                    ? const Color(0xFFFF4D4F)
+                                                    : const Color(0xFF34C759),
                                               ),
                                             ),
                                           ),
@@ -4304,7 +4306,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             final bool hasVipCard = data['hasVipCard'] == true;
             final String userName = _readUserName(data);
             final String userPhone = _readUserPhone(data);
-            final String cardNumber = _readUserAccount(data);
+            final String fallbackCardNumberRaw =
+                CardNumberService.readStoredCardNumber(data);
             final String standardKey = _cardLockUpdateKey(
               userId: doc.id,
               fieldName: 'is_standard_locked',
@@ -4322,12 +4325,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             );
             final bool vipUpdating = _pendingCardLockUpdates.contains(vipKey);
 
-            return _glassPanel(
+            return Container(
               margin: const EdgeInsets.only(bottom: 10),
-              padding: EdgeInsets.zero,
-              radius: 16,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFE5E7EB)),
+              ),
+              clipBehavior: Clip.antiAlias,
               child: ExpansionTile(
                 key: PageStorageKey<String>('admin-card-tile-${doc.id}'),
+                backgroundColor: Colors.transparent,
+                collapsedBackgroundColor: Colors.transparent,
+                iconColor: const Color(0xFF1D4ED8),
+                collapsedIconColor: const Color(0xFF1D4ED8),
                 tilePadding: const EdgeInsets.symmetric(
                   horizontal: 14,
                   vertical: 2,
@@ -4350,7 +4361,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   ),
                 ),
                 subtitle: Text(
-                  '$userPhone • $cardNumber',
+                  userPhone,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.poppins(
@@ -4364,6 +4375,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     userId: doc.id,
                     fieldName: 'is_standard_locked',
                     cardName: AppText.text(context, 'card_standard'),
+                    fallbackCardNumberRaw: fallbackCardNumberRaw,
                     isLocked: effectiveStandardLocked,
                     isUpdating: standardUpdating,
                   ),
@@ -4372,6 +4384,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     userId: doc.id,
                     fieldName: 'is_vip_locked',
                     cardName: AppText.text(context, 'card_vip'),
+                    fallbackCardNumberRaw: fallbackCardNumberRaw,
                     isLocked: effectiveVipLocked,
                     isUpdating: vipUpdating,
                     isEnabled: hasVipCard,
@@ -4389,15 +4402,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     required String userId,
     required String fieldName,
     required String cardName,
+    required String fallbackCardNumberRaw,
     required bool isLocked,
     required bool isUpdating,
     bool isEnabled = true,
   }) {
-    final String actionText = !isEnabled
-        ? _t('Không khả dụng', 'Unavailable')
-        : isLocked
-        ? AppText.text(context, 'unlock_card')
-        : AppText.text(context, 'lock_card');
     final String statusText = !isEnabled
         ? _t('Chưa có thẻ VIP', 'No VIP card')
         : isLocked
@@ -4406,81 +4415,276 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final Color statusColor = !isEnabled
         ? const Color(0xFF64748B)
         : isLocked
-        ? const Color(0xFFB91C1C)
-        : const Color(0xFF166534);
+        ? const Color(0xFFFF6B6B)
+        : const Color(0xFF00E676);
     final String cardId = fieldName == 'is_vip_locked' ? 'vip' : 'standard';
 
-    return ListTile(
-      dense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-      title: Text(
-        cardName,
-        style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w700),
-      ),
-      subtitle: Padding(
-        padding: const EdgeInsets.only(top: 4),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Text(
-              statusText,
-              style: GoogleFonts.poppins(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: statusColor,
+    final DocumentReference<Map<String, dynamic>> cardRef = _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('cards')
+        .doc(cardId);
+
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: cardRef.snapshots(includeMetadataChanges: true),
+      builder:
+          (
+            BuildContext context,
+            AsyncSnapshot<DocumentSnapshot<Map<String, dynamic>>> snapshot,
+          ) {
+            final Map<String, dynamic> cardData =
+                snapshot.data?.data() ?? <String, dynamic>{};
+            final String rawFromCard = CardNumberService.readStoredCardNumber(
+              cardData,
+            );
+            final String rawCardNumber = rawFromCard.isNotEmpty
+                ? rawFromCard
+                : fallbackCardNumberRaw;
+            final String formattedCardNumber = rawCardNumber.isEmpty
+                ? '-'
+                : CardNumberService.formatCardNumber(rawCardNumber);
+
+            return ListTile(
+              dense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+              title: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Text(
+                          cardName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF0F172A),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          formattedCardNumber,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF1D4ED8),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  isUpdating
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            IconButton(
+                              icon: const Icon(Icons.badge_rounded, size: 20),
+                              color: const Color(0xFF2563EB),
+                              tooltip: _t('Chỉnh số thẻ', 'Edit card number'),
+                              onPressed: !isEnabled
+                                  ? null
+                                  : () {
+                                      _showEditCardNumberDialog(
+                                        userId: userId,
+                                        cardId: cardId,
+                                        cardName: cardName,
+                                        initialRawCardNumber: rawCardNumber,
+                                      );
+                                    },
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.edit_rounded, size: 20),
+                              color: _primaryBlue,
+                              tooltip: _t(
+                                'Chỉnh số dư thẻ',
+                                'Edit card balance',
+                              ),
+                              onPressed: !isEnabled
+                                  ? null
+                                  : () {
+                                      _showEditCardBalanceDialog(
+                                        userId: userId,
+                                        cardId: cardId,
+                                        cardName: cardName,
+                                      );
+                                    },
+                            ),
+                            Switch(
+                              value: isLocked,
+                              onChanged: !isEnabled
+                                  ? null
+                                  : (bool newValue) {
+                                      _updateCardLockState(
+                                        userId: userId,
+                                        fieldName: fieldName,
+                                        currentValue: isLocked,
+                                        newValue: newValue,
+                                      );
+                                    },
+                            ),
+                          ],
+                        ),
+                ],
               ),
+              subtitle: Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Text(
+                      statusText,
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: statusColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+    );
+  }
+
+  Future<void> _showEditCardNumberDialog({
+    required String userId,
+    required String cardId,
+    required String cardName,
+    required String initialRawCardNumber,
+  }) async {
+    final TextEditingController controller = TextEditingController(
+      text: initialRawCardNumber,
+    );
+
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: Text(
+            _t('Chỉnh số thẻ', 'Edit card number'),
+            style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                cardName,
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  color: const Color(0xFF667085),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: controller,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: _t('Số thẻ mới', 'New card number'),
+                  border: const OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+            ],
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(_t('Hủy', 'Cancel')),
             ),
-            const SizedBox(height: 2),
-            Text(
-              actionText,
-              style: GoogleFonts.poppins(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: Colors.white70,
-              ),
+            FilledButton(
+              onPressed: () async {
+                final String normalized = controller.text.replaceAll(
+                  RegExp(r'[^0-9]'),
+                  '',
+                );
+                if (normalized.length < 8) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        _t('Số thẻ không hợp lệ', 'Invalid card number'),
+                      ),
+                    ),
+                  );
+                  return;
+                }
+
+                try {
+                  final DocumentReference<Map<String, dynamic>> userRef =
+                      _firestore.collection('users').doc(userId);
+                  final DocumentReference<Map<String, dynamic>> cardRef =
+                      userRef.collection('cards').doc(cardId);
+
+                  final WriteBatch batch = _firestore.batch();
+                  batch.set(cardRef, <String, dynamic>{
+                    'card_number': normalized,
+                    'cardNumber': normalized,
+                    'updatedAt': FieldValue.serverTimestamp(),
+                  }, SetOptions(merge: true));
+
+                  batch.set(userRef, <String, dynamic>{
+                    'card_number': normalized,
+                    'cardNumber': normalized,
+                    'account_number': normalized,
+                    'accountNumber': normalized,
+                    'updatedAt': FieldValue.serverTimestamp(),
+                  }, SetOptions(merge: true));
+
+                  await batch.commit();
+
+                  if (dialogContext.mounted) {
+                    Navigator.pop(dialogContext);
+                  }
+
+                  if (!mounted) {
+                    return;
+                  }
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        _t('Đã cập nhật số thẻ', 'Card number updated'),
+                      ),
+                      backgroundColor: const Color(0xFF16A34A),
+                    ),
+                  );
+                } catch (_) {
+                  if (!mounted) {
+                    return;
+                  }
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        _t(
+                          'Không thể cập nhật số thẻ',
+                          'Unable to update card number',
+                        ),
+                      ),
+                      backgroundColor: const Color(0xFFDC2626),
+                    ),
+                  );
+                }
+              },
+              child: Text(_t('Lưu', 'Save')),
             ),
           ],
-        ),
-      ),
-      trailing: isUpdating
-          ? const SizedBox(
-              width: 22,
-              height: 22,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                IconButton(
-                  icon: const Icon(Icons.edit_rounded, size: 20),
-                  color: _primaryBlue,
-                  tooltip: _t('Chỉnh số dư thẻ', 'Edit card balance'),
-                  onPressed: !isEnabled
-                      ? null
-                      : () {
-                          _showEditCardBalanceDialog(
-                            userId: userId,
-                            cardId: cardId,
-                            cardName: cardName,
-                          );
-                        },
-                ),
-                Switch(
-                  value: isLocked,
-                  onChanged: !isEnabled
-                      ? null
-                      : (bool newValue) {
-                          _updateCardLockState(
-                            userId: userId,
-                            fieldName: fieldName,
-                            currentValue: isLocked,
-                            newValue: newValue,
-                          );
-                        },
-                ),
-              ],
-            ),
+        );
+      },
     );
   }
 
@@ -4989,7 +5193,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final bool wide = MediaQuery.of(context).size.width >= 900;
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: const Color(0xFF0F2B6F),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -5078,13 +5282,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         ],
       ),
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: <Color>[Color(0xFF08133F), Color(0xFF03081E)],
-          ),
-        ),
+        decoration: const BoxDecoration(color: Color(0xFF0F2B6F)),
         child: wide
             ? Row(
                 children: <Widget>[
