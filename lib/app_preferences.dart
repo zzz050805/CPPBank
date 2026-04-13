@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 class AppPreferences extends ChangeNotifier {
   AppPreferences._();
@@ -12,8 +13,20 @@ class AppPreferences extends ChangeNotifier {
   static const List<Locale> supportedLocales = [Locale('vi'), Locale('en')];
 
   void setLocale(Locale locale) {
-    if (_locale == locale) return;
+    if (_locale == locale) {
+      return;
+    }
     _locale = locale;
-    notifyListeners();
+
+    final SchedulerPhase phase = WidgetsBinding.instance.schedulerPhase;
+    if (phase == SchedulerPhase.idle ||
+        phase == SchedulerPhase.postFrameCallbacks) {
+      notifyListeners();
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      notifyListeners();
+    });
   }
 }

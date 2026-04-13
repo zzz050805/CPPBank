@@ -34,5 +34,12 @@
       "amount": {},
       "service": {}
     }
+  },
+  "notify_new_service_title": "Dịch vụ mới xuất hiện!",
+  "notify_new_service_body": "{serviceName} đã có mặt trên CCPBank. Khám phá ngay!",
+  "@notify_new_service_body": {
+    "placeholders": {
+      "serviceName": {}
+    }
   }
 }

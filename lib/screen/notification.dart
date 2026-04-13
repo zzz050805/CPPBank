@@ -109,6 +109,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
     return type == 'uu_dai' ||
         type == 'promotion' ||
         type == 'shopping_discount' ||
+        type == 'new_service' ||
         category == 'promotion';
   }
 
@@ -378,7 +379,9 @@ class _NotificationScreenState extends State<NotificationScreen> {
     QueryDocumentSnapshot<Map<String, dynamic>> doc,
   ) async {
     final Map<String, dynamic> data = doc.data();
-    final String serviceId = (data['serviceId'] ?? '').toString().trim();
+    final String serviceId = (data['serviceId'] ?? data['service_id'] ?? '')
+        .toString()
+        .trim();
 
     if (serviceId.isEmpty) {
       if (!mounted) {

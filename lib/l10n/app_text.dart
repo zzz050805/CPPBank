@@ -137,6 +137,14 @@ class AppText {
       'vi': 'Đã thanh toán {amount} cho dịch vụ {service}',
       'en': 'Paid {amount} for service {service}',
     },
+    'notify_new_service_title': <String, String>{
+      'vi': 'Dịch vụ mới xuất hiện!',
+      'en': 'New service arrived!',
+    },
+    'notify_new_service_body': <String, String>{
+      'vi': '{serviceName} đã có mặt trên CCPBank. Khám phá ngay!',
+      'en': '{serviceName} is now available on CCPBank. Explore now!',
+    },
   };
 
   static String tr(BuildContext context, String vi, String en) {

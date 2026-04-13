@@ -167,6 +167,7 @@ class _HomeScreenState extends State<HomeScreen> {
               title: title,
               body: body,
               lightVibration: true,
+              payload: _buildHeadsUpPayload(data),
             );
           }
         });
@@ -304,7 +305,9 @@ class _HomeScreenState extends State<HomeScreen> {
         ? rawTitle
         : (type == 'uu_dai'
               ? _t('Ưu đãi mới', 'New offer')
-              : _t('Thông báo mới', 'New notification'));
+              : (type == 'new_service'
+                    ? AppText.text(context, 'notify_new_service_title')
+                    : _t('Thông báo mới', 'New notification')));
 
     String titleKey = (data['titleKey'] ?? '').toString().trim();
     if (titleKey.isEmpty) {
@@ -330,12 +333,21 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String _resolveHeadsUpBody(Map<String, dynamic> data) {
     final String type = (data['type'] ?? '').toString().trim().toLowerCase();
+    final String serviceName = (data['serviceName'] ?? data['service'] ?? '')
+        .toString()
+        .trim();
     final String rawBody = (data['body'] ?? '').toString().trim();
     final String fallback = rawBody.isNotEmpty
         ? rawBody
         : (type == 'uu_dai'
               ? _t('Bạn vừa nhận được ưu đãi mới.', 'You received a new offer.')
-              : _t('Không có mô tả', 'No description'));
+              : (type == 'new_service'
+                    ? AppText.textWithParams(
+                        context,
+                        'notify_new_service_body',
+                        <String, String>{'serviceName': serviceName},
+                      )
+                    : _t('Không có mô tả', 'No description')));
 
     String bodyKey = (data['bodyKey'] ?? '').toString().trim();
     if (bodyKey.isEmpty) {
@@ -392,10 +404,35 @@ class _HomeScreenState extends State<HomeScreen> {
     return type == 'uu_dai' ||
         type == 'promotion' ||
         type == 'shopping_discount' ||
+        type == 'new_service' ||
         type == 'transfer' ||
         type == 'withdraw' ||
         type == 'shopping' ||
         category == 'promotion';
+  }
+
+  Map<String, dynamic>? _buildHeadsUpPayload(Map<String, dynamic> data) {
+    final String type = (data['type'] ?? '').toString().trim().toLowerCase();
+    if (type == 'new_service') {
+      final String serviceId =
+          (data['service_id'] ??
+                  data['serviceId'] ??
+                  data['targetServiceId'] ??
+                  '')
+              .toString()
+              .trim();
+      if (serviceId.isEmpty) {
+        return null;
+      }
+
+      return <String, dynamic>{
+        'type': 'new_service',
+        'service_id': serviceId,
+        'targetServiceId': serviceId,
+      };
+    }
+
+    return null;
   }
 
   bool _resolveTransferIsNegative(Map<String, dynamic> data, String uid) {

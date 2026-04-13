@@ -180,10 +180,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   @override
   void initState() {
     super.initState();
-    _servicesPricingStream = _adminCollection('services_pricing')
-        .where('kind', isEqualTo: 'shopping_bundle')
+    _servicesPricingStream = FirebaseFirestore.instance
+        .collection('services')
         .snapshots(includeMetadataChanges: true)
         .asBroadcastStream();
+
+    _bootstrapServicesData();
 
     _bannersStream = _adminCollection('home_banners')
         .orderBy('order', descending: false)
@@ -208,6 +210,201 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   CollectionReference<Map<String, dynamic>> _adminCollection(String path) {
     return _firestore.collection('admin').doc('settings').collection(path);
+  }
+
+  Future<void> _bootstrapServicesData() async {
+    await _restoreMissingServiceDocsFromLegacy();
+    await _cleanupDuplicateServiceNames();
+  }
+
+  Future<void> _restoreMissingServiceDocsFromLegacy() async {
+    try {
+      final QuerySnapshot<Map<String, dynamic>> servicesSnapshot =
+          await _firestore.collection('services').get();
+      final Set<String> existingDocIds = servicesSnapshot.docs
+          .map((QueryDocumentSnapshot<Map<String, dynamic>> doc) => doc.id)
+          .toSet();
+      final Set<String> existingLegacyIds = servicesSnapshot.docs
+          .map(
+            (QueryDocumentSnapshot<Map<String, dynamic>> doc) =>
+                (doc.data()['id'] ?? '').toString().trim(),
+          )
+          .where((String id) => id.isNotEmpty)
+          .toSet();
+
+      final QuerySnapshot<Map<String, dynamic>> legacySnapshot =
+          await _adminCollection(
+            'services_pricing',
+          ).where('kind', isEqualTo: 'shopping_bundle').get();
+
+      if (legacySnapshot.docs.isEmpty) {
+        return;
+      }
+
+      WriteBatch batch = _firestore.batch();
+      int operationCount = 0;
+
+      for (final QueryDocumentSnapshot<Map<String, dynamic>> legacyDoc
+          in legacySnapshot.docs) {
+        final Map<String, dynamic> legacy = legacyDoc.data();
+        final String legacyId =
+            (legacy['id'] ?? legacyDoc.id).toString().trim().isEmpty
+            ? legacyDoc.id
+            : (legacy['id'] ?? legacyDoc.id).toString().trim();
+
+        if (existingDocIds.contains(legacyId) ||
+            existingLegacyIds.contains(legacyId)) {
+          continue;
+        }
+
+        batch.set(
+          _firestore.collection('services').doc(legacyId),
+          <String, dynamic>{
+            ...legacy,
+            'id': legacyId,
+            'createdAt': legacy['createdAt'] ?? FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+
+        operationCount += 1;
+        if (operationCount >= 400) {
+          await batch.commit();
+          batch = _firestore.batch();
+          operationCount = 0;
+        }
+      }
+
+      if (operationCount > 0) {
+        await batch.commit();
+      }
+    } catch (_) {
+      // Keep dashboard usable even if legacy recovery fails.
+    }
+  }
+
+  String _normalizedServiceName(Map<String, dynamic> data, String fallbackId) {
+    final String name =
+        (data['nameVi'] ?? data['name'] ?? data['nameEn'] ?? fallbackId)
+            .toString()
+            .trim()
+            .toLowerCase();
+    return name;
+  }
+
+  DateTime _readServiceTimestamp(dynamic raw) {
+    if (raw is Timestamp) {
+      return raw.toDate();
+    }
+    if (raw is DateTime) {
+      return raw;
+    }
+    if (raw is int) {
+      if (raw.abs() < 100000000000) {
+        return DateTime.fromMillisecondsSinceEpoch(raw * 1000);
+      }
+      return DateTime.fromMillisecondsSinceEpoch(raw);
+    }
+    if (raw is String) {
+      final DateTime? parsed = DateTime.tryParse(raw);
+      if (parsed != null) {
+        return parsed;
+      }
+    }
+    return DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
+  Future<void> _cleanupDuplicateServiceNames() async {
+    try {
+      final QuerySnapshot<Map<String, dynamic>> snapshot = await _firestore
+          .collection('services')
+          .get();
+      if (snapshot.docs.length < 2) {
+        return;
+      }
+
+      final Map<String, List<QueryDocumentSnapshot<Map<String, dynamic>>>>
+      groups = <String, List<QueryDocumentSnapshot<Map<String, dynamic>>>>{};
+
+      for (final QueryDocumentSnapshot<Map<String, dynamic>> doc
+          in snapshot.docs) {
+        final String key = _normalizedServiceName(doc.data(), doc.id);
+        groups
+            .putIfAbsent(
+              key,
+              () => <QueryDocumentSnapshot<Map<String, dynamic>>>[],
+            )
+            .add(doc);
+      }
+
+      WriteBatch batch = _firestore.batch();
+      int operationCount = 0;
+
+      for (final List<QueryDocumentSnapshot<Map<String, dynamic>>> group
+          in groups.values) {
+        if (group.length < 2) {
+          continue;
+        }
+
+        group.sort((a, b) {
+          final DateTime aTime = _readServiceTimestamp(
+            a.data()['updatedAt'] ?? a.data()['createdAt'],
+          );
+          final DateTime bTime = _readServiceTimestamp(
+            b.data()['updatedAt'] ?? b.data()['createdAt'],
+          );
+          return bTime.compareTo(aTime);
+        });
+
+        final QueryDocumentSnapshot<Map<String, dynamic>> keeper = group.first;
+        final List<Map<String, dynamic>> mergedPackages =
+            <Map<String, dynamic>>[];
+        final Set<String> seenPackageKeys = <String>{};
+
+        for (final QueryDocumentSnapshot<Map<String, dynamic>> doc in group) {
+          final List<Map<String, dynamic>> rows = _parsePackageRows(
+            (doc.data()['packages'] as List<dynamic>?) ?? <dynamic>[],
+          );
+
+          for (final Map<String, dynamic> row in rows) {
+            final String key =
+                '${(row['title'] ?? '').toString().trim().toLowerCase()}|${row['price']}|${row['discountPercent']}';
+            if (seenPackageKeys.add(key)) {
+              mergedPackages.add(row);
+            }
+          }
+        }
+
+        if (mergedPackages.isNotEmpty) {
+          batch.set(keeper.reference, <String, dynamic>{
+            'packages': mergedPackages,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+          operationCount += 1;
+        }
+
+        for (int i = 1; i < group.length; i++) {
+          final QueryDocumentSnapshot<Map<String, dynamic>> duplicate =
+              group[i];
+          batch.delete(duplicate.reference);
+          batch.delete(_adminCollection('services_pricing').doc(duplicate.id));
+          operationCount += 2;
+
+          if (operationCount >= 400) {
+            await batch.commit();
+            batch = _firestore.batch();
+            operationCount = 0;
+          }
+        }
+      }
+
+      if (operationCount > 0) {
+        await batch.commit();
+      }
+    } catch (_) {
+      // Keep admin flow unaffected if cleanup fails.
+    }
   }
 
   String _formatVnd(int amount) {
@@ -334,6 +531,68 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         'serviceName': serviceName,
         'discountPercent': maxDiscount,
         'deepLink': 'shopping_service_detail',
+      });
+
+      operationCount += 1;
+      if (operationCount >= 400) {
+        await batch.commit();
+        batch = _firestore.batch();
+        operationCount = 0;
+      }
+    }
+
+    if (operationCount > 0) {
+      await batch.commit();
+    }
+  }
+
+  Future<void> _pushNewServiceNotifications({
+    required String serviceId,
+    required String serviceName,
+  }) async {
+    final QuerySnapshot<Map<String, dynamic>> usersSnapshot = await _firestore
+        .collection('users')
+        .get();
+
+    if (usersSnapshot.docs.isEmpty) {
+      return;
+    }
+
+    final String languageCode = AppText.systemLanguageCode();
+    final String title = AppText.textByCode(
+      languageCode,
+      'notify_new_service_title',
+    );
+    final String body = AppText.textByCodeWithParams(
+      languageCode,
+      'notify_new_service_body',
+      <String, String>{'serviceName': serviceName},
+    );
+
+    WriteBatch batch = _firestore.batch();
+    int operationCount = 0;
+
+    for (final QueryDocumentSnapshot<Map<String, dynamic>> userDoc
+        in usersSnapshot.docs) {
+      final DocumentReference<Map<String, dynamic>> notificationRef = userDoc
+          .reference
+          .collection('notifications')
+          .doc();
+
+      batch.set(notificationRef, <String, dynamic>{
+        'timestamp': FieldValue.serverTimestamp(),
+        'isRead': false,
+        'type': 'new_service',
+        'category': 'promotion',
+        'service_id': serviceId,
+        'serviceId': serviceId,
+        'serviceName': serviceName,
+        'titleKey': 'notify_new_service_title',
+        'bodyKey': 'notify_new_service_body',
+        'params': <String, dynamic>{'serviceName': serviceName},
+        'title': title,
+        'body': body,
+        'deepLink': 'shopping_store',
       });
 
       operationCount += 1;
@@ -2526,6 +2785,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
+      await _adminCollection(
+        'services_pricing',
+      ).doc(serviceId).set(<String, dynamic>{
+        'id': serviceId,
+        'kind': 'shopping_bundle',
+        'packages': nextPackages,
+        'discountPercent': FieldValue.delete(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
       await _pushShoppingDiscountNotifications(
         serviceId: serviceId,
         serviceName: serviceName,
@@ -2533,18 +2802,587 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       );
     }
 
-    for (final TextEditingController controller in titleControllers) {
-      controller.dispose();
+    // The dialog Future resolves before the pop animation fully settles.
+    // Dispose controllers after a short delay to avoid listener updates
+    // on already-disposed controllers during transition rebuilds.
+    _disposeTextControllersDeferred(<TextEditingController>[
+      ...titleControllers,
+      ...priceControllers,
+      ...discountControllers,
+      ...detachedControllers,
+    ]);
+  }
+
+  void _disposeTextControllersDeferred(List<TextEditingController> controls) {
+    Future<void>.delayed(const Duration(milliseconds: 350), () {
+      for (final TextEditingController controller in controls) {
+        try {
+          controller.dispose();
+        } catch (_) {
+          // Ignore double-dispose edge cases in debug teardown paths.
+        }
+      }
+    });
+  }
+
+  bool _isValidHttpUrl(String raw) {
+    final Uri? uri = Uri.tryParse(raw.trim());
+    if (uri == null) {
+      return false;
     }
-    for (final TextEditingController controller in priceControllers) {
-      controller.dispose();
+    final String scheme = uri.scheme.toLowerCase();
+    return (scheme == 'http' || scheme == 'https') && uri.host.isNotEmpty;
+  }
+
+  Future<void> _showAddServiceDialog(BuildContext parentContext) async {
+    final TextEditingController serviceNameController = TextEditingController();
+    final TextEditingController logoUrlController = TextEditingController();
+    final List<TextEditingController> titleControllers =
+        <TextEditingController>[TextEditingController()];
+    final List<TextEditingController> priceControllers =
+        <TextEditingController>[TextEditingController()];
+    final List<TextEditingController> discountControllers =
+        <TextEditingController>[TextEditingController()];
+    final List<TextEditingController> detachedControllers =
+        <TextEditingController>[];
+
+    String defaultPackageTitle(int index) {
+      return '${_t('Gói', 'Package')} ${index + 1}';
     }
-    for (final TextEditingController controller in discountControllers) {
-      controller.dispose();
+
+    Future<void> submit(BuildContext dialogContext) async {
+      final String serviceName = serviceNameController.text.trim();
+      final String logoUrl = logoUrlController.text.trim();
+
+      if (serviceName.isEmpty) {
+        ScaffoldMessenger.of(dialogContext).showSnackBar(
+          SnackBar(
+            content: Text(
+              _t(
+                'Tên dịch vụ không được để trống',
+                'Service name cannot be empty',
+              ),
+            ),
+          ),
+        );
+        return;
+      }
+
+      if (logoUrl.isEmpty) {
+        ScaffoldMessenger.of(dialogContext).showSnackBar(
+          SnackBar(
+            content: Text(
+              _t('Link logo không được để trống', 'Logo URL cannot be empty'),
+            ),
+          ),
+        );
+        return;
+      }
+
+      final List<Map<String, dynamic>> packages = <Map<String, dynamic>>[];
+      for (int i = 0; i < titleControllers.length; i++) {
+        final int price =
+            int.tryParse(
+              priceControllers[i].text.trim().replaceAll(RegExp(r'[^0-9]'), ''),
+            ) ??
+            0;
+        final int discountPercent = _sanitizeDiscountPercent(
+          discountControllers[i].text.trim(),
+        );
+        if (price <= 0) {
+          continue;
+        }
+
+        final String title = titleControllers[i].text.trim().isNotEmpty
+            ? titleControllers[i].text.trim()
+            : defaultPackageTitle(i);
+
+        packages.add(<String, dynamic>{
+          'title': title,
+          'price': price,
+          'discountPercent': discountPercent,
+        });
+      }
+
+      if (packages.isEmpty) {
+        ScaffoldMessenger.of(dialogContext).showSnackBar(
+          SnackBar(
+            content: Text(
+              _t(
+                'Danh sách gói phải có ít nhất 1 gói hợp lệ',
+                'Please add at least one valid package',
+              ),
+            ),
+          ),
+        );
+        return;
+      }
+
+      try {
+        final Map<String, dynamic> servicePayload = <String, dynamic>{
+          'kind': 'shopping_bundle',
+          'category': 'shopping_entertainment',
+          'name': serviceName,
+          'nameVi': serviceName,
+          'nameEn': serviceName,
+          'logoPath': logoUrl,
+          'packages': packages,
+          'isActive': true,
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        };
+
+        final DocumentReference<Map<String, dynamic>> createdServiceRef =
+            await FirebaseFirestore.instance
+                .collection('services')
+                .add(servicePayload);
+
+        await _adminCollection(
+          'services_pricing',
+        ).doc(createdServiceRef.id).set(<String, dynamic>{
+          ...servicePayload,
+          'id': createdServiceRef.id,
+        }, SetOptions(merge: true));
+
+        await _pushNewServiceNotifications(
+          serviceId: createdServiceRef.id,
+          serviceName: serviceName,
+        );
+
+        if (!dialogContext.mounted) {
+          return;
+        }
+        Navigator.pop(dialogContext);
+
+        if (!parentContext.mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(parentContext).showSnackBar(
+          SnackBar(
+            content: Text(
+              _t('Tạo mới dịch vụ thành công', 'Service created successfully'),
+            ),
+          ),
+        );
+      } catch (_) {
+        if (!dialogContext.mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(dialogContext).showSnackBar(
+          SnackBar(
+            content: Text(
+              _t(
+                'Không thể tạo dịch vụ mới, vui lòng thử lại',
+                'Unable to create new service, please try again',
+              ),
+            ),
+          ),
+        );
+      }
     }
-    for (final TextEditingController controller in detachedControllers) {
-      controller.dispose();
-    }
+
+    await showDialog<void>(
+      context: parentContext,
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setDialogState) {
+            final String logoUrl = logoUrlController.text.trim();
+            final bool canPreviewLogo = _isValidHttpUrl(logoUrl);
+
+            return Stack(
+              children: <Widget>[
+                Positioned.fill(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                    child: Container(
+                      color: Colors.black.withValues(alpha: 0.16),
+                    ),
+                  ),
+                ),
+                Center(
+                  child: Dialog(
+                    backgroundColor: Colors.white.withValues(alpha: 0.92),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(18),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 560),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            Text(
+                              _t('Tạo mới dịch vụ', 'Create new service'),
+                              style: GoogleFonts.poppins(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Expanded(
+                              child: SingleChildScrollView(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: <Widget>[
+                                    TextField(
+                                      controller: serviceNameController,
+                                      decoration: InputDecoration(
+                                        labelText: _t(
+                                          'Tên dịch vụ / Sản phẩm',
+                                          'Service / Product name',
+                                        ),
+                                        hintText: _t(
+                                          'Ví dụ: Youtube Premium',
+                                          'Example: Youtube Premium',
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.end,
+                                      children: <Widget>[
+                                        Expanded(
+                                          child: TextField(
+                                            controller: logoUrlController,
+                                            onChanged: (_) {
+                                              setDialogState(() {});
+                                            },
+                                            decoration: InputDecoration(
+                                              labelText: _t(
+                                                'Link ảnh Logo (URL)',
+                                                'Logo image link (URL)',
+                                              ),
+                                              hintText: _t(
+                                                'Ví dụ: https://...',
+                                                'Example: https://...',
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Container(
+                                          width: 42,
+                                          height: 42,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: const Color(0xFFF8FAFC),
+                                            border: Border.all(
+                                              color: const Color(0xFFE5E7EB),
+                                            ),
+                                          ),
+                                          clipBehavior: Clip.antiAlias,
+                                          child: canPreviewLogo
+                                              ? Image.network(
+                                                  logoUrl,
+                                                  fit: BoxFit.cover,
+                                                  errorBuilder:
+                                                      (
+                                                        BuildContext context,
+                                                        Object error,
+                                                        StackTrace? stackTrace,
+                                                      ) {
+                                                        return Icon(
+                                                          Icons.image_outlined,
+                                                          color: Colors
+                                                              .grey
+                                                              .shade500,
+                                                          size: 18,
+                                                        );
+                                                      },
+                                                )
+                                              : Icon(
+                                                  Icons.image_outlined,
+                                                  color: Colors.grey.shade500,
+                                                  size: 18,
+                                                ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 14),
+                                    const Divider(height: 1),
+                                    const SizedBox(height: 14),
+                                    Text(
+                                      _t('Danh sách các gói', 'Package list'),
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    Column(
+                                      children: List<Widget>.generate(titleControllers.length, (
+                                        int index,
+                                      ) {
+                                        return Padding(
+                                          key: ValueKey<TextEditingController>(
+                                            titleControllers[index],
+                                          ),
+                                          padding: const EdgeInsets.only(
+                                            bottom: 10,
+                                          ),
+                                          child: Container(
+                                            padding: const EdgeInsets.all(10),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFF8FAFC),
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                              border: Border.all(
+                                                color: const Color(0xFFE5E7EB),
+                                              ),
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: <Widget>[
+                                                Row(
+                                                  children: <Widget>[
+                                                    Expanded(
+                                                      child: Text(
+                                                        '${_t('Gói', 'Package')} ${index + 1}',
+                                                        style:
+                                                            GoogleFonts.poppins(
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w700,
+                                                              fontSize: 12,
+                                                            ),
+                                                      ),
+                                                    ),
+                                                    if (titleControllers
+                                                            .length >
+                                                        1)
+                                                      IconButton(
+                                                        onPressed: () {
+                                                          FocusScope.of(
+                                                            dialogContext,
+                                                          ).unfocus();
+                                                          setDialogState(() {
+                                                            final TextEditingController
+                                                            removedTitle =
+                                                                titleControllers
+                                                                    .removeAt(
+                                                                      index,
+                                                                    );
+                                                            final TextEditingController
+                                                            removedPrice =
+                                                                priceControllers
+                                                                    .removeAt(
+                                                                      index,
+                                                                    );
+                                                            final TextEditingController
+                                                            removedDiscount =
+                                                                discountControllers
+                                                                    .removeAt(
+                                                                      index,
+                                                                    );
+
+                                                            detachedControllers
+                                                                .add(
+                                                                  removedTitle,
+                                                                );
+                                                            detachedControllers
+                                                                .add(
+                                                                  removedPrice,
+                                                                );
+                                                            detachedControllers
+                                                                .add(
+                                                                  removedDiscount,
+                                                                );
+                                                          });
+                                                        },
+                                                        icon: const Icon(
+                                                          Icons
+                                                              .delete_outline_rounded,
+                                                          size: 18,
+                                                        ),
+                                                        tooltip: _t(
+                                                          'Xóa gói',
+                                                          'Remove package',
+                                                        ),
+                                                      ),
+                                                  ],
+                                                ),
+                                                const SizedBox(height: 8),
+                                                TextField(
+                                                  controller:
+                                                      titleControllers[index],
+                                                  decoration: InputDecoration(
+                                                    labelText: _t(
+                                                      'Tên gói',
+                                                      'Package title',
+                                                    ),
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 8),
+                                                TextField(
+                                                  controller:
+                                                      priceControllers[index],
+                                                  keyboardType:
+                                                      TextInputType.number,
+                                                  decoration: InputDecoration(
+                                                    labelText: _t(
+                                                      'Giá gốc',
+                                                      'Original price',
+                                                    ),
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 8),
+                                                TextField(
+                                                  controller:
+                                                      discountControllers[index],
+                                                  keyboardType:
+                                                      TextInputType.number,
+                                                  decoration: InputDecoration(
+                                                    labelText: _t(
+                                                      '% Giảm giá (0-100)',
+                                                      'Discount % (0-100)',
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        );
+                                      }),
+                                    ),
+                                    Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: OutlinedButton.icon(
+                                        onPressed: () {
+                                          setDialogState(() {
+                                            titleControllers.add(
+                                              TextEditingController(),
+                                            );
+                                            priceControllers.add(
+                                              TextEditingController(),
+                                            );
+                                            discountControllers.add(
+                                              TextEditingController(),
+                                            );
+                                          });
+                                        },
+                                        icon: const Icon(Icons.add_rounded),
+                                        label: Text(
+                                          _t('Thêm gói', 'Add package'),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: <Widget>[
+                                TextButton(
+                                  onPressed: () => Navigator.pop(dialogContext),
+                                  child: Text(
+                                    _t('Đóng', 'Close'),
+                                    style: GoogleFonts.poppins(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                _gradientActionButton(
+                                  label: _t('Lưu', 'Save'),
+                                  icon: Icons.save_rounded,
+                                  onPressed: () async {
+                                    await submit(dialogContext);
+                                  },
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    _disposeTextControllersDeferred(<TextEditingController>[
+      serviceNameController,
+      logoUrlController,
+      ...titleControllers,
+      ...priceControllers,
+      ...discountControllers,
+      ...detachedControllers,
+    ]);
+  }
+
+  Future<void> _showDeleteConfirmDialog(
+    BuildContext parentContext,
+    String documentId,
+    String serviceName,
+  ) async {
+    await showDialog<void>(
+      context: parentContext,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: Text(
+            _t('Xác nhận xóa', 'Confirm deletion'),
+            style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
+          ),
+          content: Text(
+            _t(
+              'Bạn có chắc chắn muốn xóa dịch vụ $serviceName không? Hành động này không thể hoàn tác và sẽ xóa dịch vụ khỏi màn hình của người dùng ngay lập tức.',
+              'Are you sure you want to delete service $serviceName? This action cannot be undone and will remove the service from user screens immediately.',
+            ),
+            style: GoogleFonts.poppins(fontSize: 13),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(_t('Hủy', 'Cancel')),
+            ),
+            TextButton(
+              onPressed: () async {
+                await FirebaseFirestore.instance
+                    .collection('services')
+                    .doc(documentId)
+                    .delete();
+
+                await _adminCollection(
+                  'services_pricing',
+                ).doc(documentId).delete();
+
+                if (!dialogContext.mounted) {
+                  return;
+                }
+                Navigator.pop(dialogContext);
+
+                if (!parentContext.mounted) {
+                  return;
+                }
+                ScaffoldMessenger.of(parentContext).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      _t(
+                        'Đã xóa dịch vụ thành công',
+                        'Service deleted successfully',
+                      ),
+                    ),
+                  ),
+                );
+              },
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: Text(
+                _t('Xóa', 'Delete'),
+                style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> _editBanner(
@@ -3290,16 +4128,28 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       ],
                     ),
                   ),
-                  IconButton(
-                    tooltip: _t('Chỉnh sửa giá', 'Edit prices'),
-                    onPressed: () => _editPackagePrices(
-                      ref: doc.reference,
-                      serviceId: doc.id,
-                      serviceName: name,
-                      currentData: data,
-                    ),
-                    icon: const Icon(Icons.edit_rounded),
-                    color: _primaryBlue,
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      IconButton(
+                        tooltip: _t('Chỉnh sửa giá', 'Edit prices'),
+                        onPressed: () => _editPackagePrices(
+                          ref: doc.reference,
+                          serviceId: doc.id,
+                          serviceName: name,
+                          currentData: data,
+                        ),
+                        icon: const Icon(Icons.edit_rounded),
+                        color: _primaryBlue,
+                      ),
+                      IconButton(
+                        tooltip: _t('Xóa dịch vụ', 'Delete service'),
+                        onPressed: () =>
+                            _showDeleteConfirmDialog(context, doc.id, name),
+                        icon: const Icon(Icons.delete_outline_rounded),
+                        color: Colors.red,
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -4077,6 +4927,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ),
               ],
             ),
+      floatingActionButton: _selectedTab == 2
+          ? FloatingActionButton(
+              onPressed: () => _showAddServiceDialog(context),
+              backgroundColor: _primaryBlue,
+              child: const Icon(Icons.add, color: Colors.white),
+            )
+          : null,
     );
   }
 }

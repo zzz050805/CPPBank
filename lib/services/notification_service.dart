@@ -1,5 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'dart:convert';
+
+@pragma('vm:entry-point')
+void notificationTapBackground(NotificationResponse response) {
+  // No-op: foreground callback handles in-app navigation payload.
+}
 
 class NotificationService {
   NotificationService._internal();
@@ -12,6 +18,8 @@ class NotificationService {
       FlutterLocalNotificationsPlugin();
   bool _isInitialized = false;
   bool _permissionGranted = true;
+  void Function(Map<String, dynamic> payload)? _onTapPayload;
+  Map<String, dynamic>? _pendingTapPayload;
 
   static const int _maxNotificationId = 2147483647;
   static const String _channelId = 'high_importance_channel_v3';
@@ -117,18 +125,81 @@ class NotificationService {
       iOS: iosSettings,
     );
 
-    await _plugin.initialize(initSettings);
+    await _plugin.initialize(
+      initSettings,
+      onDidReceiveNotificationResponse: _onNotificationTapped,
+      onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
+    );
     await _recreateAndroidChannelIfNeeded();
 
     await _requestPermissions(askIfNeeded: true);
 
+    final NotificationAppLaunchDetails? launchDetails = await _plugin
+        .getNotificationAppLaunchDetails();
+    if (launchDetails?.didNotificationLaunchApp == true) {
+      final String? payload = launchDetails?.notificationResponse?.payload
+          ?.trim();
+      if (payload != null && payload.isNotEmpty) {
+        _dispatchTapPayload(payload);
+      }
+    }
+
     _isInitialized = true;
+  }
+
+  void setOnNotificationTapHandler(
+    void Function(Map<String, dynamic> payload)? handler,
+  ) {
+    _onTapPayload = handler;
+    final Map<String, dynamic>? pending = _pendingTapPayload;
+    if (handler != null && pending != null) {
+      _pendingTapPayload = null;
+      handler(pending);
+    }
+  }
+
+  void _onNotificationTapped(NotificationResponse response) {
+    final String payload = (response.payload ?? '').trim();
+    if (payload.isEmpty) {
+      return;
+    }
+    _dispatchTapPayload(payload);
+  }
+
+  void _dispatchTapPayload(String rawPayload) {
+    try {
+      final dynamic decoded = jsonDecode(rawPayload);
+      if (decoded is! Map) {
+        return;
+      }
+
+      final Map<String, dynamic> payload = <String, dynamic>{};
+      decoded.forEach((dynamic key, dynamic value) {
+        final String k = key.toString().trim();
+        if (k.isEmpty) {
+          return;
+        }
+        payload[k] = value;
+      });
+
+      final void Function(Map<String, dynamic> payload)? handler =
+          _onTapPayload;
+      if (handler != null) {
+        handler(payload);
+        return;
+      }
+
+      _pendingTapPayload = payload;
+    } catch (_) {
+      // Ignore malformed payload.
+    }
   }
 
   Future<bool> showNotification({
     required String title,
     required String body,
     bool lightVibration = false,
+    Map<String, dynamic>? payload,
   }) async {
     if (!_isInitialized) {
       await init();
@@ -174,7 +245,13 @@ class NotificationService {
       iOS: iosDetails,
     );
 
-    await _plugin.show(_nextNotificationId(), title, body, details);
+    await _plugin.show(
+      _nextNotificationId(),
+      title,
+      body,
+      details,
+      payload: payload == null ? null : jsonEncode(payload),
+    );
 
     debugPrint('System notification shown: $title');
     return true;

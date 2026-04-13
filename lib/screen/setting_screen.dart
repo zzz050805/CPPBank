@@ -668,8 +668,6 @@ class _SettingScreenState extends State<SettingScreen> {
 
     if (selected == null) return;
     AppPreferences.instance.setLocale(selected);
-    if (!mounted) return;
-    setState(() {});
   }
 
   Widget _buildToggleItem(

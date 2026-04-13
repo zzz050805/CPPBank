@@ -92,32 +92,40 @@ List<ServicePackageOption> _readPackageOptions(List<dynamic> rawPackages) {
   return parsed;
 }
 
+bool _isShoppingBundleDoc(Map<String, dynamic> data) {
+  final String kind = (data['kind'] ?? 'shopping_bundle').toString().trim();
+  return kind.isEmpty || kind == 'shopping_bundle';
+}
+
+Stream<QuerySnapshot<Map<String, dynamic>>> shoppingServicesQueryStream() {
+  return FirebaseFirestore.instance.collection('services').snapshots();
+}
+
 Stream<Map<String, ServicePricingData>> shoppingPricingStream() {
-  return FirebaseFirestore.instance
-      .collection('admin')
-      .doc('settings')
-      .collection('services_pricing')
-      .where('kind', isEqualTo: 'shopping_bundle')
-      .snapshots()
-      .map((QuerySnapshot<Map<String, dynamic>> snapshot) {
-        final Map<String, ServicePricingData> pricing =
-            <String, ServicePricingData>{};
+  return shoppingServicesQueryStream().map((
+    QuerySnapshot<Map<String, dynamic>> snapshot,
+  ) {
+    final Map<String, ServicePricingData> pricing =
+        <String, ServicePricingData>{};
 
-        for (final QueryDocumentSnapshot<Map<String, dynamic>> doc
-            in snapshot.docs) {
-          final Map<String, dynamic> data = doc.data();
-          final List<ServicePackageOption> packages = _readPackageOptions(
-            (data['packages'] as List<dynamic>?) ?? <dynamic>[],
-          );
-          if (packages.isEmpty) {
-            continue;
-          }
+    for (final QueryDocumentSnapshot<Map<String, dynamic>> doc
+        in snapshot.docs) {
+      final Map<String, dynamic> data = doc.data();
+      if (!_isShoppingBundleDoc(data)) {
+        continue;
+      }
+      final List<ServicePackageOption> packages = _readPackageOptions(
+        (data['packages'] as List<dynamic>?) ?? <dynamic>[],
+      );
+      if (packages.isEmpty) {
+        continue;
+      }
 
-          pricing[doc.id] = ServicePricingData(packages: packages);
-        }
+      pricing[doc.id] = ServicePricingData(packages: packages);
+    }
 
-        return pricing;
-      });
+    return pricing;
+  });
 }
 
 int discountedPrice(int originalPrice, int discountPercent) {
@@ -148,19 +156,44 @@ class _ShoppingStoreScreenState extends State<ShoppingStoreScreen> {
   static const double _estimatedSectionExtent = 220;
 
   final ScrollController _scrollController = ScrollController();
+  List<ServiceModel> _currentServices = <ServiceModel>[];
   String? _highlightedServiceId;
   bool _didConsumeRouteArgs = false;
-  bool _didOpenTargetBottomSheet = false;
   bool _isPackageSheetOpen = false;
+
+  static final Map<String, ServiceModel> _serviceTemplateById =
+      <String, ServiceModel>{
+        for (final ServiceModel service in shoppingServices)
+          service.id: service,
+      };
+
+  static const List<ServiceAccountField> _defaultDynamicAccountFields =
+      <ServiceAccountField>[
+        ServiceAccountField(
+          id: 'email',
+          label: <String, String>{'vi': 'Email', 'en': 'Email'},
+          hint: <String, String>{
+            'vi': 'Nhap email tai khoan dich vu',
+            'en': 'Enter service account email',
+          },
+          type: ServiceAccountInputType.email,
+          regexPattern: r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+          errorText: <String, String>{
+            'vi': 'Vui long nhap Email hop le.',
+            'en': 'Please enter a valid email address.',
+          },
+        ),
+      ];
 
   @override
   void initState() {
     super.initState();
-    _highlightedServiceId = widget.isFromNotification
-        ? widget.targetServiceId?.trim()
-        : null;
-
-    if (_highlightedServiceId != null && _highlightedServiceId!.isNotEmpty) {
+    _currentServices = List<ServiceModel>.from(shoppingServices);
+    final String initialTarget = widget.isFromNotification
+        ? (widget.targetServiceId ?? '').trim()
+        : '';
+    if (initialTarget.isNotEmpty) {
+      _activateHighlight(initialTarget, fromInit: true);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _scrollToHighlightedService();
       });
@@ -196,12 +229,28 @@ class _ShoppingStoreScreenState extends State<ShoppingStoreScreen> {
       return;
     }
 
-    setState(() {
-      _highlightedServiceId = targetId;
-      _didOpenTargetBottomSheet = false;
-    });
+    _activateHighlight(targetId);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToHighlightedService();
+    });
+  }
+
+  void _activateHighlight(String targetId, {bool fromInit = false}) {
+    if (fromInit) {
+      _highlightedServiceId = targetId;
+    } else {
+      setState(() {
+        _highlightedServiceId = targetId;
+      });
+    }
+
+    Future<void>.delayed(const Duration(seconds: 3), () {
+      if (!mounted || _highlightedServiceId != targetId) {
+        return;
+      }
+      setState(() {
+        _highlightedServiceId = null;
+      });
     });
   }
 
@@ -211,7 +260,7 @@ class _ShoppingStoreScreenState extends State<ShoppingStoreScreen> {
       return;
     }
 
-    final int targetIndex = shoppingServices.indexWhere(
+    final int targetIndex = _currentServices.indexWhere(
       (ServiceModel service) => service.id == targetId,
     );
     if (targetIndex < 0 || !_scrollController.hasClients) {
@@ -250,6 +299,135 @@ class _ShoppingStoreScreenState extends State<ShoppingStoreScreen> {
       symbol: 'đ',
       decimalDigits: 0,
     ).format(amount);
+  }
+
+  List<ServiceModel> _servicesFromSnapshot(
+    QuerySnapshot<Map<String, dynamic>> snapshot,
+  ) {
+    final List<QueryDocumentSnapshot<Map<String, dynamic>>> docs =
+        snapshot.docs
+            .where((QueryDocumentSnapshot<Map<String, dynamic>> doc) {
+              return _isShoppingBundleDoc(doc.data());
+            })
+            .toList(growable: false)
+          ..sort((a, b) {
+            final String aName =
+                (a.data()['nameVi'] ?? a.data()['name'] ?? a.id).toString();
+            final String bName =
+                (b.data()['nameVi'] ?? b.data()['name'] ?? b.id).toString();
+            return aName.compareTo(bName);
+          });
+
+    if (docs.isEmpty) {
+      return List<ServiceModel>.from(shoppingServices);
+    }
+
+    return docs
+        .map((QueryDocumentSnapshot<Map<String, dynamic>> doc) {
+          return _serviceFromDoc(doc);
+        })
+        .toList(growable: false);
+  }
+
+  ServiceModel _serviceFromDoc(
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
+    final Map<String, dynamic> data = doc.data();
+    final String templateId = (data['id'] ?? '').toString().trim();
+    final ServiceModel? template =
+        _serviceTemplateById[templateId] ?? _serviceTemplateById[doc.id];
+
+    final String nameVi =
+        (data['nameVi'] ?? data['name'] ?? template?.name['vi'] ?? doc.id)
+            .toString()
+            .trim();
+    final String nameEn =
+        (data['nameEn'] ?? data['name'] ?? template?.name['en'] ?? nameVi)
+            .toString()
+            .trim();
+    final String logoPath = (data['logoPath'] ?? template?.logoPath ?? '')
+        .toString()
+        .trim();
+    final String descVi =
+        (data['descriptionVi'] ??
+                data['description'] ??
+                template?.description['vi'] ??
+                'Dich vu so')
+            .toString()
+            .trim();
+    final String descEn =
+        (data['descriptionEn'] ??
+                data['description'] ??
+                template?.description['en'] ??
+                'Digital service')
+            .toString()
+            .trim();
+
+    final List<ServicePackageOption> packageOptions = _readPackageOptions(
+      (data['packages'] as List<dynamic>?) ?? <dynamic>[],
+    );
+    final List<int> packages = packageOptions.isNotEmpty
+        ? packageOptions
+              .map((ServicePackageOption option) => option.price)
+              .toList(growable: false)
+        : (template?.packages ?? <int>[50000]);
+
+    return ServiceModel(
+      id: doc.id,
+      name: <String, String>{
+        'vi': nameVi.isEmpty ? doc.id : nameVi,
+        'en': nameEn.isEmpty ? (nameVi.isEmpty ? doc.id : nameVi) : nameEn,
+      },
+      logoPath: logoPath,
+      description: <String, String>{
+        'vi': descVi.isEmpty ? 'Dich vu so' : descVi,
+        'en': descEn.isEmpty ? 'Digital service' : descEn,
+      },
+      packages: packages,
+      accountFields: (template?.accountFields.isNotEmpty ?? false)
+          ? template!.accountFields
+          : _defaultDynamicAccountFields,
+    );
+  }
+
+  Widget _buildServiceLogo(
+    String logoPath, {
+    required double iconSize,
+    required IconData fallbackIcon,
+  }) {
+    if (logoPath.startsWith('http://') || logoPath.startsWith('https://')) {
+      return Image.network(
+        logoPath,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            color: const Color(0xFFF2F4F7),
+            alignment: Alignment.center,
+            child: Icon(
+              fallbackIcon,
+              size: iconSize,
+              color: const Color(0xFF98A2B3),
+            ),
+          );
+        },
+      );
+    }
+
+    return Image.asset(
+      logoPath,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) {
+        return Container(
+          color: const Color(0xFFF2F4F7),
+          alignment: Alignment.center,
+          child: Icon(
+            fallbackIcon,
+            size: iconSize,
+            color: const Color(0xFF98A2B3),
+          ),
+        );
+      },
+    );
   }
 
   List<ServicePackageOption> _effectivePackages(
@@ -373,6 +551,7 @@ class _ShoppingStoreScreenState extends State<ShoppingStoreScreen> {
   Widget _buildServiceGridCard(
     ServiceModel service,
     Map<String, ServicePricingData> pricing,
+    bool isHighlighted,
   ) {
     final String languageCode = AppTranslations.currentLanguageCode(context);
     final String subtitle = _serviceSubtitle(context, service);
@@ -383,6 +562,7 @@ class _ShoppingStoreScreenState extends State<ShoppingStoreScreen> {
     final bool hasSale = packageOptions.any(
       (ServicePackageOption option) => option.discountPercent > 0,
     );
+    final String newBadgeLabel = languageCode == 'vi' ? 'MỚI' : 'NEW';
 
     return InkWell(
       borderRadius: BorderRadius.circular(16),
@@ -410,6 +590,29 @@ class _ShoppingStoreScreenState extends State<ShoppingStoreScreen> {
         ),
         child: Stack(
           children: <Widget>[
+            if (isHighlighted)
+              Positioned(
+                top: 0,
+                right: 0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF97316),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    newBadgeLabel,
+                    style: GoogleFonts.poppins(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
             Align(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -428,20 +631,10 @@ class _ShoppingStoreScreenState extends State<ShoppingStoreScreen> {
                       ],
                     ),
                     child: ClipOval(
-                      child: Image.asset(
+                      child: _buildServiceLogo(
                         service.logoPath,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Container(
-                            color: const Color(0xFFF2F4F7),
-                            alignment: Alignment.center,
-                            child: const Icon(
-                              Icons.image_not_supported_outlined,
-                              size: 22,
-                              color: Color(0xFF98A2B3),
-                            ),
-                          );
-                        },
+                        iconSize: 22,
+                        fallbackIcon: Icons.image_not_supported_outlined,
                       ),
                     ),
                   ),
@@ -716,20 +909,10 @@ class _ShoppingStoreScreenState extends State<ShoppingStoreScreen> {
                           ],
                         ),
                         child: ClipOval(
-                          child: Image.asset(
+                          child: _buildServiceLogo(
                             service.logoPath,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Container(
-                                color: const Color(0xFFF2F4F7),
-                                alignment: Alignment.center,
-                                child: const Icon(
-                                  Icons.image_not_supported_outlined,
-                                  size: 18,
-                                  color: Color(0xFF98A2B3),
-                                ),
-                              );
-                            },
+                            iconSize: 18,
+                            fallbackIcon: Icons.image_not_supported_outlined,
                           ),
                         ),
                       ),
@@ -856,20 +1039,10 @@ class _ShoppingStoreScreenState extends State<ShoppingStoreScreen> {
               ],
             ),
             child: ClipOval(
-              child: Image.asset(
+              child: _buildServiceLogo(
                 service.logoPath,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    color: const Color(0xFFF2F4F7),
-                    alignment: Alignment.center,
-                    child: const Icon(
-                      Icons.image_outlined,
-                      size: 18,
-                      color: Color(0xFF98A2B3),
-                    ),
-                  );
-                },
+                iconSize: 18,
+                fallbackIcon: Icons.image_outlined,
               ),
             ),
           ),
@@ -1011,40 +1184,53 @@ class _ShoppingStoreScreenState extends State<ShoppingStoreScreen> {
         ),
       ),
       backgroundColor: const Color(0xFFF4F6FB),
-      body: StreamBuilder<Map<String, ServicePricingData>>(
-        stream: shoppingPricingStream(),
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: shoppingServicesQueryStream(),
         builder:
             (
               BuildContext context,
-              AsyncSnapshot<Map<String, ServicePricingData>> snapshot,
+              AsyncSnapshot<QuerySnapshot<Map<String, dynamic>>> snapshot,
             ) {
+              if (!snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              final QuerySnapshot<Map<String, dynamic>> serviceSnapshot =
+                  snapshot.data!;
               final Map<String, ServicePricingData> pricing =
-                  snapshot.data ?? <String, ServicePricingData>{};
-
-              final String? targetId = _highlightedServiceId;
-              if (targetId != null &&
-                  targetId.isNotEmpty &&
-                  !_didOpenTargetBottomSheet) {
-                _didOpenTargetBottomSheet = true;
-
-                ServiceModel? targetService;
-                for (final ServiceModel service in shoppingServices) {
-                  if (service.id == targetId) {
-                    targetService = service;
-                    break;
-                  }
+                  <String, ServicePricingData>{};
+              for (final QueryDocumentSnapshot<Map<String, dynamic>> doc
+                  in serviceSnapshot.docs) {
+                final Map<String, dynamic> data = doc.data();
+                if (!_isShoppingBundleDoc(data)) {
+                  continue;
                 }
 
-                if (targetService != null) {
-                  final ServiceModel resolvedService = targetService;
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (!mounted) {
-                      return;
-                    }
-                    _showServicePackagesSheet(resolvedService);
-                    _highlightedServiceId = null;
-                  });
+                final List<ServicePackageOption> packages = _readPackageOptions(
+                  (data['packages'] as List<dynamic>?) ?? <dynamic>[],
+                );
+                if (packages.isEmpty) {
+                  continue;
                 }
+                pricing[doc.id] = ServicePricingData(packages: packages);
+              }
+
+              final List<ServiceModel> services = _servicesFromSnapshot(
+                serviceSnapshot,
+              );
+              _currentServices = services;
+
+              if (services.isEmpty) {
+                return Center(
+                  child: Text(
+                    AppTranslations.getText(context, 'service_not_found'),
+                    style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: const Color(0xFF64748B),
+                    ),
+                  ),
+                );
               }
 
               return GridView.builder(
@@ -1055,95 +1241,36 @@ class _ShoppingStoreScreenState extends State<ShoppingStoreScreen> {
                   mainAxisSpacing: 12,
                   childAspectRatio: 1.15,
                 ),
-                itemCount: shoppingServices.length,
+                itemCount: services.length,
                 itemBuilder: (BuildContext context, int index) {
-                  final ServiceModel service = shoppingServices[index];
-                  return _buildServiceGridCard(service, pricing);
+                  final ServiceModel service = services[index];
+                  final bool isHighlighted =
+                      service.id == _highlightedServiceId;
+                  final Widget card = _buildServiceGridCard(
+                    service,
+                    pricing,
+                    isHighlighted,
+                  );
+
+                  if (!isHighlighted) {
+                    return card;
+                  }
+
+                  return TweenAnimationBuilder<double>(
+                    tween: Tween<double>(begin: 1, end: 1.1),
+                    duration: const Duration(milliseconds: 700),
+                    curve: Curves.easeOutBack,
+                    builder:
+                        (BuildContext context, double scale, Widget? child) {
+                          return Transform.scale(scale: scale, child: child);
+                        },
+                    child: card,
+                  );
                 },
               );
             },
       ),
     );
-  }
-}
-
-class _ServiceItemPulse extends StatefulWidget {
-  const _ServiceItemPulse({required this.child, required this.active});
-
-  final Widget child;
-  final bool active;
-
-  @override
-  State<_ServiceItemPulse> createState() => _ServiceItemPulseState();
-}
-
-class _ServiceItemPulseState extends State<_ServiceItemPulse>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<double> _scale;
-  bool _isPulsing = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 320),
-    );
-    _scale = Tween<double>(
-      begin: 1,
-      end: 1.1,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
-
-    if (widget.active) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _runPulse();
-      });
-    }
-  }
-
-  @override
-  void didUpdateWidget(covariant _ServiceItemPulse oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.active && !oldWidget.active) {
-      _runPulse();
-    }
-    if (!widget.active && oldWidget.active) {
-      _controller.stop();
-      _controller.value = 0;
-      _isPulsing = false;
-    }
-  }
-
-  Future<void> _runPulse() async {
-    if (_isPulsing || !widget.active || !mounted) {
-      return;
-    }
-    _isPulsing = true;
-
-    for (int i = 0; i < 3; i++) {
-      if (!mounted || !widget.active) {
-        break;
-      }
-      await _controller.forward(from: 0);
-      if (!mounted || !widget.active) {
-        break;
-      }
-      await _controller.reverse();
-    }
-
-    _isPulsing = false;
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return ScaleTransition(scale: _scale, child: widget.child);
   }
 }
 
