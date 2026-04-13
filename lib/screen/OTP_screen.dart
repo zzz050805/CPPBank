@@ -30,7 +30,7 @@ class OtpScreen extends StatefulWidget {
   State<OtpScreen> createState() => _OtpScreenState();
 }
 
-/// Gi? tuong thích v?i các màn cu dang dùng OTPScreen.
+/// Giữ tương thích với các màn cũ đang dùng OTPScreen.
 class OTPScreen extends OtpScreen {
   const OTPScreen({super.key, required super.phoneNumber});
 }
@@ -94,8 +94,7 @@ class _OtpScreenState extends State<OtpScreen> {
     await Future.delayed(const Duration(seconds: 1));
     await NotificationService().showNotification(
       title: 'CCP BANK',
-      body:
-          'Mă OTP c?a b?n là $otp. Vui ḷng không chia s? cho b?t k? ai.',
+      body: 'Mã OTP của bạn là $otp. Vui lòng không chia sẻ cho bất kỳ ai.',
     );
 
     if (!mounted) return;
@@ -107,7 +106,7 @@ class _OtpScreenState extends State<OtpScreen> {
       SnackBar(
         content: Text(
           _t(
-            'OTP dă du?c g?i qua thông báo h? th?ng.',
+            'OTP đã được gửi qua thông báo hệ thống.',
             'OTP was sent via system notification.',
           ),
           style: GoogleFonts.poppins(),
@@ -175,7 +174,7 @@ class _OtpScreenState extends State<OtpScreen> {
         SnackBar(
           content: Text(
             _t(
-              'Vui ḷng nh?p d?y d? 6 ch? s? OTP.',
+              'Vui lòng nhập đầy đủ 6 chữ số OTP.',
               'Please enter all 6 OTP digits.',
             ),
           ),
@@ -203,7 +202,7 @@ class _OtpScreenState extends State<OtpScreen> {
             SnackBar(
               content: Text(
                 _t(
-                  'Thi?u d? li?u c?p nh?t Smart OTP PIN.',
+                  'Thiếu dữ liệu cập nhật Smart OTP PIN.',
                   'Missing Smart OTP PIN update data.',
                 ),
               ),
@@ -221,7 +220,7 @@ class _OtpScreenState extends State<OtpScreen> {
             SnackBar(
               content: Text(
                 _t(
-                  'Mă Smart OTP dă du?c c?p nh?t thành công',
+                  'Mã Smart OTP đã được cập nhật thành công',
                   'Smart OTP PIN updated successfully',
                 ),
               ),
@@ -235,7 +234,7 @@ class _OtpScreenState extends State<OtpScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                '${_t('Không th? c?p nh?t Smart OTP', 'Unable to update Smart OTP')}: $e',
+                '${_t('Không thể cập nhật Smart OTP', 'Unable to update Smart OTP')}: $e',
               ),
               backgroundColor: Colors.red,
               behavior: SnackBarBehavior.floating,
@@ -256,7 +255,7 @@ class _OtpScreenState extends State<OtpScreen> {
       SnackBar(
         content: Text(
           _t(
-            'Mă OTP không chính xác. Vui ḷng th? l?i.',
+            'Mã OTP không chính xác. Vui lòng thử lại.',
             'Incorrect OTP code. Please try again.',
           ),
         ),
@@ -273,8 +272,8 @@ class _OtpScreenState extends State<OtpScreen> {
       backgroundColor: const Color(0xFFF3F4F8),
       appBar: CCPAppBar(
         title: _isSmartOtpSmsFlow
-            ? _t('Nh?p SMS OTP', 'Enter SMS OTP')
-            : _t('Nh?p OTP', 'Enter OTP'),
+            ? _t('Nhập SMS OTP', 'Enter SMS OTP')
+            : _t('Nhập OTP', 'Enter OTP'),
         backgroundColor: const Color(0xFFF3F4F8),
       ),
       body: SafeArea(
@@ -298,8 +297,8 @@ class _OtpScreenState extends State<OtpScreen> {
               children: [
                 Text(
                   _isSmartOtpSmsFlow
-                      ? _t('Nh?p mă SMS OTP', 'Enter SMS OTP code')
-                      : _t('Nh?p mă', 'Enter code'),
+                      ? _t('Nhập mã SMS OTP', 'Enter SMS OTP code')
+                      : _t('Nhập mã', 'Enter code'),
                   style: GoogleFonts.poppins(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
@@ -404,12 +403,12 @@ class _OtpScreenState extends State<OtpScreen> {
                       child: Text(
                         _resendCooldown > 0
                             ? _t(
-                                'G?i l?i mă ($_resendCooldown)s',
+                                'Gửi lại mã ($_resendCooldown)s',
                                 'Resend code ($_resendCooldown)s',
                               )
                             : (_isLoadingOtp
-                                  ? _t('Đang g?i...', 'Sending...')
-                                  : _t('G?i l?i mă', 'Resend code')),
+                                  ? _t('Đang gửi...', 'Sending...')
+                                  : _t('Gửi lại mã', 'Resend code')),
                         style: GoogleFonts.poppins(
                           color: Colors.white,
                           fontWeight: FontWeight.w600,
@@ -432,11 +431,11 @@ class _OtpScreenState extends State<OtpScreen> {
                       TextSpan(
                         text: _isSmartOtpSmsFlow
                             ? _t(
-                                'Chúng tôi dă g?i mă xác th?c SMS OTP d?n s? di?n tho?i ',
+                                'Chúng tôi đã gửi mã xác thực SMS OTP đến số điện thoại ',
                                 'We have sent an SMS OTP verification code to phone number ',
                               )
                             : _t(
-                                'Chúng tôi dă g?i mă xác th?c d?n s? di?n tho?i ',
+                                'Chúng tôi đã gửi mã xác thực đến số điện thoại ',
                                 'We have sent a verification code to phone number ',
                               ),
                       ),
@@ -447,14 +446,14 @@ class _OtpScreenState extends State<OtpScreen> {
                           color: const Color(0xFF252531),
                         ),
                       ),
-                      TextSpan(text: _t(' c?a b?n', '.')),
+                      TextSpan(text: _t(' của bạn.', '.')),
                     ],
                   ),
                 ),
                 const SizedBox(height: 10),
                 Text(
                   _t(
-                    'Mă này s? h?t hi?u l?c sau 10 phút k? t? th?i di?m g?i.',
+                    'Mã này sẽ hết hiệu lực sau 10 phút kể từ thời điểm gửi.',
                     'This code will expire 10 minutes after it is sent.',
                   ),
                   style: GoogleFonts.poppins(
@@ -467,11 +466,11 @@ class _OtpScreenState extends State<OtpScreen> {
                 Text(
                   _isSmartOtpSmsFlow
                       ? _t(
-                          'S? di?n tho?i này dang du?c dùng d? xác th?c thay d?i Smart OTP.',
+                          'Số điện thoại này đang được dùng để xác thực thay đổi Smart OTP.',
                           'This phone number is used to verify Smart OTP changes.',
                         )
                       : _t(
-                          'S? di?n tho?i này g?n li?n v?i tài kho?n b?n s? d?ng v? sau.',
+                          'Số điện thoại này gắn liền với tài khoản bạn sử dụng về sau.',
                           'This phone number will be linked to your account for future use.',
                         ),
                   style: GoogleFonts.poppins(
@@ -495,8 +494,8 @@ class _OtpScreenState extends State<OtpScreen> {
                     ),
                     child: Text(
                       _isSmartOtpSmsFlow
-                          ? _t('Xác nh?n', 'Confirm')
-                          : _t('Ti?p theo', 'Next'),
+                          ? _t('Xác nhận', 'Confirm')
+                          : _t('Tiếp theo', 'Next'),
                       style: GoogleFonts.poppins(
                         color: Colors.white,
                         fontWeight: FontWeight.w700,
@@ -514,7 +513,7 @@ class _OtpScreenState extends State<OtpScreen> {
   }
 }
 
-/// L?p trung gian d? dúng tên màn h́nh bu?c NFC theo yêu c?u.
+/// Lớp trung gian để đúng tên màn hình bước NFC theo yêu cầu.
 class NFCScanningScreen extends StatelessWidget {
   const NFCScanningScreen({super.key});
 
