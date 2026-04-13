@@ -101,6 +101,16 @@ class AppText {
       'vi': 'Đặc quyền chăm sóc khách hàng 24/7',
       'en': '24/7 premium customer care',
     },
+    'vip_condition_msg': <String, String>{
+      'vi':
+          'Bạn sẽ có đặc quyền thẻ VIP khi có từ 200.000.000 VND trong thẻ thường.',
+      'en':
+          'You will unlock VIP card privileges when your standard card balance reaches at least 200,000,000 VND.',
+    },
+    'vip_not_eligible': <String, String>{
+      'vi': 'Chưa đủ điều kiện',
+      'en': 'Not eligible yet',
+    },
     'select_source_card': <String, String>{
       'vi': 'Chọn nguồn tiền',
       'en': 'Select source card',

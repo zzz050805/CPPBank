@@ -442,6 +442,14 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
           ? standardAvailable
           : vipAvailable;
       final double selectedBalance = useStandard ? standardBalance : vipBalance;
+      final Map<String, dynamic> selectedCardData =
+          cardsById[normalizedCardId] ?? <String, dynamic>{};
+      final String selectedRawCardNumberFromCard =
+          CardNumberService.readStoredCardNumber(selectedCardData);
+      final String selectedRawCardNumber =
+          selectedRawCardNumberFromCard.isNotEmpty
+          ? selectedRawCardNumberFromCard
+          : CardNumberService.readStoredCardNumber(userData);
 
       if (!useStandard && !useVip) {
         throw Exception(AppText.text(context, 'card_unavailable'));
@@ -465,10 +473,19 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
         }, SetOptions(merge: true));
       }
 
+      transaction.update(userRef, <String, dynamic>{
+        'total_transactions': FieldValue.increment(1),
+        'total_spent': FieldValue.increment(amount),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
       transaction.set(withdrawalRef, <String, dynamic>{
         'uid': uid,
         'amount': amount,
         'code': code,
+        'target_account': selectedRawCardNumber,
+        'targetAccount': selectedRawCardNumber,
+        'card_number': selectedRawCardNumber,
         'status': 'active',
         'type': 'withdraw',
         'created_at': FieldValue.serverTimestamp(),
@@ -497,6 +514,9 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
         'type': 'atm_withdrawal',
         'amount': amount,
         'cardId': normalizedCardId,
+        'target_account': selectedRawCardNumber,
+        'targetAccount': selectedRawCardNumber,
+        'card_number': selectedRawCardNumber,
         'status': 'success',
         'timestamp': FieldValue.serverTimestamp(),
         'timestamp_client': Timestamp.fromDate(createdAt),

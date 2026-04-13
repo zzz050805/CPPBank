@@ -24,8 +24,11 @@ const List<String> _kTransactionCollections = <String>[
   'recent_tranfer',
   'recent_transfer',
   'recent_transfers',
+  'atm_withdrawals',
   'withdraw',
 ];
+
+const double _kVipEligibilityMinStandardBalance = 200000000;
 
 DateTime? parseTransactionTime(dynamic timeData) {
   if (timeData == null) {
@@ -92,8 +95,12 @@ DateTime? parseTransactionTime(dynamic timeData) {
 
 DateTime? _extractTransactionTime(Map<String, dynamic> data) {
   return parseTransactionTime(data['timestamp']) ??
+      parseTransactionTime(data['timestamp_client']) ??
       parseTransactionTime(data['date']) ??
       parseTransactionTime(data['createdAt']) ??
+      parseTransactionTime(data['createdAt_client']) ??
+      parseTransactionTime(data['created_at']) ??
+      parseTransactionTime(data['created_at_client']) ??
       parseTransactionTime(data['updatedAt']) ??
       parseTransactionTime(data['time']) ??
       parseTransactionTime(data['paidAt']);
@@ -104,6 +111,48 @@ bool _isTimeInRange(DateTime? value, DateTimeRange range) {
     return false;
   }
   return !value.isBefore(range.start) && value.isBefore(range.end);
+}
+
+String _transactionIdentity(Map<String, dynamic> data) {
+  const List<String> keys = <String>[
+    'transactionCode',
+    'relatedId',
+    'withdrawCode',
+    'code',
+    'id',
+  ];
+
+  for (final String key in keys) {
+    final String value = (data[key] ?? '').toString().trim();
+    if (value.isNotEmpty) {
+      return value;
+    }
+  }
+  return '';
+}
+
+int _transactionSourcePriority(String source) {
+  switch (source) {
+    case 'pay_bill':
+    case 'paybill':
+      return 1;
+    case 'bill_payment':
+      return 2;
+    case 'phone_recharge':
+      return 3;
+    case 'Shopping':
+    case 'shopping':
+      return 4;
+    case 'recent_tranfer':
+    case 'recent_transfer':
+    case 'recent_transfers':
+      return 5;
+    case 'atm_withdrawals':
+    case 'withdraw':
+      return 6;
+    default:
+      return 99;
+  }
 }
 
 String _transactionTypeFromCollection(String collectionName) {
@@ -118,6 +167,8 @@ String _transactionTypeFromCollection(String collectionName) {
       return 'Chi trả hóa đơn';
     case 'phone_recharge':
       return 'Nạp điện thoại';
+    case 'atm_withdrawals':
+      return 'Rút tiền';
     case 'recent_tranfer':
     case 'recent_transfer':
     case 'recent_transfers':
@@ -908,6 +959,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
       final double amount = _toDouble(tx['amount']);
       final DateTime? parsedTime = tx['_parsedTime'] as DateTime?;
+      final String txIdentity = _transactionIdentity(tx);
       final String minutePart = parsedTime == null
           ? 'no_time'
           : '${parsedTime.year.toString().padLeft(4, '0')}-'
@@ -915,8 +967,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 '${parsedTime.day.toString().padLeft(2, '0')} '
                 '${parsedTime.hour.toString().padLeft(2, '0')}:'
                 '${parsedTime.minute.toString().padLeft(2, '0')}';
-      final String dedupKey =
-          '${userPart}_${amount.toStringAsFixed(2)}_$minutePart';
+      final String dedupKey = txIdentity.isNotEmpty
+          ? '${userPart}_code_$txIdentity'
+          : '${userPart}_${amount.toStringAsFixed(2)}_$minutePart';
 
       final Map<String, dynamic>? existing = dedupByKey[dedupKey];
       if (existing == null) {
@@ -927,11 +980,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       final String existingSource = (existing['_sourceCollection'] ?? '')
           .toString();
       final String currentSource = (tx['_sourceCollection'] ?? '').toString();
-      final bool currentIsCanonical =
-          currentSource == 'pay_bill' || currentSource == 'paybill';
-      final bool existingIsCanonical =
-          existingSource == 'pay_bill' || existingSource == 'paybill';
-      if (currentIsCanonical && !existingIsCanonical) {
+      if (_transactionSourcePriority(currentSource) <
+          _transactionSourcePriority(existingSource)) {
         dedupByKey[dedupKey] = tx;
       }
     }
@@ -1025,6 +1075,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Stream<int> _allUsersTotalTransactionsCountStream() {
+    final Stream<QuerySnapshot<Map<String, dynamic>>> usersTrigger = _firestore
+        .collection('users')
+        .snapshots(includeMetadataChanges: true);
     final List<Stream<QuerySnapshot<Map<String, dynamic>>>> sourceTriggers =
         _kTransactionCollections
             .map(
@@ -1034,55 +1087,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             )
             .toList(growable: false);
 
-    return CombineLatestStream.list<QuerySnapshot<Map<String, dynamic>>>(
-          sourceTriggers,
-        )
-        .map((List<QuerySnapshot<Map<String, dynamic>>> snapshots) {
-          final Map<String, String> dedupByKey = <String, String>{};
-
-          for (int i = 0; i < snapshots.length; i++) {
-            final String source = _kTransactionCollections[i];
-            final QuerySnapshot<Map<String, dynamic>> snapshot = snapshots[i];
-
-            for (final QueryDocumentSnapshot<Map<String, dynamic>> doc
-                in snapshot.docs) {
-              final DocumentReference<Map<String, dynamic>>? userRef =
-                  doc.reference.parent.parent;
-              if (userRef == null || userRef.parent.id != 'users') {
-                continue;
-              }
-
-              final Map<String, dynamic> data = doc.data();
-              final double amount = _toDouble(data['amount']);
-              final DateTime? parsedTime = _extractTransactionTime(data);
-              final String minutePart = parsedTime == null
-                  ? 'no_time'
-                  : '${parsedTime.year.toString().padLeft(4, '0')}-'
-                        '${parsedTime.month.toString().padLeft(2, '0')}-'
-                        '${parsedTime.day.toString().padLeft(2, '0')} '
-                        '${parsedTime.hour.toString().padLeft(2, '0')}:'
-                        '${parsedTime.minute.toString().padLeft(2, '0')}';
-
-              final String dedupKey =
-                  '${userRef.id}_${amount.toStringAsFixed(2)}_$minutePart';
-
-              final String? existingSource = dedupByKey[dedupKey];
-              if (existingSource == null) {
-                dedupByKey[dedupKey] = source;
-                continue;
-              }
-
-              final bool currentIsCanonical =
-                  source == 'pay_bill' || source == 'paybill';
-              final bool existingIsCanonical =
-                  existingSource == 'pay_bill' || existingSource == 'paybill';
-              if (currentIsCanonical && !existingIsCanonical) {
-                dedupByKey[dedupKey] = source;
-              }
-            }
-          }
-
-          return dedupByKey.length;
+    return MergeStream<Object>(<Stream<Object>>[
+          usersTrigger,
+          ...sourceTriggers,
+        ])
+        .startWith(const Object())
+        .switchMap((Object _) {
+          return Stream.fromFuture(
+            _deepScanAllTransactions(
+              filterType: _AdminHistoryFilterType.day,
+              selectedPoint: DateTime.now(),
+            ).then((List<Map<String, dynamic>> txs) {
+              return txs.length;
+            }),
+          );
         })
         .startWith(0)
         .distinct();
@@ -2495,6 +2513,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   ) async {
     await ref.set(<String, dynamic>{
       'isLocked': next,
+      'is_locked': next,
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
@@ -4251,11 +4270,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         children: <Widget>[
                           IconButton(
                             icon: const Icon(Icons.edit_rounded),
+                            color: _primaryBlue,
                             onPressed: () =>
                                 _editBanner(doc.reference, imageUrl, isActive),
                           ),
                           IconButton(
                             icon: const Icon(Icons.delete_outline_rounded),
+                            color: Colors.red,
                             onPressed: () => doc.reference.delete(),
                           ),
                         ],
@@ -4303,7 +4324,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
             final bool isStandardLocked = data['is_standard_locked'] == true;
             final bool isVipLocked = data['is_vip_locked'] == true;
-            final bool hasVipCard = data['hasVipCard'] == true;
             final String userName = _readUserName(data);
             final String userPhone = _readUserPhone(data);
             final String fallbackCardNumberRaw =
@@ -4324,73 +4344,101 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               standardKey,
             );
             final bool vipUpdating = _pendingCardLockUpdates.contains(vipKey);
+            final DocumentReference<Map<String, dynamic>> standardCardRef =
+                _firestore
+                    .collection('users')
+                    .doc(doc.id)
+                    .collection('cards')
+                    .doc('standard');
 
-            return Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE5E7EB)),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: ExpansionTile(
-                key: PageStorageKey<String>('admin-card-tile-${doc.id}'),
-                backgroundColor: Colors.transparent,
-                collapsedBackgroundColor: Colors.transparent,
-                iconColor: const Color(0xFF1D4ED8),
-                collapsedIconColor: const Color(0xFF1D4ED8),
-                tilePadding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 2,
-                ),
-                childrenPadding: const EdgeInsets.only(bottom: 8),
-                leading: CircleAvatar(
-                  backgroundColor: const Color(0xFFE7EEFF),
-                  child: Icon(
-                    Icons.person_rounded,
-                    color: _primaryBlue,
-                    size: 20,
-                  ),
-                ),
-                title: Text(
-                  userName,
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF0F172A),
-                  ),
-                ),
-                subtitle: Text(
-                  userPhone,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    color: const Color(0xFF667085),
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                children: <Widget>[
-                  _buildCardLockTile(
-                    userId: doc.id,
-                    fieldName: 'is_standard_locked',
-                    cardName: AppText.text(context, 'card_standard'),
-                    fallbackCardNumberRaw: fallbackCardNumberRaw,
-                    isLocked: effectiveStandardLocked,
-                    isUpdating: standardUpdating,
-                  ),
-                  const Divider(height: 1),
-                  _buildCardLockTile(
-                    userId: doc.id,
-                    fieldName: 'is_vip_locked',
-                    cardName: AppText.text(context, 'card_vip'),
-                    fallbackCardNumberRaw: fallbackCardNumberRaw,
-                    isLocked: effectiveVipLocked,
-                    isUpdating: vipUpdating,
-                    isEnabled: hasVipCard,
-                  ),
-                ],
-              ),
+            return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+              stream: standardCardRef.snapshots(includeMetadataChanges: true),
+              builder:
+                  (
+                    BuildContext context,
+                    AsyncSnapshot<DocumentSnapshot<Map<String, dynamic>>>
+                    standardCardSnapshot,
+                  ) {
+                    final Map<String, dynamic> standardCardData =
+                        standardCardSnapshot.data?.data() ??
+                        <String, dynamic>{};
+                    final double standardBalance = _toDouble(
+                      standardCardData['balance'],
+                    );
+                    final bool vipEligibleByBalance =
+                        standardBalance >= _kVipEligibilityMinStandardBalance;
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: ExpansionTile(
+                        key: PageStorageKey<String>(
+                          'admin-card-tile-${doc.id}',
+                        ),
+                        backgroundColor: Colors.transparent,
+                        collapsedBackgroundColor: Colors.transparent,
+                        iconColor: const Color(0xFF1D4ED8),
+                        collapsedIconColor: const Color(0xFF1D4ED8),
+                        tilePadding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 2,
+                        ),
+                        childrenPadding: const EdgeInsets.only(bottom: 8),
+                        leading: CircleAvatar(
+                          backgroundColor: const Color(0xFFE7EEFF),
+                          child: Icon(
+                            Icons.person_rounded,
+                            color: _primaryBlue,
+                            size: 20,
+                          ),
+                        ),
+                        title: Text(
+                          userName,
+                          style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF0F172A),
+                          ),
+                        ),
+                        subtitle: Text(
+                          userPhone,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            color: const Color(0xFF667085),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        children: <Widget>[
+                          _buildCardLockTile(
+                            userId: doc.id,
+                            fieldName: 'is_standard_locked',
+                            cardName: AppText.text(context, 'card_standard'),
+                            fallbackCardNumberRaw: fallbackCardNumberRaw,
+                            isLocked: effectiveStandardLocked,
+                            isUpdating: standardUpdating,
+                          ),
+                          const Divider(height: 1),
+                          _buildCardLockTile(
+                            userId: doc.id,
+                            fieldName: 'is_vip_locked',
+                            cardName: AppText.text(context, 'card_vip'),
+                            fallbackCardNumberRaw: fallbackCardNumberRaw,
+                            isLocked: effectiveVipLocked,
+                            isUpdating: vipUpdating,
+                            isEnabled: vipEligibleByBalance,
+                            isVipEligibilityMet: vipEligibleByBalance,
+                          ),
+                        ],
+                      ),
+                    );
+                  },
             );
           },
         );
@@ -4406,18 +4454,26 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     required bool isLocked,
     required bool isUpdating,
     bool isEnabled = true,
+    bool isVipEligibilityMet = true,
   }) {
-    final String statusText = !isEnabled
+    final bool isVipCard = fieldName == 'is_vip_locked';
+    final bool blockedByEligibility = isVipCard && !isVipEligibilityMet;
+    final bool canControl = isEnabled && !blockedByEligibility;
+    final String statusText = blockedByEligibility
+        ? AppText.text(context, 'vip_not_eligible')
+        : !isEnabled
         ? _t('Chưa có thẻ VIP', 'No VIP card')
         : isLocked
         ? AppText.text(context, 'status_locked')
         : AppText.text(context, 'status_active');
-    final Color statusColor = !isEnabled
+    final Color statusColor = blockedByEligibility
+        ? const Color(0xFFDC2626)
+        : !isEnabled
         ? const Color(0xFF64748B)
         : isLocked
         ? const Color(0xFFFF6B6B)
         : const Color(0xFF00E676);
-    final String cardId = fieldName == 'is_vip_locked' ? 'vip' : 'standard';
+    final String cardId = isVipCard ? 'vip' : 'standard';
 
     final DocumentReference<Map<String, dynamic>> cardRef = _firestore
         .collection('users')
@@ -4493,7 +4549,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               icon: const Icon(Icons.badge_rounded, size: 20),
                               color: const Color(0xFF2563EB),
                               tooltip: _t('Chỉnh số thẻ', 'Edit card number'),
-                              onPressed: !isEnabled
+                              onPressed: !canControl
                                   ? null
                                   : () {
                                       _showEditCardNumberDialog(
@@ -4511,7 +4567,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                 'Chỉnh số dư thẻ',
                                 'Edit card balance',
                               ),
-                              onPressed: !isEnabled
+                              onPressed: !canControl
                                   ? null
                                   : () {
                                       _showEditCardBalanceDialog(
@@ -4523,7 +4579,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                             ),
                             Switch(
                               value: isLocked,
-                              onChanged: !isEnabled
+                              onChanged: !canControl
                                   ? null
                                   : (bool newValue) {
                                       _updateCardLockState(
@@ -4870,9 +4926,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
         final double standardBalance = _toDouble(standardCardData['balance']);
         final double vipBalance = _toDouble(vipCardData['balance']);
+        final bool vipEligibleByBalance =
+            standardBalance >= _kVipEligibilityMinStandardBalance;
+        final bool hasVipAccess = hasVipCard || vipEligibleByBalance;
         final double availableBalance =
             (nextStandardLocked ? 0 : standardBalance) +
-            ((hasVipCard && !nextVipLocked) ? vipBalance : 0);
+            ((hasVipAccess && !nextVipLocked) ? vipBalance : 0);
 
         transaction.set(userRef, <String, dynamic>{
           fieldName: newValue,
@@ -5477,6 +5536,8 @@ class _AdminUserTransactionHistoryScreenState
         return _t('Chi trả hóa đơn', 'Pay bill');
       case 'phone_recharge':
         return _t('Nạp điện thoại', 'Phone recharge');
+      case 'atm_withdrawals':
+        return _t('Rút tiền', 'Withdraw');
       case 'recent_tranfer':
       case 'recent_transfer':
       case 'recent_transfers':
@@ -5517,6 +5578,7 @@ class _AdminUserTransactionHistoryScreenState
       case 'phone_recharge':
         return 85;
       case 'withdraw':
+      case 'atm_withdrawals':
         return 80;
       case 'Shopping':
       case 'shopping':

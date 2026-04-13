@@ -19,7 +19,10 @@ final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
 
 void _handleNotificationTapPayload(Map<String, dynamic> payload) {
   final String type = (payload['type'] ?? '').toString().trim().toLowerCase();
-  if (type != 'new_service') {
+  if (type != 'new_service' &&
+      type != 'promotion' &&
+      type != 'uu_dai' &&
+      type != 'shopping_discount') {
     return;
   }
 
@@ -50,6 +53,7 @@ void _handleNotificationTapPayload(Map<String, dynamic> payload) {
       builder: (_) => ShoppingStoreScreen(
         isFromNotification: true,
         targetServiceId: targetServiceId,
+        highlightServiceId: targetServiceId,
       ),
     ),
   );

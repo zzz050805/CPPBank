@@ -284,6 +284,8 @@ class UserFirestoreService {
         'cardNumber': cardNumber,
         'card_number': cardNumber,
         'cardType': 'Standard',
+        'status': 'active',
+        'is_locked': false,
         'color': '#1A1A75',
         'updatedAt': FieldValue.serverTimestamp(),
       };
@@ -293,6 +295,8 @@ class UserFirestoreService {
     'cardNumber': cardNumber,
     'card_number': cardNumber,
     'cardType': 'VIP',
+    'status': 'active',
+    'is_locked': false,
     'color': '#1A1A1A',
     'updatedAt': FieldValue.serverTimestamp(),
   };
@@ -450,10 +454,11 @@ class UserFirestoreService {
           'card_number': generatedCardNumber,
           'cardNumber': generatedCardNumber,
           'hasVipCard': createHasVipCard,
+          'vip_request_status': 'none',
           'role': role,
           'isLocked': false,
           'is_standard_locked': false,
-          'is_vip_locked': false,
+          'is_vip_locked': !createHasVipCard,
           'updatedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
       } else {
@@ -495,10 +500,19 @@ class UserFirestoreService {
 
         if (existingData['is_standard_locked'] == null ||
             existingData['is_vip_locked'] == null) {
+          final bool hasVipCard = _parseHasVipCard(existingData['hasVipCard']);
           await userRef.set(<String, dynamic>{
             if (existingData['is_standard_locked'] == null)
               'is_standard_locked': false,
-            if (existingData['is_vip_locked'] == null) 'is_vip_locked': false,
+            if (existingData['is_vip_locked'] == null)
+              'is_vip_locked': !hasVipCard,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+        }
+
+        if (existingData['vip_request_status'] == null) {
+          await userRef.set(<String, dynamic>{
+            'vip_request_status': 'none',
             'updatedAt': FieldValue.serverTimestamp(),
           }, SetOptions(merge: true));
         }
@@ -567,19 +581,21 @@ class UserFirestoreService {
 
       final DocumentSnapshot<Map<String, dynamic>> vipCardDoc = await vipCardRef
           .get();
-      if (!vipCardDoc.exists) {
-        await vipCardRef.set(_vipCardPayload(permanentCardNumber));
-      } else {
-        final String existingVipCardNumber =
-            CardNumberService.readStoredCardNumber(
-              vipCardDoc.data() ?? <String, dynamic>{},
-            );
-        if (existingVipCardNumber.isEmpty) {
-          await vipCardRef.set(<String, dynamic>{
-            'cardNumber': permanentCardNumber,
-            'card_number': permanentCardNumber,
-            'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
+      if (refreshedHasVipCard) {
+        if (!vipCardDoc.exists) {
+          await vipCardRef.set(_vipCardPayload(permanentCardNumber));
+        } else {
+          final String existingVipCardNumber =
+              CardNumberService.readStoredCardNumber(
+                vipCardDoc.data() ?? <String, dynamic>{},
+              );
+          if (existingVipCardNumber.isEmpty) {
+            await vipCardRef.set(<String, dynamic>{
+              'cardNumber': permanentCardNumber,
+              'card_number': permanentCardNumber,
+              'updatedAt': FieldValue.serverTimestamp(),
+            }, SetOptions(merge: true));
+          }
         }
       }
 

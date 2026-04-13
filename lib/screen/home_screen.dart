@@ -421,26 +421,37 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Map<String, dynamic>? _buildHeadsUpPayload(Map<String, dynamic> data) {
     final String type = (data['type'] ?? '').toString().trim().toLowerCase();
-    if (type == 'new_service') {
-      final String serviceId =
-          (data['service_id'] ??
-                  data['serviceId'] ??
-                  data['targetServiceId'] ??
-                  '')
-              .toString()
-              .trim();
-      if (serviceId.isEmpty) {
-        return null;
-      }
-
-      return <String, dynamic>{
-        'type': 'new_service',
-        'service_id': serviceId,
-        'targetServiceId': serviceId,
-      };
+    final String category = (data['category'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
+    final bool isPromotion =
+        type == 'promotion' ||
+        type == 'uu_dai' ||
+        type == 'shopping_discount' ||
+        type == 'new_service' ||
+        category == 'promotion';
+    if (!isPromotion) {
+      return null;
     }
 
-    return null;
+    final String serviceId =
+        (data['service_id'] ??
+                data['serviceId'] ??
+                data['targetServiceId'] ??
+                '')
+            .toString()
+            .trim();
+    if (serviceId.isEmpty) {
+      return null;
+    }
+
+    return <String, dynamic>{
+      'type': 'promotion',
+      'service_id': serviceId,
+      'serviceId': serviceId,
+      'targetServiceId': serviceId,
+    };
   }
 
   bool _resolveTransferIsNegative(Map<String, dynamic> data, String uid) {

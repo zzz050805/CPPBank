@@ -125,5 +125,7 @@
   "language_english": "English",
   "account_locked_title": "Account locked",
   "account_locked_msg": "Your account has been locked by the manager. Please contact support.",
-  "btn_understand": "Understood"
+  "btn_understand": "Understood",
+  "vip_condition_msg": "You will unlock VIP card privileges when your standard card balance reaches at least 200,000,000 VND.",
+  "vip_not_eligible": "Not eligible yet"
 }

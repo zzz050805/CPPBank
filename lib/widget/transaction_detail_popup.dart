@@ -38,6 +38,7 @@ class TransactionDetailPopup {
       tr('transaction_details'),
     ]);
     final String targetInfo = _firstNonEmpty(<dynamic>[
+      transactionData['target_account'],
       transactionData['targetAccount'],
       transactionData['toCardNumber'],
       transactionData['card_number'],

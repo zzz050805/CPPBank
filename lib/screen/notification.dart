@@ -367,7 +367,8 @@ class _NotificationScreenState extends State<NotificationScreen> {
     final num amount = _readAmount(data['amount']);
 
     final String targetAccount =
-        (data['targetAccount'] ??
+        (data['target_account'] ??
+                data['targetAccount'] ??
                 data['toCardNumber'] ??
                 data['card_number'] ??
                 data['cardNumber'] ??
@@ -417,9 +418,13 @@ class _NotificationScreenState extends State<NotificationScreen> {
     QueryDocumentSnapshot<Map<String, dynamic>> doc,
   ) async {
     final Map<String, dynamic> data = doc.data();
-    final String serviceId = (data['serviceId'] ?? data['service_id'] ?? '')
-        .toString()
-        .trim();
+    final String serviceId =
+        (data['serviceId'] ??
+                data['service_id'] ??
+                data['targetServiceId'] ??
+                '')
+            .toString()
+            .trim();
 
     if (serviceId.isEmpty) {
       if (!mounted) {
@@ -447,6 +452,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
         builder: (_) => ShoppingStoreScreen(
           isFromNotification: true,
           targetServiceId: serviceId,
+          highlightServiceId: serviceId,
         ),
       ),
     );
@@ -547,7 +553,15 @@ class _NotificationScreenState extends State<NotificationScreen> {
                     child: InkWell(
                       borderRadius: BorderRadius.circular(16),
                       onTap: () async {
-                        if (promotionsOnly) {
+                        final String normalizedType = (data['type'] ?? '')
+                            .toString()
+                            .trim()
+                            .toLowerCase();
+                        final bool isPromotionType =
+                            normalizedType == 'promotion' ||
+                            _isPromotionNotification(data);
+
+                        if (promotionsOnly || isPromotionType) {
                           await _openOffer(doc);
                           return;
                         }

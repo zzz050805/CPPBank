@@ -13,6 +13,8 @@ import 'branch_screen.dart';
 class CreditCardScreen extends StatelessWidget {
   const CreditCardScreen({super.key});
 
+  static const double _vipEligibilityThreshold = 200000000;
+
   String _t(BuildContext context, String vi, String en) {
     return AppText.tr(context, vi, en);
   }
@@ -123,8 +125,12 @@ class CreditCardScreen extends StatelessWidget {
                       preferredId: 'vip',
                     );
 
+                    final bool vipEligibleByStandardBalance =
+                        regularCard.balance >= _vipEligibilityThreshold;
+
                     final bool showStandardCard = !isStandardLocked;
-                    final bool showVipCard = !isVipLocked;
+                    final bool showVipCard =
+                        vipEligibleByStandardBalance && !isVipLocked;
 
                     if (!showStandardCard && !showVipCard) {
                       return _StatusBox(
@@ -186,6 +192,32 @@ class CreditCardScreen extends StatelessWidget {
                           ),
                         ),
                       );
+                      if (!vipEligibleByStandardBalance) {
+                        addGap(10);
+                        addEntry(
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF5F8FF),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: const Color(0xFFDCE6FF),
+                              ),
+                            ),
+                            child: Text(
+                              AppText.text(context, 'vip_condition_msg'),
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                fontStyle: FontStyle.italic,
+                                color: const Color(0xFF64748B),
+                                fontWeight: FontWeight.w500,
+                                height: 1.4,
+                              ),
+                            ),
+                          ),
+                        );
+                      }
                     }
 
                     if (showVipCard) {

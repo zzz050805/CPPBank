@@ -140,10 +140,12 @@ class ShoppingStoreScreen extends StatefulWidget {
     super.key,
     this.isFromNotification = false,
     this.targetServiceId,
+    this.highlightServiceId,
   });
 
   final bool isFromNotification;
   final String? targetServiceId;
+  final String? highlightServiceId;
 
   @override
   State<ShoppingStoreScreen> createState() => _ShoppingStoreScreenState();
@@ -190,7 +192,7 @@ class _ShoppingStoreScreenState extends State<ShoppingStoreScreen> {
     super.initState();
     _currentServices = List<ServiceModel>.from(shoppingServices);
     final String initialTarget = widget.isFromNotification
-        ? (widget.targetServiceId ?? '').trim()
+        ? (widget.highlightServiceId ?? widget.targetServiceId ?? '').trim()
         : '';
     if (initialTarget.isNotEmpty) {
       _activateHighlight(initialTarget, fromInit: true);

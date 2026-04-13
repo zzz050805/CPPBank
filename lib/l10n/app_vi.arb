@@ -125,5 +125,7 @@
   "language_english": "English",
   "account_locked_title": "Tài khoản bị khóa",
   "account_locked_msg": "Tài khoản của bạn đã bị Quản lý khóa. Vui lòng liên hệ bộ phận hỗ trợ.",
-  "btn_understand": "Đã hiểu"
+  "btn_understand": "Đã hiểu",
+  "vip_condition_msg": "Bạn sẽ có đặc quyền thẻ VIP khi có từ 200.000.000 VND trong thẻ thường.",
+  "vip_not_eligible": "Chưa đủ điều kiện"
 }
