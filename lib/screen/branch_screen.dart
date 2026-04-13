@@ -58,6 +58,9 @@ class _BranchMapScreenState extends State<BranchMapScreen>
   static const Color mapBackground = Color(0xFFEFF3FB);
   static const double focusZoomLevel = 15.5;
   static const double userLocationZoomLevel = 15.0;
+  static const bool useFixedMachineLocation = true;
+  static const double huflitFocusZoomLevel = 16.6;
+  static const LatLng huflitHocMonLatLng = LatLng(10.8653321, 106.6006639);
   static LatLng? _cachedUserLocation;
   static const String _directionsApiKey =
       'AIzaSyCnOT1cldbQw9V0buoOxfEj2Y6r25pD9Lo';
@@ -67,6 +70,7 @@ class _BranchMapScreenState extends State<BranchMapScreen>
       DraggableScrollableController();
   final TextEditingController _searchController = TextEditingController();
   StreamSubscription<Position>? _positionSubscription;
+  Timer? _fixedLocationTimer;
 
   int? _selectedBranchId;
   LatLng _currentCenter = const LatLng(10.7765, 106.7009);
@@ -388,6 +392,7 @@ class _BranchMapScreenState extends State<BranchMapScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _positionSubscription?.cancel();
+    _fixedLocationTimer?.cancel();
     _branchRouteDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
@@ -409,6 +414,12 @@ class _BranchMapScreenState extends State<BranchMapScreen>
   }
 
   Future<void> _initUserLocationTracking() async {
+    if (useFixedMachineLocation) {
+      _setUserLocation(huflitHocMonLatLng, centerCamera: true);
+      await _startRealtimeLocationTracking();
+      return;
+    }
+
     await _loadUserLocation();
     await _startRealtimeLocationTracking();
   }
@@ -512,6 +523,10 @@ class _BranchMapScreenState extends State<BranchMapScreen>
   Future<bool> _ensureLocationPermission({
     bool openSettingsWhenDeniedForever = true,
   }) async {
+    if (useFixedMachineLocation) {
+      return true;
+    }
+
     final bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       _showLocationNotice(
@@ -555,6 +570,11 @@ class _BranchMapScreenState extends State<BranchMapScreen>
   }
 
   Future<void> _loadUserLocation() async {
+    if (useFixedMachineLocation) {
+      _setUserLocation(huflitHocMonLatLng, centerCamera: true);
+      return;
+    }
+
     final bool hasPermission = await _ensureLocationPermission();
     if (!hasPermission) {
       return;
@@ -607,6 +627,15 @@ class _BranchMapScreenState extends State<BranchMapScreen>
   }
 
   Future<void> _startRealtimeLocationTracking() async {
+    if (useFixedMachineLocation) {
+      _fixedLocationTimer?.cancel();
+      _setUserLocation(huflitHocMonLatLng);
+      _fixedLocationTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+        _setUserLocation(huflitHocMonLatLng);
+      });
+      return;
+    }
+
     final bool hasPermission = await _ensureLocationPermission(
       openSettingsWhenDeniedForever: false,
     );
@@ -694,6 +723,12 @@ class _BranchMapScreenState extends State<BranchMapScreen>
   }
 
   Future<void> _moveToMyLocation() async {
+    if (useFixedMachineLocation) {
+      _animatedMove(huflitHocMonLatLng, huflitFocusZoomLevel);
+      await _startRealtimeLocationTracking();
+      return;
+    }
+
     if (_userLocation != null) {
       _animatedMove(_userLocation!, userLocationZoomLevel);
       await _startRealtimeLocationTracking();
@@ -920,12 +955,35 @@ class _BranchMapScreenState extends State<BranchMapScreen>
           position: _userLocation!,
           zIndexInt: 99,
           icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-          infoWindow: InfoWindow(title: _t('Vị trí của tôi', 'My location')),
+          infoWindow: InfoWindow(
+            title: _t(
+              'Vị trí của tôi (HUFLIT Hóc Môn)',
+              'My location (HUFLIT Hoc Mon)',
+            ),
+          ),
         ),
       );
     }
 
     return markers;
+  }
+
+  Future<void> _handleBranchItemTap(BranchInfo branch) async {
+    setState(() {
+      _selectedBranchId = branch.id;
+    });
+
+    _animatedMove(huflitHocMonLatLng, huflitFocusZoomLevel);
+
+    if (_sheetController.isAttached) {
+      await _sheetController.animateTo(
+        0.32,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    }
+
+    _showBranchDetailSheet(branch);
   }
 
   void _animatedMove(LatLng destination, double zoom) {
@@ -1031,6 +1089,19 @@ class _BranchMapScreenState extends State<BranchMapScreen>
     });
 
     _fitCameraToPoints(<LatLng>[origin, ...routePoints, branch.position]);
+  }
+
+  void _clearActiveRoute() {
+    if (_routePolylines.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _routePolylines = <Polyline>{};
+      _routeDistanceMeters = null;
+      _routeDurationSeconds = null;
+      _routeBranchId = null;
+    });
   }
 
   double _distanceFromUser(BranchInfo branch) {
@@ -1371,6 +1442,14 @@ class _BranchMapScreenState extends State<BranchMapScreen>
               child: _buildRouteSummaryBar(),
             ),
 
+          if (_routePolylines.isNotEmpty)
+            Positioned(
+              top: 128,
+              left: 14,
+              right: 66,
+              child: _buildCancelRouteButton(),
+            ),
+
           _buildDraggableSheet(),
         ],
       ),
@@ -1424,6 +1503,37 @@ class _BranchMapScreenState extends State<BranchMapScreen>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCancelRouteButton() {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      elevation: 2,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: _clearActiveRoute,
+        child: Container(
+          height: 40,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.close_rounded, color: Colors.red, size: 18),
+              const SizedBox(width: 6),
+              Text(
+                _t('Huỷ chỉ đường', 'Cancel directions'),
+                style: GoogleFonts.poppins(
+                  color: Colors.red,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1525,7 +1635,7 @@ class _BranchMapScreenState extends State<BranchMapScreen>
                       branch,
                     );
                     return GestureDetector(
-                      onTap: () => _focusBranch(branch),
+                      onTap: () => _handleBranchItemTap(branch),
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
                         margin: const EdgeInsets.only(bottom: 10),
