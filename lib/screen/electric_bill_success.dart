@@ -45,7 +45,7 @@ class ElectricBillSuccessScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: _surface,
       appBar: CCPAppBar(
-        title: _t(context, 'Hoàn tất', 'Completed'),
+        title: _t(context, 'Hoàn tất', 'Bill payment'),
         backgroundColor: _surface,
         onBackPressed: () => _goHome(context),
       ),
@@ -80,8 +80,8 @@ class ElectricBillSuccessScreen extends StatelessWidget {
                     Text(
                       _t(
                         context,
-                        'Thanh toán hóa đơn thành công',
-                        'Bill payment completed',
+                        'Thanh toán hoá đơn điện thành công',
+                        'Electric bill payment completed',
                       ),
                       textAlign: TextAlign.center,
                       style: GoogleFonts.poppins(

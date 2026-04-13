@@ -3,12 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
-import '../data/user_firestore_service.dart';
+import '../services/user_firestore_service.dart';
 import '../l10n/app_text.dart';
 import '../services/payment_service.dart';
 import '../widget/pin_popup.dart';
 import '../widget/ccp_app_bar.dart';
-import 'main_tab_shell.dart';
 import 'water_bill_success.dart';
 
 class WaterBillPayScreen extends StatefulWidget {
@@ -67,13 +66,6 @@ class _WaterBillPayScreenState extends State<WaterBillPayScreen>
 
   String _formatBalanceLine(double amount) {
     return '${_t('Số dư', 'Balance')}: ${_moneyFormat.format(amount)} đ';
-  }
-
-  void _goHome() {
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const MainTabShell(initialIndex: 0)),
-      (Route<dynamic> route) => false,
-    );
   }
 
   Future<void> _processPayment() async {
@@ -582,13 +574,6 @@ class _WaterBillPayScreenState extends State<WaterBillPayScreen>
         title: _t('Thanh toán hoá đơn', 'Bill payment'),
         backgroundColor: _surface,
         onBackPressed: () => Navigator.maybePop(context),
-        actions: <Widget>[
-          IconButton(
-            onPressed: _goHome,
-            icon: const Icon(Icons.home_rounded),
-            color: _primaryBlue,
-          ),
-        ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(

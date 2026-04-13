@@ -3,9 +3,9 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:doan_nganhang/screen/home_screen.dart';
 
 import '../core/app_translations.dart';
-import '../screen/home_screen.dart';
 import 'service_model.dart';
 
 class PaymentSuccessScreen extends StatefulWidget {

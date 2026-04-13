@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:doan_nganhang/screen/OTP_screen.dart';
 import '../l10n/app_text.dart';
-import 'OTP_screen.dart';
 import 'enter_new_password.dart';
 import 'login.dart';
 

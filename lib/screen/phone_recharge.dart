@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/services.dart';
 import '../l10n/app_text.dart';
@@ -51,7 +51,7 @@ class _TopUpScreenState extends State<TopUpScreen>
   late final Animation<double> _buttonFade;
   late final Animation<Offset> _buttonSlide;
 
-  // Danh sách nhà mạng
+  // Danh sách nhà m?ng
   final List<String> providers = [
     'Viettel',
     'Mobifone',
@@ -61,7 +61,7 @@ class _TopUpScreenState extends State<TopUpScreen>
   ];
   String? selectedProvider;
 
-  // Danh sách mệnh giá
+  // Danh sách m?nh giá
   final List<String> amounts = [
     '10.000',
     '20.000',
@@ -310,7 +310,7 @@ class _TopUpScreenState extends State<TopUpScreen>
                 Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    _t('Chọn nhà cung cấp', 'Select provider'),
+                    _t('Ch?n nhà cung c?p', 'Select provider'),
                     style: GoogleFonts.poppins(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
@@ -336,7 +336,7 @@ class _TopUpScreenState extends State<TopUpScreen>
                             _providerError = null;
                             if (_phoneError ==
                                 _t(
-                                  'Vui lòng chọn nhà cung cấp trước khi nhập số điện thoại.',
+                                  'Vui ḷng ch?n nhà cung c?p tru?c khi nh?p s? di?n tho?i.',
                                   'Please select a provider before entering phone number.',
                                 )) {
                               _phoneError = null;
@@ -408,7 +408,7 @@ class _TopUpScreenState extends State<TopUpScreen>
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          _t('Nạp tiền điện thoại', 'Phone Top-Up'),
+          _t('N?p ti?n di?n tho?i', 'Phone Top-Up'),
           style: GoogleFonts.poppins(
             color: const Color(0xFF1A1A1A),
             fontWeight: FontWeight.bold,
@@ -417,7 +417,7 @@ class _TopUpScreenState extends State<TopUpScreen>
       ),
       body: Column(
         children: [
-          // Phần nội dung chính (Cho phép cuộn)
+          // Ph?n n?i dung chính (Cho phép cu?n)
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -455,7 +455,7 @@ class _TopUpScreenState extends State<TopUpScreen>
                           Expanded(
                             child: Text(
                               _t(
-                                'Nạp tiền nhanh trong vài giây, an toàn và tiện lợi.',
+                                'N?p ti?n nhanh trong vài giây, an toàn và ti?n l?i.',
                                 'Top up in seconds with a safe and seamless flow.',
                               ),
                               style: GoogleFonts.poppins(
@@ -476,7 +476,7 @@ class _TopUpScreenState extends State<TopUpScreen>
                     fade: _providerFade,
                     slide: _providerSlide,
                     child: Text(
-                      _t('Nhà cung cấp', 'Provider'),
+                      _t('Nhà cung c?p', 'Provider'),
                       style: GoogleFonts.poppins(
                         color: _primaryBlue,
                         fontWeight: FontWeight.w700,
@@ -486,7 +486,7 @@ class _TopUpScreenState extends State<TopUpScreen>
                   ),
                   const SizedBox(height: 8),
 
-                  // --- Dropdown chọn nhà cung cấp ---
+                  // --- Dropdown ch?n nhà cung c?p ---
                   _buildAnimatedSection(
                     fade: _providerFade,
                     slide: _providerSlide,
@@ -519,7 +519,7 @@ class _TopUpScreenState extends State<TopUpScreen>
                             Expanded(
                               child: Text(
                                 selectedProvider ??
-                                    _t('Chọn nhà cung cấp', 'Select provider'),
+                                    _t('Ch?n nhà cung c?p', 'Select provider'),
                                 style: GoogleFonts.poppins(
                                   color: selectedProvider == null
                                       ? const Color(0xFF78819E)
@@ -556,7 +556,7 @@ class _TopUpScreenState extends State<TopUpScreen>
                     fade: _phoneFade,
                     slide: _phoneSlide,
                     child: Text(
-                      _t('Số điện thoại', 'Phone number'),
+                      _t('S? di?n tho?i', 'Phone number'),
                       style: GoogleFonts.poppins(
                         color: _primaryBlue,
                         fontWeight: FontWeight.w700,
@@ -566,7 +566,7 @@ class _TopUpScreenState extends State<TopUpScreen>
                   ),
                   const SizedBox(height: 8),
 
-                  // --- Ô nhập số điện thoại ---
+                  // --- Ô nh?p s? di?n tho?i ---
                   _buildAnimatedSection(
                     fade: _phoneFade,
                     slide: _phoneSlide,
@@ -592,11 +592,11 @@ class _TopUpScreenState extends State<TopUpScreen>
                           if (selectedProvider == null) {
                             setState(() {
                               _providerError = _t(
-                                'Vui lòng chọn nhà cung cấp trước.',
+                                'Vui ḷng ch?n nhà cung c?p tru?c.',
                                 'Please select a provider first.',
                               );
                               _phoneError = _t(
-                                'Vui lòng chọn nhà cung cấp trước khi nhập số điện thoại.',
+                                'Vui ḷng ch?n nhà cung c?p tru?c khi nh?p s? di?n tho?i.',
                                 'Please select a provider before entering phone number.',
                               );
                             });
@@ -607,12 +607,12 @@ class _TopUpScreenState extends State<TopUpScreen>
                             setState(() {
                               if (value.isEmpty) {
                                 _phoneError = _t(
-                                  'Vui lòng nhập số điện thoại trước.',
+                                  'Vui ḷng nh?p s? di?n tho?i tru?c.',
                                   'Please enter phone number first.',
                                 );
                               } else if (value.length < 10) {
                                 _phoneError = _t(
-                                  'Số điện thoại phải đủ 10 số.',
+                                  'S? di?n tho?i ph?i d? 10 s?.',
                                   'Phone number must have 10 digits.',
                                 );
                               } else {
@@ -628,7 +628,7 @@ class _TopUpScreenState extends State<TopUpScreen>
                         ],
                         decoration: InputDecoration(
                           hintText: _t(
-                            'Nhập số điện thoại',
+                            'Nh?p s? di?n tho?i',
                             'Enter phone number',
                           ),
                           hintStyle: GoogleFonts.poppins(
@@ -666,7 +666,7 @@ class _TopUpScreenState extends State<TopUpScreen>
                     fade: _amountFade,
                     slide: _amountSlide,
                     child: Text(
-                      _t('Chọn mệnh giá', 'Select amount'),
+                      _t('Ch?n m?nh giá', 'Select amount'),
                       style: GoogleFonts.poppins(
                         color: _primaryBlue,
                         fontWeight: FontWeight.w700,
@@ -706,7 +706,7 @@ class _TopUpScreenState extends State<TopUpScreen>
                             FilteringTextInputFormatter.digitsOnly,
                           ],
                           decoration: InputDecoration(
-                            hintText: _t('Nhập số tiền', 'Enter amount'),
+                            hintText: _t('Nh?p s? ti?n', 'Enter amount'),
                             hintStyle: GoogleFonts.poppins(
                               color: Colors.grey.shade400,
                             ),
@@ -738,7 +738,7 @@ class _TopUpScreenState extends State<TopUpScreen>
                     const SizedBox(height: 15),
                   ],
 
-                  // --- Grid mệnh giá ---
+                  // --- Grid m?nh giá ---
                   _buildAnimatedSection(
                     fade: _amountFade,
                     slide: _amountSlide,
@@ -757,7 +757,7 @@ class _TopUpScreenState extends State<TopUpScreen>
                         final String amount = amounts[index];
                         final bool isCustomAmount = amount == _otherAmountKey;
                         final String displayAmount = isCustomAmount
-                            ? _t('Số khác', 'Other')
+                            ? _t('S? khác', 'Other')
                             : amount;
 
                         return InkWell(
@@ -829,7 +829,7 @@ class _TopUpScreenState extends State<TopUpScreen>
             ),
           ),
 
-          // --- Nút Tiếp theo ở dưới cùng ---
+          // --- Nút Ti?p theo ? du?i cùng ---
           Padding(
             padding: const EdgeInsets.all(20),
             child: _buildAnimatedSection(
@@ -845,11 +845,11 @@ class _TopUpScreenState extends State<TopUpScreen>
                     if (selectedProvider == null) {
                       setState(() {
                         _providerError = _t(
-                          'Vui lòng chọn nhà cung cấp trước.',
+                          'Vui ḷng ch?n nhà cung c?p tru?c.',
                           'Please select a provider first.',
                         );
                         _phoneError = _t(
-                          'Vui lòng chọn nhà cung cấp trước khi nhập số điện thoại.',
+                          'Vui ḷng ch?n nhà cung c?p tru?c khi nh?p s? di?n tho?i.',
                           'Please select a provider before entering phone number.',
                         );
                       });
@@ -859,7 +859,7 @@ class _TopUpScreenState extends State<TopUpScreen>
                     if (phoneNumber.isEmpty) {
                       setState(() {
                         _phoneError = _t(
-                          'Vui lòng nhập số điện thoại trước.',
+                          'Vui ḷng nh?p s? di?n tho?i tru?c.',
                           'Please enter phone number first.',
                         );
                       });
@@ -869,7 +869,7 @@ class _TopUpScreenState extends State<TopUpScreen>
                     if (phoneNumber.length < 10) {
                       setState(() {
                         _phoneError = _t(
-                          'Số điện thoại phải đủ 10 số.',
+                          'S? di?n tho?i ph?i d? 10 s?.',
                           'Phone number must have 10 digits.',
                         );
                       });
@@ -886,7 +886,7 @@ class _TopUpScreenState extends State<TopUpScreen>
                         SnackBar(
                           content: Text(
                             _t(
-                              'Vui lòng chọn mệnh giá trước.',
+                              'Vui ḷng ch?n m?nh giá tru?c.',
                               'Please select an amount first.',
                             ),
                           ),
@@ -903,7 +903,7 @@ class _TopUpScreenState extends State<TopUpScreen>
                       if (rawValue.isEmpty) {
                         setState(() {
                           _customAmountError = _t(
-                            'Vui lòng nhập số tiền cho mục Số khác.',
+                            'Vui ḷng nh?p s? ti?n cho m?c S? khác.',
                             'Please enter amount for Other option.',
                           );
                         });
@@ -931,7 +931,7 @@ class _TopUpScreenState extends State<TopUpScreen>
                     shadowColor: Colors.transparent,
                   ),
                   child: Text(
-                    _t('Tiếp theo', 'Next'),
+                    _t('Ti?p theo', 'Next'),
                     style: GoogleFonts.poppins(
                       fontSize: 17,
                       fontWeight: FontWeight.w700,

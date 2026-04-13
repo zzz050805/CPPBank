@@ -7,7 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart';
 
 import '../data/models/currency_rate.dart';
-import '../data/services/exchange_rate_service.dart';
+import '../services/exchange_rate_service.dart';
 import '../l10n/app_text.dart';
 import '../widget/ccp_app_bar.dart';
 

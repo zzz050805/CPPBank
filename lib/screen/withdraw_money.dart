@@ -1,18 +1,20 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
-import '../data/user_firestore_service.dart';
+import '../services/user_firestore_service.dart';
 import '../l10n/app_text.dart';
 import '../services/card_number_service.dart';
+import '../services/notification_service.dart';
 import '../widget/ccp_app_bar.dart';
 import '../widget/pin_popup.dart';
+import '../widget/custom_confirm_dialog.dart';
 import 'withdraw_receipt_screen.dart';
 
 class WithdrawATMPage extends StatefulWidget {
@@ -36,22 +38,13 @@ class _WithdrawReceiptData {
   final DateTime expiresAt;
 }
 
-class _WithdrawFlowException implements Exception {
-  const _WithdrawFlowException(this.message);
-
-  final String message;
-}
-
 class _WithdrawATMPageState extends State<WithdrawATMPage> {
-  // ==================== NOTE: CAU HINH RANG BUOC (TUY CHINH O DAY) ====================
   static const int _minWithdrawAmount = 50000;
-  // Hạn mức rút tối đa mỗi giao dịch: 100 triệu.
   static const int _maxWithdrawAmount = 100000000;
   static const int _withdrawStep = 50000;
-  // ================================================================================
 
   final TextEditingController _amountController = TextEditingController();
-  final List<int> _quickAmounts = [
+  final List<int> _quickAmounts = <int>[
     50000,
     100000,
     200000,
@@ -59,14 +52,15 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
     1000000,
     2000000,
   ];
+
   int? _selectedQuickAmount;
   late final Stream<UserProfileData?> _profileStream;
   double _lastKnownTotalBalance = 0;
   bool _hasLoadedBalance = false;
+  bool _isSubmitting = false;
 
-  // Màu thương hiệu bạn đã cung cấp ở câu trước
-  final Color brandColor = const Color(0xFF000DC0);
-  final Color bgColor = const Color(0xFFF8F9FE);
+  final Color _brandColor = const Color(0xFF000DC0);
+  final Color _bgColor = const Color(0xFFF8F9FE);
 
   @override
   void initState() {
@@ -80,20 +74,79 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
     super.dispose();
   }
 
-  String _t(String vi, String en) => AppText.tr(context, vi, en);
+  String _resolveUid() {
+    final String fromService =
+        (UserFirestoreService.instance.currentUserDocId ?? '').trim();
+    if (fromService.isNotEmpty) {
+      return fromService;
+    }
 
-  String get _msgInsufficientBalance =>
-      _t('Số dư không đủ', 'Insufficient balance');
+    final String fromAuth = (FirebaseAuth.instance.currentUser?.uid ?? '')
+        .trim();
+    if (fromAuth.isNotEmpty) {
+      return fromAuth;
+    }
 
-  String get _msgInvalidStep => _t(
-    'Số tiền rút phải là bội số của 50.000đ',
-    'Withdrawal amount must be a multiple of 50,000 VND',
-  );
+    return '';
+  }
 
-  String get _msgOutOfRange => _t(
-    'Số tiền rút không nằm trong hạn mức cho phép',
-    'Withdrawal amount is outside the allowed limit',
-  );
+  int get _enteredAmount {
+    return int.tryParse(_amountController.text.replaceAll(RegExp(r'\D'), '')) ??
+        0;
+  }
+
+  bool get _hasInsufficientBalance {
+    if (!_hasLoadedBalance) {
+      return false;
+    }
+    return _enteredAmount > _lastKnownTotalBalance;
+  }
+
+  int get _maxAllowedAmount {
+    if (!_hasLoadedBalance) {
+      return _maxWithdrawAmount;
+    }
+
+    final int availableByBalance = _lastKnownTotalBalance.floor();
+    if (availableByBalance <= 0) {
+      return 0;
+    }
+    if (availableByBalance > _maxWithdrawAmount) {
+      return _maxWithdrawAmount;
+    }
+    return availableByBalance;
+  }
+
+  bool get _isOutOfRange {
+    return _enteredAmount > 0 &&
+        (_enteredAmount < _minWithdrawAmount ||
+            _enteredAmount > _maxAllowedAmount);
+  }
+
+  bool get _isInvalidStep {
+    if (_enteredAmount == 0) {
+      return false;
+    }
+    return _enteredAmount % _withdrawStep != 0;
+  }
+
+  bool get _isValidAmount {
+    return _hasLoadedBalance &&
+        _enteredAmount >= _minWithdrawAmount &&
+        _enteredAmount <= _maxAllowedAmount &&
+        !_hasInsufficientBalance &&
+        !_isInvalidStep;
+  }
+
+  String? get _amountErrorText {
+    if (_hasInsufficientBalance) {
+      return AppText.text(context, 'insufficient_balance');
+    }
+    if (_isOutOfRange || _isInvalidStep) {
+      return AppText.text(context, 'withdraw_invalid_amount');
+    }
+    return null;
+  }
 
   String _formatCurrency(int amount) {
     return NumberFormat.currency(
@@ -103,84 +156,8 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
     ).format(amount);
   }
 
-  void _onQuickSelect(int value) {
-    setState(() {
-      _selectedQuickAmount = value;
-      // Định dạng số hiển thị trong ô nhập
-      _amountController.text = NumberFormat('#,###', 'vi_VN').format(value);
-    });
-  }
-
-  void _onAmountChanged(String value) {
-    // Chỉ cần reset lựa chọn nhanh; format số thực hiện bằng inputFormatter.
-    setState(() => _selectedQuickAmount = null);
-  }
-
-  int get _enteredAmount {
-    return int.tryParse(_amountController.text.replaceAll(RegExp(r'\D'), '')) ??
-        0;
-  }
-
-  bool get _hasInsufficientBalance {
-    if (!_hasLoadedBalance) return false;
-    return _enteredAmount > _lastKnownTotalBalance;
-  }
-
-  bool get _isOutOfRange {
-    return _enteredAmount > 0 &&
-        (_enteredAmount < _minWithdrawAmount ||
-            _enteredAmount > _maxWithdrawAmount);
-  }
-
-  bool get _isInvalidStep {
-    if (_enteredAmount == 0) return false;
-    return _enteredAmount % _withdrawStep != 0;
-  }
-
-  String? get _amountErrorText {
-    if (_hasInsufficientBalance) return _msgInsufficientBalance;
-    if (_isOutOfRange) return _msgOutOfRange;
-    if (_isInvalidStep) return _msgInvalidStep;
-    return null;
-  }
-
-  bool get _isValid {
-    return _enteredAmount >= _minWithdrawAmount &&
-        _enteredAmount <= _maxWithdrawAmount &&
-        !_hasInsufficientBalance &&
-        !_isInvalidStep;
-  }
-
-  bool _parseHasVipCard(dynamic value) {
-    if (value is bool) return value;
-    if (value is num) return value != 0;
-    if (value is String) {
-      final String normalized = value.trim().toLowerCase();
-      return normalized == 'true' || normalized == '1' || normalized == 'yes';
-    }
-    return false;
-  }
-
-  double _readBalance(dynamic rawBalance) {
-    if (rawBalance is num) return rawBalance.toDouble();
-    if (rawBalance is String) {
-      final String trimmed = rawBalance.trim();
-      if (trimmed.isEmpty) {
-        return 0;
-      }
-
-      final double? direct = double.tryParse(trimmed.replaceAll(',', '.'));
-      if (direct != null) {
-        return direct;
-      }
-
-      final String normalized = trimmed.replaceAll(RegExp(r'[^0-9-]'), '');
-      if (normalized.isEmpty || normalized == '-') {
-        return 0;
-      }
-      return num.tryParse(normalized)?.toDouble() ?? 0;
-    }
-    return 0;
+  String _formatDateTime(DateTime value) {
+    return DateFormat('dd/MM/yyyy HH:mm').format(value);
   }
 
   String _formatBalanceAmount(double value) {
@@ -193,201 +170,323 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
     return formatter.format(value).replaceAll(',', '.');
   }
 
-  String _resolveUid() {
-    final String? fromService = UserFirestoreService.instance.currentUserDocId;
-    if (fromService != null && fromService.isNotEmpty) {
-      return fromService;
-    }
-
-    final String? fromAuth = FirebaseAuth.instance.currentUser?.uid;
-    if (fromAuth != null && fromAuth.isNotEmpty) {
-      return fromAuth;
-    }
-
-    return '';
+  void _onQuickSelect(int value) {
+    setState(() {
+      _selectedQuickAmount = value;
+      _amountController.text = NumberFormat('#,###', 'vi_VN').format(value);
+    });
   }
 
-  String _generateWithdrawCode() {
+  void _onAmountChanged(String value) {
+    setState(() {
+      _selectedQuickAmount = null;
+    });
+  }
+
+  String _generateSixDigitCode() {
     final Random random = Random.secure();
-    final StringBuffer buffer = StringBuffer();
-
-    for (int i = 0; i < 10; i++) {
-      final int digit = random.nextInt(10);
-      buffer.write(digit);
-    }
-
-    return 'CCP$buffer';
+    return random.nextInt(1000000).toString().padLeft(6, '0');
   }
 
-  Future<_WithdrawReceiptData> _handleWithdraw({
+  Stream<QuerySnapshot<Map<String, dynamic>>> _withdrawHistoryStream(
+    String uid,
+  ) {
+    return FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('atm_withdrawals')
+        .orderBy('created_at', descending: true)
+        .snapshots();
+  }
+
+  Future<_WithdrawReceiptData> _createWithdrawCodeAfterPin({
     required String uid,
     required int amount,
   }) async {
-    try {
-      final FirebaseFirestore firestore = FirebaseFirestore.instance;
-      final DocumentReference<Map<String, dynamic>> userRef = firestore
-          .collection('users')
-          .doc(uid);
+    double parseCardBalance(dynamic value) {
+      if (value is num) {
+        return value.toDouble();
+      }
+      if (value is String) {
+        final String trimmed = value.trim();
+        if (trimmed.isEmpty) {
+          return 0;
+        }
+        final double? direct = double.tryParse(trimmed.replaceAll(',', '.'));
+        if (direct != null) {
+          return direct;
+        }
+        final String normalized = trimmed.replaceAll(RegExp(r'[^0-9.-]'), '');
+        if (normalized.isEmpty || normalized == '-' || normalized == '.') {
+          return 0;
+        }
+        return double.tryParse(normalized) ?? 0;
+      }
+      return 0;
+    }
 
-      final DateTime createdAt = DateTime.now();
-      final DateTime expiresAt = createdAt.add(const Duration(minutes: 15));
-      final String withdrawCode = _generateWithdrawCode();
-      final String amountText = _formatIntAmount(amount);
-      final String notificationAmountText = '$amountText VND';
-      final Map<String, String> bodyParams = <String, String>{
-        'amount': notificationAmountText,
-      };
-      final DocumentReference<Map<String, dynamic>> withdrawRef = userRef
-          .collection('withdraw')
-          .doc();
-      final DocumentReference<Map<String, dynamic>> notificationRef = userRef
-          .collection('notifications')
-          .doc();
+    final FirebaseFirestore firestore = FirebaseFirestore.instance;
+    final DocumentReference<Map<String, dynamic>> userRef = firestore
+        .collection('users')
+        .doc(uid);
+    final DocumentReference<Map<String, dynamic>> standardCardRef = userRef
+        .collection('cards')
+        .doc('standard');
+    final DocumentReference<Map<String, dynamic>> vipCardRef = userRef
+        .collection('cards')
+        .doc('vip');
+    final DocumentReference<Map<String, dynamic>> withdrawalRef = userRef
+        .collection('atm_withdrawals')
+        .doc();
+    final DocumentReference<Map<String, dynamic>> notificationRef = userRef
+        .collection('notifications')
+        .doc();
+    final DocumentReference<Map<String, dynamic>> transactionRef = userRef
+        .collection('transactions')
+        .doc();
 
-      await firestore.runTransaction((transaction) async {
-        final DocumentSnapshot<Map<String, dynamic>> userSnap =
-            await transaction.get(userRef);
-        if (!userSnap.exists) {
-          throw _WithdrawFlowException(
-            _t('Không tìm thấy tài khoản người dùng', 'User account not found'),
+    final String code = _generateSixDigitCode();
+    final DateTime createdAt = DateTime.now();
+    final DateTime expiresAt = createdAt.add(const Duration(minutes: 15));
+    final String languageCode = AppText.currentLanguageCode(context);
+    final String title = AppText.textByCode(languageCode, 'atm_withdrawal');
+    final String body = AppText.textByCodeWithParams(
+      languageCode,
+      'atm_withdrawal_code_created_heads_up',
+      <String, String>{'code': code},
+    );
+
+    await firestore.runTransaction((Transaction transaction) async {
+      final DocumentSnapshot<Map<String, dynamic>> userSnap = await transaction
+          .get(userRef);
+      if (!userSnap.exists) {
+        throw Exception(AppText.text(context, 'no_valid_login_session'));
+      }
+
+      final DocumentSnapshot<Map<String, dynamic>> standardCardSnap =
+          await transaction.get(standardCardRef);
+      final DocumentSnapshot<Map<String, dynamic>> vipCardSnap =
+          await transaction.get(vipCardRef);
+
+      final Map<String, dynamic> userData =
+          userSnap.data() ?? <String, dynamic>{};
+      final Map<String, dynamic> standardCardData =
+          standardCardSnap.data() ?? <String, dynamic>{};
+      final Map<String, dynamic> vipCardData =
+          vipCardSnap.data() ?? <String, dynamic>{};
+      final Map<String, Map<String, dynamic>> cardsById =
+          <String, Map<String, dynamic>>{
+            'standard': standardCardData,
+            'vip': vipCardData,
+          };
+
+      final bool standardAvailable = UserFirestoreService.instance
+          .isCardAvailableForTransactions(
+            cardId: 'standard',
+            cardData: standardCardData,
+            userData: userData,
           );
-        }
+      final bool vipAvailable = UserFirestoreService.instance
+          .isCardAvailableForTransactions(
+            cardId: 'vip',
+            cardData: vipCardData,
+            userData: userData,
+          );
 
-        final Map<String, dynamic> userData =
-            userSnap.data() ?? <String, dynamic>{};
-        final bool hasVipCard = _parseHasVipCard(userData['hasVipCard']);
-        final DocumentReference<Map<String, dynamic>> standardCardRef = userRef
-            .collection('cards')
-            .doc('standard');
-        final DocumentReference<Map<String, dynamic>> vipCardRef = userRef
-            .collection('cards')
-            .doc('vip');
+      final double availableBalance = UserFirestoreService.instance
+          .calculateAvailableBalanceFromMaps(
+            userData: userData,
+            cardsById: cardsById,
+          );
 
-        final DocumentSnapshot<Map<String, dynamic>> standardCardSnap =
-            await transaction.get(standardCardRef);
-        final DocumentSnapshot<Map<String, dynamic>> vipCardSnap =
-            await transaction.get(vipCardRef);
+      if (availableBalance < amount) {
+        throw Exception(AppText.text(context, 'insufficient_balance'));
+      }
 
-        num standardBalance = _readBalance(standardCardSnap.data()?['balance']);
-        num vipBalance = _readBalance(vipCardSnap.data()?['balance']);
-        final num cardsBalance = hasVipCard
-            ? (standardBalance + vipBalance)
+      final double standardBalance = parseCardBalance(
+        standardCardData['balance'],
+      );
+      final double vipBalance = parseCardBalance(vipCardData['balance']);
+
+      double remaining = amount.toDouble();
+      double standardDeduction = 0;
+      double vipDeduction = 0;
+
+      if (standardAvailable && remaining > 0) {
+        standardDeduction = remaining <= standardBalance
+            ? remaining
             : standardBalance;
-        final num userBalance = _readBalance(userData['balance']);
+        remaining -= standardDeduction;
+      }
 
-        final bool hasAnyCardBalance = cardsBalance > 0;
-        final num currentBalance = hasAnyCardBalance
-            ? cardsBalance
-            : userBalance;
+      if (vipAvailable && remaining > 0) {
+        vipDeduction = remaining <= vipBalance ? remaining : vipBalance;
+        remaining -= vipDeduction;
+      }
 
-        if (currentBalance < amount) {
-          throw _WithdrawFlowException(_msgInsufficientBalance);
-        }
+      if (remaining > 0) {
+        throw Exception(AppText.text(context, 'insufficient_balance'));
+      }
 
-        num newBalance;
-        if (hasAnyCardBalance) {
-          if (standardBalance >= amount) {
-            standardBalance -= amount;
-          } else {
-            final num remaining = amount - standardBalance;
-            standardBalance = 0;
-            if (!hasVipCard || vipBalance < remaining) {
-              throw _WithdrawFlowException(_msgInsufficientBalance);
-            }
-            vipBalance -= remaining;
-          }
-
-          newBalance = hasVipCard
-              ? (standardBalance + vipBalance)
-              : standardBalance;
-
-          transaction.set(standardCardRef, <String, dynamic>{
-            'balance': standardBalance,
-            'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
-
-          if (hasVipCard) {
-            transaction.set(vipCardRef, <String, dynamic>{
-              'balance': vipBalance,
-              'updatedAt': FieldValue.serverTimestamp(),
-            }, SetOptions(merge: true));
-          }
-        } else {
-          newBalance = userBalance - amount;
-        }
-
-        transaction.set(userRef, <String, dynamic>{
-          'balance': newBalance,
+      if (standardDeduction > 0) {
+        transaction.set(standardCardRef, <String, dynamic>{
+          'balance': FieldValue.increment(-standardDeduction),
           'updatedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
+      }
 
-        transaction.set(withdrawRef, <String, dynamic>{
-          'uid': uid,
-          'amount': amount,
-          'amountText': amountText,
-          'currency': 'VND',
-          'type': 'withdraw',
-          'withdrawCode': withdrawCode,
-          'timestamp': FieldValue.serverTimestamp(),
-          'createdAt': FieldValue.serverTimestamp(),
-          'status': 'pending',
-          'expiresAt': Timestamp.fromDate(expiresAt),
-        });
+      if (vipDeduction > 0) {
+        transaction.set(vipCardRef, <String, dynamic>{
+          'balance': FieldValue.increment(-vipDeduction),
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
 
-        transaction.set(notificationRef, <String, dynamic>{
-          'titleKey': 'notify_withdraw_title',
-          'bodyKey': 'notify_withdraw_body',
-          'bodyParams': bodyParams,
-          'timestamp': FieldValue.serverTimestamp(),
-          'createdAt': FieldValue.serverTimestamp(),
-          'type': 'withdraw',
-          'isNegative': true,
-          'serviceName': _t('Rút tiền mặt', 'Cash withdrawal'),
-          'targetAccount': withdrawCode,
-          'transactionCode': withdrawCode,
-          'status': 'success',
-          'isRead': false,
-          'relatedId': withdrawRef.id,
-          'amount': amount,
-        });
+      transaction.set(userRef, <String, dynamic>{
+        'balance': FieldValue.increment(-amount),
+        'availableBalance': FieldValue.increment(-amount),
+        'totalBalance': FieldValue.increment(-amount),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      transaction.set(withdrawalRef, <String, dynamic>{
+        'uid': uid,
+        'amount': amount,
+        'code': code,
+        'status': 'active',
+        'type': 'withdraw',
+        'created_at': FieldValue.serverTimestamp(),
+        'created_at_client': Timestamp.fromDate(createdAt),
+        'expires_at': Timestamp.fromDate(expiresAt),
       });
 
-      return _WithdrawReceiptData(
-        code: withdrawCode,
-        amount: amount,
-        createdAt: createdAt,
-        expiresAt: expiresAt,
-      );
-    } on _WithdrawFlowException catch (e) {
-      if (e.message == _msgInsufficientBalance && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(_msgInsufficientBalance),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-      rethrow;
-    } on FirebaseException catch (e) {
-      final String code = e.code.toLowerCase();
-      if (code == 'unavailable' ||
-          code == 'network-request-failed' ||
-          code == 'deadline-exceeded') {
-        debugPrint('Withdraw network error: ${e.code} - ${e.message}');
-      } else {
-        debugPrint('Withdraw Firebase error: ${e.code} - ${e.message}');
-      }
-      throw _WithdrawFlowException(
-        e.message ??
-            _t(
-              'Đã xảy ra lỗi kết nối khi xử lý rút tiền',
-              'A connection error occurred while processing the withdrawal',
-            ),
-      );
-    } catch (e) {
-      debugPrint('Withdraw unexpected error: $e');
-      rethrow;
+      transaction.set(notificationRef, <String, dynamic>{
+        'title': title,
+        'body': body,
+        'titleKey': 'atm_withdrawal',
+        'bodyKey': 'atm_withdrawal_code_created_heads_up',
+        'bodyParams': <String, String>{'code': code},
+        'timestamp': FieldValue.serverTimestamp(),
+        'createdAt': FieldValue.serverTimestamp(),
+        'type': 'atm_withdrawal',
+        'status': 'success',
+        'isRead': false,
+        'isNegative': true,
+        'amount': amount,
+        'withdrawCode': code,
+        'relatedId': withdrawalRef.id,
+      });
+
+      transaction.set(transactionRef, <String, dynamic>{
+        'type': 'atm_withdrawal',
+        'amount': amount,
+        'status': 'success',
+        'timestamp': FieldValue.serverTimestamp(),
+        'timestamp_client': Timestamp.fromDate(createdAt),
+        'createdAt': FieldValue.serverTimestamp(),
+        'createdAt_client': Timestamp.fromDate(createdAt),
+        'withdrawCode': code,
+        'transactionCode': code,
+        'relatedId': withdrawalRef.id,
+        'isNegative': true,
+      });
+    });
+
+    await NotificationService().showNotification(
+      title: title,
+      body: body,
+      lightVibration: true,
+    );
+
+    return _WithdrawReceiptData(
+      code: code,
+      amount: amount,
+      createdAt: createdAt,
+      expiresAt: expiresAt,
+    );
+  }
+
+  Future<void> _onSubmitCreateCode() async {
+    if (_isSubmitting) {
+      return;
     }
+
+    final int amount = _enteredAmount;
+    if (!_isValidAmount || amount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppText.text(context, 'withdraw_invalid_amount')),
+        ),
+      );
+      return;
+    }
+
+    final String uid = _resolveUid();
+    if (uid.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppText.text(context, 'no_valid_login_session')),
+        ),
+      );
+      return;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) {
+        return PinPopupWidget(
+          onSuccess: () async {
+            if (!mounted) {
+              return;
+            }
+
+            setState(() {
+              _isSubmitting = true;
+            });
+
+            try {
+              final _WithdrawReceiptData receipt =
+                  await _createWithdrawCodeAfterPin(uid: uid, amount: amount);
+
+              if (!mounted) {
+                return;
+              }
+
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => WithdrawReceiptScreen(
+                    amount: receipt.amount,
+                    withdrawCode: receipt.code,
+                    createdAt: receipt.createdAt,
+                    expiresAt: receipt.expiresAt,
+                  ),
+                ),
+              );
+            } catch (_) {
+              if (!mounted) {
+                return;
+              }
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    AppText.text(context, 'withdraw_create_failed'),
+                  ),
+                ),
+              );
+            } finally {
+              if (mounted) {
+                setState(() {
+                  _isSubmitting = false;
+                });
+              }
+            }
+          },
+        );
+      },
+    );
   }
 
   Widget _buildAvailableBalanceValue() {
@@ -409,9 +508,8 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
               .doc(resolvedUserId)
               .snapshots(),
           builder: (context, userSnapshot) {
-            final bool hasVipCard = _parseHasVipCard(
-              userSnapshot.data?.data()?['hasVipCard'],
-            );
+            final Map<String, dynamic> userData =
+                userSnapshot.data?.data() ?? <String, dynamic>{};
 
             return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
               stream: FirebaseFirestore.instance
@@ -421,27 +519,18 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
                   .snapshots(),
               builder: (context, cardsSnapshot) {
                 if (cardsSnapshot.hasData) {
-                  double standardBalance = 0;
-                  double vipBalance = 0;
-
-                  for (final doc in cardsSnapshot.data!.docs) {
-                    final String docId = doc.id.toLowerCase();
-                    final double balance = _readBalance(doc.data()['balance']);
-                    if (docId == 'standard') {
-                      standardBalance = balance;
-                    } else if (docId == 'vip') {
-                      vipBalance = balance;
-                    }
-                  }
-
-                  final double updatedTotal = hasVipCard
-                      ? standardBalance + vipBalance
-                      : standardBalance;
+                  final double updatedTotal = UserFirestoreService.instance
+                      .calculateAvailableBalance(
+                        userData: userData,
+                        cardDocs: cardsSnapshot.data!.docs,
+                      );
 
                   if (updatedTotal != _lastKnownTotalBalance ||
                       !_hasLoadedBalance) {
                     WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (!mounted) return;
+                      if (!mounted) {
+                        return;
+                      }
                       setState(() {
                         _lastKnownTotalBalance = updatedTotal;
                         _hasLoadedBalance = true;
@@ -479,7 +568,7 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
   Widget _buildBalanceNumber(double totalBalance) {
     return Row(
       mainAxisSize: MainAxisSize.min,
-      children: [
+      children: <Widget>[
         Text(
           _formatBalanceAmount(totalBalance),
           style: GoogleFonts.poppins(
@@ -521,7 +610,7 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
 
         if (uid.isEmpty) {
           return Text(
-            _t('Đang tải...', 'Loading...'),
+            AppText.text(context, 'loading'),
             style: GoogleFonts.poppins(
               color: Colors.white,
               fontSize: 16,
@@ -537,7 +626,7 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
               .doc(uid)
               .snapshots(),
           builder: (context, userSnapshot) {
-            String display = _t('Đang tải...', 'Loading...');
+            String display = AppText.text(context, 'loading');
             if (userSnapshot.hasData) {
               final Map<String, dynamic> userData =
                   userSnapshot.data?.data() ?? <String, dynamic>{};
@@ -564,78 +653,14 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData poppinsTheme = Theme.of(context).copyWith(
-      textTheme: GoogleFonts.poppinsTextTheme(Theme.of(context).textTheme),
-    );
-
-    return Theme(
-      data: poppinsTheme,
-      child: Scaffold(
-        backgroundColor: bgColor,
-        appBar: CCPAppBar(title: _t('Rút tiền', 'Withdraw')),
-        body: SingleChildScrollView(
-          child: Column(
-            children: [
-              _buildHeader(context),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Column(
-                  children: [
-                    const SizedBox(height: 20),
-                    _buildAmountInput(),
-                    const SizedBox(height: 16),
-                    _buildQuickSelectGrid(),
-                    const SizedBox(height: 16),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFEFF3FF),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFD6E0FF)),
-                      ),
-                      child: Text(
-                        _t(
-                          'Hạn mức rút: ${_formatIntAmount(_minWithdrawAmount)}đ - ${_formatIntAmount(_maxWithdrawAmount)}đ / lần',
-                          'Withdrawal limit: ${_formatIntAmount(_minWithdrawAmount)} VND - ${_formatIntAmount(_maxWithdrawAmount)} VND / transaction',
-                        ),
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.poppins(
-                          color: const Color(0xFF405086),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    _buildSubmitButton(),
-                    const SizedBox(height: 20),
-                    _buildSecurityBadge(),
-                    const SizedBox(height: 40),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // --- Header với Gradient và Card thông tin ---
   Widget _buildHeader(BuildContext context) {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [
+          colors: <Color>[
             const Color(0xFF2239E2),
-            brandColor,
+            _brandColor,
             const Color(0xFF031A90),
           ],
           begin: Alignment.topLeft,
@@ -645,14 +670,13 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
       ),
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 36),
       child: Column(
-        children: [
+        children: <Widget>[
           const SizedBox(height: 4),
-          // Thẻ tài khoản (Glassmorphism)
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [
+                colors: <Color>[
                   Colors.white.withValues(alpha: 0.18),
                   Colors.white.withValues(alpha: 0.1),
                 ],
@@ -663,9 +687,9 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
               border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
             ),
             child: Column(
-              children: [
+              children: <Widget>[
                 Row(
-                  children: [
+                  children: <Widget>[
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
@@ -677,9 +701,9 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
                     const SizedBox(width: 12),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+                      children: <Widget>[
                         Text(
-                          _t('TÀI KHOẢN NGUỒN', 'SOURCE ACCOUNT'),
+                          AppText.text(context, 'source_account'),
                           style: GoogleFonts.poppins(
                             color: Colors.white.withValues(alpha: 0.75),
                             fontSize: 10,
@@ -699,12 +723,12 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
+                  children: <Widget>[
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+                      children: <Widget>[
                         Text(
-                          _t('SỐ DƯ KHẢ DỤNG', 'AVAILABLE BALANCE'),
+                          AppText.text(context, 'available_balance'),
                           style: GoogleFonts.poppins(
                             color: Colors.white.withValues(alpha: 0.76),
                             fontSize: 10,
@@ -731,14 +755,13 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
     );
   }
 
-  // --- Ô nhập số tiền ---
   Widget _buildAmountInput() {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
-        boxShadow: [
+        boxShadow: <BoxShadow>[
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 20,
@@ -748,9 +771,9 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+        children: <Widget>[
           Text(
-            _t('Nhập số tiền muốn rút', 'Enter withdrawal amount'),
+            AppText.text(context, 'enter_withdraw_amount'),
             style: GoogleFonts.poppins(
               color: const Color(0xFF727C96),
               fontWeight: FontWeight.w600,
@@ -760,7 +783,7 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
           TextField(
             controller: _amountController,
             keyboardType: TextInputType.number,
-            inputFormatters: [
+            inputFormatters: <TextInputFormatter>[
               FilteringTextInputFormatter.digitsOnly,
               TextInputFormatter.withFunction((oldValue, newValue) {
                 final String digits = newValue.text.replaceAll(
@@ -772,7 +795,9 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
                 }
 
                 final int? parsed = int.tryParse(digits);
-                if (parsed == null) return oldValue;
+                if (parsed == null) {
+                  return oldValue;
+                }
 
                 final String formatted = NumberFormat(
                   '#,###',
@@ -806,7 +831,7 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  _t('VNĐ', 'VND'),
+                  AppText.text(context, 'currency_vnd'),
                   style: GoogleFonts.poppins(
                     fontWeight: FontWeight.w700,
                     color: const Color(0xFF7F879E),
@@ -820,12 +845,12 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
               ),
               enabledBorder: UnderlineInputBorder(
                 borderSide: BorderSide(
-                  color: brandColor.withValues(alpha: 0.2),
+                  color: _brandColor.withValues(alpha: 0.2),
                   width: 2,
                 ),
               ),
               focusedBorder: UnderlineInputBorder(
-                borderSide: BorderSide(color: brandColor, width: 2),
+                borderSide: BorderSide(color: _brandColor, width: 2),
               ),
             ),
             onChanged: _onAmountChanged,
@@ -835,14 +860,13 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
     );
   }
 
-  // --- Grid chọn nhanh ---
   Widget _buildQuickSelectGrid() {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
-        boxShadow: [
+        boxShadow: <BoxShadow>[
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 20,
@@ -852,9 +876,9 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+        children: <Widget>[
           Text(
-            _t('Chọn nhanh mệnh giá', 'Quick amount selection'),
+            AppText.text(context, 'quick_amount_selection'),
             style: GoogleFonts.poppins(
               color: const Color(0xFF727C96),
               fontWeight: FontWeight.w600,
@@ -872,24 +896,24 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
             ),
             itemCount: _quickAmounts.length,
             itemBuilder: (context, index) {
-              final val = _quickAmounts[index];
-              final isSelected = _selectedQuickAmount == val;
+              final int val = _quickAmounts[index];
+              final bool isSelected = _selectedQuickAmount == val;
               return GestureDetector(
                 onTap: () => _onQuickSelect(val),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
                   decoration: BoxDecoration(
-                    color: isSelected ? brandColor : Colors.grey.shade50,
+                    color: isSelected ? _brandColor : Colors.grey.shade50,
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: isSelected
-                        ? [
+                        ? <BoxShadow>[
                             BoxShadow(
-                              color: brandColor.withValues(alpha: 0.3),
+                              color: _brandColor.withValues(alpha: 0.3),
                               blurRadius: 8,
                               offset: const Offset(0, 4),
                             ),
                           ]
-                        : [],
+                        : <BoxShadow>[],
                   ),
                   alignment: Alignment.center,
                   child: Text(
@@ -909,13 +933,12 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
     );
   }
 
-  // --- Nút Rút tiền ---
   Widget _buildSubmitButton() {
     return SizedBox(
       width: double.infinity,
       height: 56,
       child: ElevatedButton(
-        onPressed: _isValid ? _onSubmitWithdraw : null,
+        onPressed: _isSubmitting ? null : _onSubmitCreateCode,
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFF2B1CA3),
           foregroundColor: Colors.white,
@@ -923,16 +946,22 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
-          elevation: _isValid ? 8 : 0,
+          elevation: !_isSubmitting ? 8 : 0,
           shadowColor: const Color(0xFF2B1CA3).withValues(alpha: 0.5),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.file_download_outlined),
+          children: <Widget>[
+            _isSubmitting
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.qr_code_rounded),
             const SizedBox(width: 10),
             Text(
-              _t('Rút tiền', 'Withdraw'),
+              AppText.text(context, 'create_code'),
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
           ],
@@ -941,98 +970,14 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
     );
   }
 
-  Future<void> _onSubmitWithdraw() async {
-    final String digits = _amountController.text.replaceAll(RegExp(r'\D'), '');
-    final int amount = digits.isEmpty ? 0 : int.parse(digits);
-    if (!_isValid || amount <= 0) {
-      return;
-    }
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => PinPopupWidget(
-        onSuccess: () async {
-          final String uid = _resolveUid();
-          if (uid.isEmpty) {
-            if (!mounted) {
-              return;
-            }
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  _t(
-                    'Không tìm thấy phiên đăng nhập hợp lệ',
-                    'No valid login session found',
-                  ),
-                ),
-                backgroundColor: Colors.red,
-              ),
-            );
-            return;
-          }
-
-          try {
-            final _WithdrawReceiptData receipt = await _handleWithdraw(
-              uid: uid,
-              amount: amount,
-            );
-
-            if (!mounted) {
-              return;
-            }
-
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => WithdrawReceiptScreen(
-                  amount: receipt.amount,
-                  withdrawCode: receipt.code,
-                  createdAt: receipt.createdAt,
-                  expiresAt: receipt.expiresAt,
-                ),
-              ),
-            );
-          } on _WithdrawFlowException catch (e) {
-            if (!mounted) {
-              return;
-            }
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(e.message), backgroundColor: Colors.red),
-            );
-          } catch (_) {
-            if (!mounted) {
-              return;
-            }
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  _t(
-                    'Đã xảy ra lỗi, vui lòng thử lại',
-                    'An error occurred, please try again',
-                  ),
-                ),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-        },
-      ),
-    );
-  }
-
   Widget _buildSecurityBadge() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
-      children: [
+      children: <Widget>[
         Icon(Icons.shield, size: 14, color: Colors.grey.withValues(alpha: 0.5)),
         const SizedBox(width: 6),
         Text(
-          _t(
-            'Giao dịch được bảo mật bởi SSL 256-bit',
-            'Transactions are secured by 256-bit SSL',
-          ),
+          AppText.text(context, 'security_ssl_notice'),
           style: GoogleFonts.poppins(
             color: Colors.grey.withValues(alpha: 0.5),
             fontSize: 11,
@@ -1040,6 +985,506 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildHistorySection() {
+    final String uid = _resolveUid();
+    if (uid.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 18),
+        child: Text(
+          AppText.text(context, 'no_valid_login_session'),
+          style: GoogleFonts.poppins(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: const Color(0xFF667085),
+          ),
+        ),
+      );
+    }
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: _withdrawHistoryStream(uid),
+      builder:
+          (
+            BuildContext context,
+            AsyncSnapshot<QuerySnapshot<Map<String, dynamic>>> snapshot,
+          ) {
+            if (!snapshot.hasData) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 18),
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+
+            final List<QueryDocumentSnapshot<Map<String, dynamic>>> docs =
+                snapshot.data!.docs;
+            if (docs.isEmpty) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 18),
+                child: Text(
+                  AppText.text(context, 'no_withdraw_history'),
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: const Color(0xFF667085),
+                  ),
+                ),
+              );
+            }
+
+            return ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: docs.length,
+              separatorBuilder: (_, int index) => const SizedBox(height: 10),
+              itemBuilder: (BuildContext context, int index) {
+                final QueryDocumentSnapshot<Map<String, dynamic>> doc =
+                    docs[index];
+                return _WithdrawHistoryCard(
+                  key: ValueKey<String>(doc.id),
+                  docRef: doc.reference,
+                  data: doc.data(),
+                  formatCurrency: _formatCurrency,
+                  formatDateTime: _formatDateTime,
+                );
+              },
+            );
+          },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Theme(
+      data: Theme.of(context).copyWith(
+        textTheme: GoogleFonts.poppinsTextTheme(Theme.of(context).textTheme),
+      ),
+      child: Scaffold(
+        backgroundColor: _bgColor,
+        appBar: CCPAppBar(title: AppText.text(context, 'atm_withdrawal')),
+        body: SingleChildScrollView(
+          child: Column(
+            children: <Widget>[
+              _buildHeader(context),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Column(
+                  children: <Widget>[
+                    const SizedBox(height: 20),
+                    _buildAmountInput(),
+                    const SizedBox(height: 16),
+                    _buildQuickSelectGrid(),
+                    const SizedBox(height: 16),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEFF3FF),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFD6E0FF)),
+                      ),
+                      child: Text(
+                        AppText.textWithParams(
+                          context,
+                          'withdraw_limit_text',
+                          <String, String>{
+                            'min': _formatIntAmount(_minWithdrawAmount),
+                            'max': _formatIntAmount(_maxAllowedAmount),
+                          },
+                        ),
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.poppins(
+                          color: const Color(0xFF405086),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    _buildSubmitButton(),
+                    const SizedBox(height: 20),
+                    _buildSecurityBadge(),
+                    const SizedBox(height: 24),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        AppText.text(context, 'withdraw_history'),
+                        style: GoogleFonts.poppins(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF101828),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    _buildHistorySection(),
+                    const SizedBox(height: 28),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WithdrawHistoryCard extends StatefulWidget {
+  const _WithdrawHistoryCard({
+    super.key,
+    required this.docRef,
+    required this.data,
+    required this.formatCurrency,
+    required this.formatDateTime,
+  });
+
+  final DocumentReference<Map<String, dynamic>> docRef;
+  final Map<String, dynamic> data;
+  final String Function(int amount) formatCurrency;
+  final String Function(DateTime value) formatDateTime;
+
+  @override
+  State<_WithdrawHistoryCard> createState() => _WithdrawHistoryCardState();
+}
+
+class _WithdrawHistoryCardState extends State<_WithdrawHistoryCard> {
+  Timer? _countdownTimer;
+  Duration _remaining = Duration.zero;
+  bool _isMarkingExpired = false;
+  bool _isCancellingCode = false;
+
+  static const Duration _activeWindow = Duration(minutes: 15);
+
+  @override
+  void initState() {
+    super.initState();
+    _syncTimer();
+  }
+
+  @override
+  void didUpdateWidget(covariant _WithdrawHistoryCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    final String oldStatus = (oldWidget.data['status'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
+    final String newStatus = (widget.data['status'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
+    final String oldCode = (oldWidget.data['code'] ?? '').toString();
+    final String newCode = (widget.data['code'] ?? '').toString();
+
+    if (oldStatus != newStatus || oldCode != newCode) {
+      _syncTimer();
+    }
+  }
+
+  @override
+  void dispose() {
+    _countdownTimer?.cancel();
+    super.dispose();
+  }
+
+  DateTime? _readCreatedAt() {
+    final dynamic rawServer = widget.data['created_at'];
+    if (rawServer is Timestamp) {
+      return rawServer.toDate();
+    }
+
+    final dynamic rawClient = widget.data['created_at_client'];
+    if (rawClient is Timestamp) {
+      return rawClient.toDate();
+    }
+
+    return null;
+  }
+
+  String get _status {
+    return (widget.data['status'] ?? '').toString().trim().toLowerCase();
+  }
+
+  Duration _computeRemaining() {
+    final DateTime? createdAt = _readCreatedAt();
+    if (createdAt == null) {
+      return _activeWindow;
+    }
+    final Duration elapsed = DateTime.now().difference(createdAt);
+    final Duration remaining = _activeWindow - elapsed;
+    if (remaining.isNegative) {
+      return Duration.zero;
+    }
+    return remaining;
+  }
+
+  Future<void> _markExpiredIfNeeded() async {
+    if (_isMarkingExpired || _status != 'active') {
+      return;
+    }
+
+    _isMarkingExpired = true;
+    try {
+      await widget.docRef.set(<String, dynamic>{
+        'status': 'expired',
+        'updated_at': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (_) {
+      // Keep UI responsive if status update fails.
+    } finally {
+      _isMarkingExpired = false;
+    }
+  }
+
+  Future<void> _confirmCancelCode() async {
+    if (_isCancellingCode || _status != 'active') {
+      return;
+    }
+
+    await showCustomConfirmDialog(
+      context: context,
+      title: AppText.text(context, 'cancel_withdraw_code_title'),
+      message: AppText.text(context, 'cancel_withdraw_code_confirm'),
+      confirmText: AppText.text(context, 'btn_yes'),
+      cancelText: AppText.text(context, 'btn_no'),
+      confirmColor: const Color(0xFFB42318),
+      onConfirm: _cancelCode,
+    );
+  }
+
+  Future<void> _cancelCode() async {
+    if (_isCancellingCode || _status != 'active' || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _isCancellingCode = true;
+    });
+
+    try {
+      await widget.docRef.set(<String, dynamic>{
+        'status': 'cancelled',
+        'updated_at': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppText.text(context, 'withdraw_code_cancelled')),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppText.text(context, 'withdraw_cancel_failed')),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCancellingCode = false;
+        });
+      }
+    }
+  }
+
+  void _syncTimer() {
+    _countdownTimer?.cancel();
+
+    if (_status != 'active') {
+      if (mounted) {
+        setState(() {
+          _remaining = Duration.zero;
+        });
+      }
+      return;
+    }
+
+    void tick() {
+      final Duration next = _computeRemaining();
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _remaining = next;
+      });
+
+      if (next == Duration.zero) {
+        _countdownTimer?.cancel();
+        _markExpiredIfNeeded();
+      }
+    }
+
+    tick();
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      tick();
+    });
+  }
+
+  String _formatRemaining(Duration value) {
+    final int minutes = value.inMinutes;
+    final int seconds = value.inSeconds.remainder(60);
+    final String mm = minutes.toString().padLeft(2, '0');
+    final String ss = seconds.toString().padLeft(2, '0');
+    return '$mm:$ss';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final String code = (widget.data['code'] ?? '').toString();
+    final int amount = (widget.data['amount'] as num?)?.toInt() ?? 0;
+    final DateTime? createdAt = _readCreatedAt();
+
+    final bool isActive = _status == 'active';
+    final bool isExpired = _status == 'expired';
+    final bool isSuccess = _status == 'success';
+    final bool isCancelled = _status == 'cancelled';
+
+    final Color borderColor = isActive
+        ? const Color(0xFF1D4ED8)
+        : const Color(0xFFE4E7EC);
+
+    String statusText;
+    TextStyle statusStyle;
+
+    if (isActive) {
+      statusText = AppText.textWithParams(
+        context,
+        'remaining_time',
+        <String, String>{'time': _formatRemaining(_remaining)},
+      );
+      statusStyle = GoogleFonts.poppins(
+        fontSize: 12,
+        fontWeight: FontWeight.w700,
+        color: const Color(0xFF1D4ED8),
+        fontStyle: FontStyle.italic,
+      );
+    } else if (isSuccess) {
+      statusText = AppText.text(context, 'title_withdraw');
+      statusStyle = GoogleFonts.poppins(
+        fontSize: 12,
+        fontWeight: FontWeight.w700,
+        color: const Color(0xFF15803D),
+      );
+    } else if (isExpired) {
+      statusText = AppText.text(context, 'status_expired');
+      statusStyle = GoogleFonts.poppins(
+        fontSize: 12,
+        fontWeight: FontWeight.w700,
+        color: const Color(0xFF98A2B3),
+      );
+    } else if (isCancelled) {
+      statusText = AppText.text(context, 'status_cancelled');
+      statusStyle = GoogleFonts.poppins(
+        fontSize: 12,
+        fontWeight: FontWeight.w700,
+        color: const Color(0xFFB42318),
+      );
+    } else {
+      statusText = AppText.text(context, 'status_active');
+      statusStyle = GoogleFonts.poppins(
+        fontSize: 12,
+        fontWeight: FontWeight.w700,
+        color: const Color(0xFF344054),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: borderColor, width: isActive ? 1.4 : 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Icon(
+                Icons.atm_rounded,
+                color: isActive
+                    ? const Color(0xFF1D4ED8)
+                    : const Color(0xFF667085),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '${AppText.text(context, 'code_label')}: $code',
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF101828),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '${AppText.text(context, 'payment_amount')}: ${widget.formatCurrency(amount)}',
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF344054),
+            ),
+          ),
+          if (createdAt != null) ...<Widget>[
+            const SizedBox(height: 4),
+            Text(
+              '${AppText.text(context, 'created_at_label')}: ${widget.formatDateTime(createdAt)}',
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: const Color(0xFF667085),
+              ),
+            ),
+          ],
+          const SizedBox(height: 8),
+          Text(statusText, style: statusStyle),
+          if (isActive) ...<Widget>[
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerRight,
+              child: OutlinedButton.icon(
+                onPressed: _isCancellingCode ? null : _confirmCancelCode,
+                icon: _isCancellingCode
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.cancel_outlined, size: 16),
+                label: Text(AppText.text(context, 'cancel_code')),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFFB42318),
+                  side: const BorderSide(color: Color(0xFFFDA29B)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  textStyle: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

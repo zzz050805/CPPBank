@@ -7,11 +7,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../admin/admin_dashboard_screen.dart';
 import '../admin/admin_firestore_setup_service.dart';
-import '../data/user_firestore_service.dart';
+import 'package:doan_nganhang/screen/register.dart';
+import '../services/user_firestore_service.dart';
 import '../services/home_cache_service.dart';
 import 'forget_password.dart';
 import 'main_tab_shell.dart';
-import 'register.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});

@@ -1,14 +1,18 @@
 import 'dart:ui';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:rxdart/rxdart.dart';
 
+import '../app_preferences.dart';
 import '../l10n/app_text.dart';
+import '../screen/login.dart';
 import '../services/card_number_service.dart';
+import '../widget/custom_confirm_dialog.dart';
 
 const List<String> _kTransactionCollections = <String>[
   'Shopping',
@@ -142,6 +146,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   int _selectedTab = 0;
+  bool _isLoggingOut = false;
   late Stream<QuerySnapshot<Map<String, dynamic>>> _servicesPricingStream;
   late Stream<QuerySnapshot<Map<String, dynamic>>> _bannersStream;
   late Stream<int> _totalTransactionsCountStream;
@@ -198,6 +203,142 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   String _t(String vi, String en) => AppText.tr(context, vi, en);
 
+  void _onSettingsMenuSelected(int value) {
+    switch (value) {
+      case 1:
+        _showLanguageBottomSheet(context);
+        break;
+      case 2:
+        _handleLogout();
+        break;
+      default:
+        break;
+    }
+  }
+
+  Future<void> _showLanguageBottomSheet(BuildContext parentContext) async {
+    await showModalBottomSheet<void>(
+      context: parentContext,
+      builder: (BuildContext sheetContext) {
+        final String currentCode = AppPreferences.instance.locale.languageCode;
+
+        Future<void> selectLanguage(Locale locale) async {
+          await AppPreferences.instance.setLocaleAndPersist(locale);
+          if (!sheetContext.mounted) {
+            return;
+          }
+          Navigator.pop(sheetContext);
+        }
+
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              ListTile(
+                title: Text(
+                  AppText.text(sheetContext, 'select_language'),
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
+                ),
+              ),
+              ListTile(
+                onTap: () => selectLanguage(const Locale('vi')),
+                title: Text(AppText.text(sheetContext, 'language_vietnamese')),
+                trailing: currentCode == 'vi'
+                    ? const Icon(Icons.check, color: _primaryBlue)
+                    : null,
+              ),
+              ListTile(
+                onTap: () => selectLanguage(const Locale('en')),
+                title: Text(AppText.text(sheetContext, 'language_english')),
+                trailing: currentCode == 'en'
+                    ? const Icon(Icons.check, color: _primaryBlue)
+                    : null,
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _handleLogout() async {
+    if (!mounted || _isLoggingOut) {
+      return;
+    }
+
+    await showCustomConfirmDialog(
+      context: context,
+      title: AppText.text(context, 'confirm_logout_title'),
+      message: AppText.text(context, 'confirm_logout_msg'),
+      confirmText: AppText.text(context, 'menu_logout'),
+      cancelText: AppText.text(context, 'btn_cancel'),
+      confirmColor: Colors.red,
+      onConfirm: _performAdminLogout,
+    );
+  }
+
+  Future<void> _performAdminLogout() async {
+    if (!mounted || _isLoggingOut) {
+      return;
+    }
+
+    setState(() {
+      _isLoggingOut = true;
+    });
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      useRootNavigator: true,
+      builder: (BuildContext _) {
+        return const PopScope(
+          canPop: false,
+          child: Center(child: CircularProgressIndicator()),
+        );
+      },
+    );
+
+    try {
+      await FirebaseAuth.instance.signOut();
+
+      if (!mounted) {
+        return;
+      }
+
+      if (Navigator.of(context, rootNavigator: true).canPop()) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (Route<dynamic> route) => false,
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      if (Navigator.of(context, rootNavigator: true).canPop()) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppText.text(context, 'logout_failed'))),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoggingOut = false;
+        });
+      }
+    }
+  }
+
   String _tabLabel(
     ({IconData icon, String vi, String en, String? textKey}) tab,
   ) {
@@ -214,7 +355,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   Future<void> _bootstrapServicesData() async {
     await _restoreMissingServiceDocsFromLegacy();
-    await _cleanupDuplicateServiceNames();
+  }
+
+  bool _isShoppingBundleService(Map<String, dynamic> data) {
+    final String kind = (data['kind'] ?? 'shopping_bundle').toString().trim();
+    return kind.isEmpty || kind == 'shopping_bundle';
   }
 
   Future<void> _restoreMissingServiceDocsFromLegacy() async {
@@ -281,129 +426,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       }
     } catch (_) {
       // Keep dashboard usable even if legacy recovery fails.
-    }
-  }
-
-  String _normalizedServiceName(Map<String, dynamic> data, String fallbackId) {
-    final String name =
-        (data['nameVi'] ?? data['name'] ?? data['nameEn'] ?? fallbackId)
-            .toString()
-            .trim()
-            .toLowerCase();
-    return name;
-  }
-
-  DateTime _readServiceTimestamp(dynamic raw) {
-    if (raw is Timestamp) {
-      return raw.toDate();
-    }
-    if (raw is DateTime) {
-      return raw;
-    }
-    if (raw is int) {
-      if (raw.abs() < 100000000000) {
-        return DateTime.fromMillisecondsSinceEpoch(raw * 1000);
-      }
-      return DateTime.fromMillisecondsSinceEpoch(raw);
-    }
-    if (raw is String) {
-      final DateTime? parsed = DateTime.tryParse(raw);
-      if (parsed != null) {
-        return parsed;
-      }
-    }
-    return DateTime.fromMillisecondsSinceEpoch(0);
-  }
-
-  Future<void> _cleanupDuplicateServiceNames() async {
-    try {
-      final QuerySnapshot<Map<String, dynamic>> snapshot = await _firestore
-          .collection('services')
-          .get();
-      if (snapshot.docs.length < 2) {
-        return;
-      }
-
-      final Map<String, List<QueryDocumentSnapshot<Map<String, dynamic>>>>
-      groups = <String, List<QueryDocumentSnapshot<Map<String, dynamic>>>>{};
-
-      for (final QueryDocumentSnapshot<Map<String, dynamic>> doc
-          in snapshot.docs) {
-        final String key = _normalizedServiceName(doc.data(), doc.id);
-        groups
-            .putIfAbsent(
-              key,
-              () => <QueryDocumentSnapshot<Map<String, dynamic>>>[],
-            )
-            .add(doc);
-      }
-
-      WriteBatch batch = _firestore.batch();
-      int operationCount = 0;
-
-      for (final List<QueryDocumentSnapshot<Map<String, dynamic>>> group
-          in groups.values) {
-        if (group.length < 2) {
-          continue;
-        }
-
-        group.sort((a, b) {
-          final DateTime aTime = _readServiceTimestamp(
-            a.data()['updatedAt'] ?? a.data()['createdAt'],
-          );
-          final DateTime bTime = _readServiceTimestamp(
-            b.data()['updatedAt'] ?? b.data()['createdAt'],
-          );
-          return bTime.compareTo(aTime);
-        });
-
-        final QueryDocumentSnapshot<Map<String, dynamic>> keeper = group.first;
-        final List<Map<String, dynamic>> mergedPackages =
-            <Map<String, dynamic>>[];
-        final Set<String> seenPackageKeys = <String>{};
-
-        for (final QueryDocumentSnapshot<Map<String, dynamic>> doc in group) {
-          final List<Map<String, dynamic>> rows = _parsePackageRows(
-            (doc.data()['packages'] as List<dynamic>?) ?? <dynamic>[],
-          );
-
-          for (final Map<String, dynamic> row in rows) {
-            final String key =
-                '${(row['title'] ?? '').toString().trim().toLowerCase()}|${row['price']}|${row['discountPercent']}';
-            if (seenPackageKeys.add(key)) {
-              mergedPackages.add(row);
-            }
-          }
-        }
-
-        if (mergedPackages.isNotEmpty) {
-          batch.set(keeper.reference, <String, dynamic>{
-            'packages': mergedPackages,
-            'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
-          operationCount += 1;
-        }
-
-        for (int i = 1; i < group.length; i++) {
-          final QueryDocumentSnapshot<Map<String, dynamic>> duplicate =
-              group[i];
-          batch.delete(duplicate.reference);
-          batch.delete(_adminCollection('services_pricing').doc(duplicate.id));
-          operationCount += 2;
-
-          if (operationCount >= 400) {
-            await batch.commit();
-            batch = _firestore.batch();
-            operationCount = 0;
-          }
-        }
-      }
-
-      if (operationCount > 0) {
-        await batch.commit();
-      }
-    } catch (_) {
-      // Keep admin flow unaffected if cleanup fails.
     }
   }
 
@@ -3323,63 +3345,34 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     String documentId,
     String serviceName,
   ) async {
-    await showDialog<void>(
+    await showCustomConfirmDialog(
       context: parentContext,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          title: Text(
-            _t('Xác nhận xóa', 'Confirm deletion'),
-            style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
+      title: AppText.text(parentContext, 'confirm_delete_service_title'),
+      message: AppText.textWithParams(
+        parentContext,
+        'confirm_delete_service_message',
+        <String, String>{'serviceName': serviceName},
+      ),
+      confirmText: AppText.text(parentContext, 'btn_delete'),
+      cancelText: AppText.text(parentContext, 'btn_cancel'),
+      confirmColor: Colors.red,
+      onConfirm: () async {
+        await FirebaseFirestore.instance
+            .collection('services')
+            .doc(documentId)
+            .delete();
+
+        await _adminCollection('services_pricing').doc(documentId).delete();
+
+        if (!parentContext.mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(parentContext).showSnackBar(
+          SnackBar(
+            content: Text(
+              AppText.text(parentContext, 'service_deleted_success'),
+            ),
           ),
-          content: Text(
-            _t(
-              'Bạn có chắc chắn muốn xóa dịch vụ $serviceName không? Hành động này không thể hoàn tác và sẽ xóa dịch vụ khỏi màn hình của người dùng ngay lập tức.',
-              'Are you sure you want to delete service $serviceName? This action cannot be undone and will remove the service from user screens immediately.',
-            ),
-            style: GoogleFonts.poppins(fontSize: 13),
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: Text(_t('Hủy', 'Cancel')),
-            ),
-            TextButton(
-              onPressed: () async {
-                await FirebaseFirestore.instance
-                    .collection('services')
-                    .doc(documentId)
-                    .delete();
-
-                await _adminCollection(
-                  'services_pricing',
-                ).doc(documentId).delete();
-
-                if (!dialogContext.mounted) {
-                  return;
-                }
-                Navigator.pop(dialogContext);
-
-                if (!parentContext.mounted) {
-                  return;
-                }
-                ScaffoldMessenger.of(parentContext).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      _t(
-                        'Đã xóa dịch vụ thành công',
-                        'Service deleted successfully',
-                      ),
-                    ),
-                  ),
-                );
-              },
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: Text(
-                _t('Xóa', 'Delete'),
-                style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
-              ),
-            ),
-          ],
         );
       },
     );
@@ -3998,11 +3991,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         }
 
         final List<QueryDocumentSnapshot<Map<String, dynamic>>> docs =
-            snapshot.data!.docs.toList(growable: false)..sort((a, b) {
-              final String aName = (a.data()['nameVi'] ?? a.id).toString();
-              final String bName = (b.data()['nameVi'] ?? b.id).toString();
-              return aName.compareTo(bName);
-            });
+            snapshot.data!.docs
+                .where((QueryDocumentSnapshot<Map<String, dynamic>> doc) {
+                  return _isShoppingBundleService(doc.data());
+                })
+                .toList(growable: false)
+              ..sort((a, b) {
+                final String aName = (a.data()['nameVi'] ?? a.id).toString();
+                final String bName = (b.data()['nameVi'] ?? b.id).toString();
+                return aName.compareTo(bName);
+              });
 
         if (docs.isEmpty) {
           return Center(
@@ -4908,6 +4906,47 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             color: Colors.white,
           ),
         ),
+        actions: <Widget>[
+          PopupMenuButton<int>(
+            tooltip: AppText.text(context, 'menu_settings'),
+            icon: const Icon(Icons.settings, color: Colors.white),
+            onSelected: _onSettingsMenuSelected,
+            itemBuilder: (BuildContext context) => <PopupMenuEntry<int>>[
+              PopupMenuItem<int>(
+                value: 1,
+                child: Row(
+                  children: <Widget>[
+                    const Icon(Icons.language, size: 18),
+                    const SizedBox(width: 10),
+                    Text(
+                      AppText.text(context, 'menu_switch_language'),
+                      style: GoogleFonts.poppins(fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              PopupMenuItem<int>(
+                value: 2,
+                child: Row(
+                  children: <Widget>[
+                    const Icon(Icons.logout, size: 18, color: Colors.red),
+                    const SizedBox(width: 10),
+                    Text(
+                      AppText.text(context, 'menu_logout'),
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        color: Colors.red,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: wide
           ? Row(

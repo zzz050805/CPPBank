@@ -4,7 +4,6 @@ import 'package:google_fonts/google_fonts.dart';
 import '../l10n/app_text.dart';
 import '../widget/ccp_app_bar.dart';
 import 'bill_mock_data.dart';
-import 'main_tab_shell.dart';
 import 'water_bill_pay.dart';
 
 class WaterBillScreen extends StatefulWidget {
@@ -66,13 +65,6 @@ class _WaterBillScreenState extends State<WaterBillScreen>
     _introController.dispose();
     _customerCodeController.dispose();
     super.dispose();
-  }
-
-  void _goHome() {
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const MainTabShell(initialIndex: 0)),
-      (Route<dynamic> route) => false,
-    );
   }
 
   void _fillCode(String code) {
@@ -163,16 +155,6 @@ class _WaterBillScreenState extends State<WaterBillScreen>
             height: 4,
             decoration: BoxDecoration(
               color: _primaryBlue,
-              borderRadius: BorderRadius.circular(30),
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Container(
-            height: 4,
-            decoration: BoxDecoration(
-              color: _primaryBlue.withValues(alpha: 0.14),
               borderRadius: BorderRadius.circular(30),
             ),
           ),
@@ -325,13 +307,6 @@ class _WaterBillScreenState extends State<WaterBillScreen>
         title: _t('Thanh toán hoá đơn', 'Bill payment'),
         backgroundColor: _surface,
         onBackPressed: () => Navigator.maybePop(context),
-        actions: <Widget>[
-          IconButton(
-            onPressed: _goHome,
-            icon: const Icon(Icons.home_rounded),
-            color: _primaryBlue,
-          ),
-        ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(

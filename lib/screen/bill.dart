@@ -17,7 +17,6 @@ class BillScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color surface = const Color(0xFFF6F7FF);
-    final Color primary = const Color(0xFF000DC0);
     final Color link = const Color(0xFF000DC0);
 
     return Scaffold(
@@ -78,7 +77,7 @@ class BillScreen extends StatelessWidget {
                   );
                 },
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
               _ServiceCard(
                 title: _t(context, 'Tiền nước', 'Water'),
                 subtitle: _t(
@@ -101,7 +100,7 @@ class BillScreen extends StatelessWidget {
                   );
                 },
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
               _ServiceCard(
                 title: _t(context, 'Internet', 'Internet'),
                 subtitle: _t(
@@ -124,7 +123,7 @@ class BillScreen extends StatelessWidget {
                   );
                 },
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
               _ServiceCard(
                 title: _t(context, 'Data điện thoại', 'Mobile data'),
                 subtitle: _t(context, 'Nạp Data', 'Top up data'),
@@ -141,86 +140,6 @@ class BillScreen extends StatelessWidget {
                     ),
                   );
                 },
-              ),
-              const SizedBox(height: 16),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(18),
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [primary, primary.withValues(alpha: 0.82)],
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _t(context, 'ƯU ĐÃI ĐỘC QUYỀN', 'EXCLUSIVE OFFER'),
-                            style: GoogleFonts.poppins(
-                              color: Colors.white.withValues(alpha: 0.85),
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.7,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            _t(
-                              context,
-                              'Hoàn tiền 50%\ncho hóa đơn đầu\ntiên.',
-                              'Get 50% cashback\non your first\nbill.',
-                            ),
-                            style: GoogleFonts.poppins(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              height: 1.15,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 9,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: Text(
-                              _t(context, 'NHẬN NGAY', 'GET NOW'),
-                              style: GoogleFonts.poppins(
-                                color: primary,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Container(
-                      width: 70,
-                      height: 70,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.16),
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      child: const Icon(
-                        Icons.local_offer_outlined,
-                        color: Colors.white,
-                        size: 34,
-                      ),
-                    ),
-                  ],
-                ),
               ),
             ],
           ),
@@ -260,9 +179,10 @@ class _ServiceCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+          constraints: const BoxConstraints(minHeight: 116),
+          padding: const EdgeInsets.fromLTRB(18, 18, 16, 18),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.05),
@@ -279,26 +199,32 @@ class _ServiceCard extends StatelessWidget {
                   children: [
                     Text(
                       title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.poppins(
-                        fontSize: 14,
+                        fontSize: 16,
                         fontWeight: FontWeight.w700,
                         color: const Color(0xFF1B1B1F),
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 6),
                     Text(
                       subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.poppins(
-                        fontSize: 11,
+                        fontSize: 12,
                         fontWeight: FontWeight.w400,
                         color: const Color(0xFF7C8196),
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 10),
                     Text(
                       actionText,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.poppins(
-                        fontSize: 11,
+                        fontSize: 12,
                         fontWeight: FontWeight.w700,
                         color: actionColor,
                       ),
@@ -308,13 +234,13 @@ class _ServiceCard extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Container(
-                width: 52,
-                height: 52,
+                width: 68,
+                height: 68,
                 decoration: BoxDecoration(
                   color: iconBackground,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(20),
                 ),
-                child: Icon(icon, color: iconForeground, size: 28),
+                child: Icon(icon, color: iconForeground, size: 34),
               ),
             ],
           ),

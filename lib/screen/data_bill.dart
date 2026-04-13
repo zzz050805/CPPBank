@@ -5,7 +5,6 @@ import 'package:google_fonts/google_fonts.dart';
 import '../l10n/app_text.dart';
 import '../widget/ccp_app_bar.dart';
 import 'data_bill_pay.dart';
-import 'main_tab_shell.dart';
 
 class DataBillScreen extends StatefulWidget {
   const DataBillScreen({super.key});
@@ -159,13 +158,6 @@ class _DataBillScreenState extends State<DataBillScreen>
     _introController.dispose();
     _phoneController.dispose();
     super.dispose();
-  }
-
-  void _goHome() {
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const MainTabShell(initialIndex: 0)),
-      (Route<dynamic> route) => false,
-    );
   }
 
   bool _isValidPhone(String phone) {
@@ -417,13 +409,6 @@ class _DataBillScreenState extends State<DataBillScreen>
         title: _t('Thanh toán hoá đơn', 'Bill payment'),
         backgroundColor: _surface,
         onBackPressed: () => Navigator.pop(context),
-        actions: <Widget>[
-          IconButton(
-            onPressed: _goHome,
-            icon: const Icon(Icons.home_rounded),
-            color: _primaryBlue,
-          ),
-        ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(

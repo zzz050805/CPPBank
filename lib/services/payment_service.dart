@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 
 import '../app_preferences.dart';
-import '../data/user_firestore_service.dart';
+import '../services/user_firestore_service.dart';
 import '../l10n/app_text.dart';
 import 'home_cache_service.dart';
 import 'notification_service.dart';
@@ -84,23 +84,6 @@ class PaymentService {
     }
 
     return 0;
-  }
-
-  bool _parseHasVipCard(dynamic value) {
-    if (value is bool) {
-      return value;
-    }
-
-    if (value is num) {
-      return value != 0;
-    }
-
-    if (value is String) {
-      final String normalized = value.trim().toLowerCase();
-      return normalized == 'true' || normalized == '1' || normalized == 'yes';
-    }
-
-    return false;
   }
 
   String _mapBillTypeToKey(String billType) {
@@ -212,67 +195,86 @@ class PaymentService {
 
       final Map<String, dynamic> userData =
           userSnapshot.data() ?? <String, dynamic>{};
-      final bool hasVipCard = _parseHasVipCard(userData['hasVipCard']);
-      final double userBalance = _parseBalance(userData['balance']);
 
       final DocumentSnapshot<Map<String, dynamic>> standardCardSnap =
           await transaction.get(standardCardRef);
       final DocumentSnapshot<Map<String, dynamic>> vipCardSnap =
           await transaction.get(vipCardRef);
 
-      double standardBalance = _parseBalance(
-        standardCardSnap.data()?['balance'],
-      );
-      double vipBalance = _parseBalance(vipCardSnap.data()?['balance']);
+      final Map<String, dynamic> standardCardData =
+          standardCardSnap.data() ?? <String, dynamic>{};
+      final Map<String, dynamic> vipCardData =
+          vipCardSnap.data() ?? <String, dynamic>{};
+      final Map<String, Map<String, dynamic>> cardsById =
+          <String, Map<String, dynamic>>{
+            'standard': standardCardData,
+            'vip': vipCardData,
+          };
 
-      final double cardsBalance = hasVipCard
-          ? (standardBalance + vipBalance)
-          : standardBalance;
-      final bool hasAnyCardBalance = cardsBalance > 0;
-      final double currentBalance = hasAnyCardBalance
-          ? cardsBalance
-          : userBalance;
+      final bool standardAvailable = UserFirestoreService.instance
+          .isCardAvailableForTransactions(
+            cardId: 'standard',
+            cardData: standardCardData,
+            userData: userData,
+          );
+      final bool vipAvailable = UserFirestoreService.instance
+          .isCardAvailableForTransactions(
+            cardId: 'vip',
+            cardData: vipCardData,
+            userData: userData,
+          );
 
-      if (currentBalance < amount) {
+      final double availableBalance = UserFirestoreService.instance
+          .calculateAvailableBalanceFromMaps(
+            userData: userData,
+            cardsById: cardsById,
+          );
+
+      if (availableBalance < amount) {
         throw PaymentServiceException(insufficientBalanceMessage);
       }
 
-      double newBalance;
+      final double standardBalance = _parseBalance(standardCardData['balance']);
+      final double vipBalance = _parseBalance(vipCardData['balance']);
 
-      if (hasAnyCardBalance) {
-        if (standardBalance >= amount) {
-          standardBalance -= amount;
-        } else {
-          final double remaining = amount - standardBalance;
-          standardBalance = 0;
+      double remaining = amount;
+      double standardDeduction = 0;
+      double vipDeduction = 0;
 
-          if (!hasVipCard || vipBalance < remaining) {
-            throw PaymentServiceException(insufficientBalanceMessage);
-          }
-
-          vipBalance -= remaining;
-        }
-
-        newBalance = hasVipCard
-            ? (standardBalance + vipBalance)
+      if (standardAvailable && remaining > 0) {
+        standardDeduction = remaining <= standardBalance
+            ? remaining
             : standardBalance;
-
-        transaction.set(standardCardRef, <String, dynamic>{
-          'balance': standardBalance,
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-
-        if (hasVipCard) {
-          transaction.set(vipCardRef, <String, dynamic>{
-            'balance': vipBalance,
-            'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
-        }
-      } else {
-        newBalance = userBalance - amount;
+        remaining -= standardDeduction;
       }
 
-      currentBalanceAfterPayment = newBalance;
+      if (vipAvailable && remaining > 0) {
+        vipDeduction = remaining <= vipBalance ? remaining : vipBalance;
+        remaining -= vipDeduction;
+      }
+
+      if (remaining > 0) {
+        throw PaymentServiceException(insufficientBalanceMessage);
+      }
+
+      if (standardDeduction > 0) {
+        transaction.set(standardCardRef, <String, dynamic>{
+          'balance': FieldValue.increment(-standardDeduction),
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
+
+      if (vipDeduction > 0) {
+        transaction.set(vipCardRef, <String, dynamic>{
+          'balance': FieldValue.increment(-vipDeduction),
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
+
+      final double nextAvailableBalance = availableBalance - amount;
+      currentBalanceAfterPayment = nextAvailableBalance < 0
+          ? 0
+          : nextAvailableBalance;
 
       final String balanceText = _formatAmountByLanguage(
         currentBalanceAfterPayment,
@@ -297,7 +299,9 @@ class PaymentService {
       }
 
       final Map<String, dynamic> userBalanceAndStatsUpdate = <String, dynamic>{
-        'balance': newBalance,
+        'balance': FieldValue.increment(-amount),
+        'availableBalance': FieldValue.increment(-amount),
+        'totalBalance': FieldValue.increment(-amount),
         'spending_stats.bill': FieldValue.increment(amount),
         'updatedAt': FieldValue.serverTimestamp(),
       };

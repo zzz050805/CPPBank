@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
-import '../services/card_number_service.dart';
+import 'card_number_service.dart';
 
 class UserProfileData {
   const UserProfileData({
@@ -33,8 +33,10 @@ class UserFirestoreService {
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _docSub;
   bool _isProfileBindingInitialized = false;
   UserProfileData? _latestProfile;
+  double _latestAvailableBalance = 0;
 
   UserProfileData? get latestProfile => _latestProfile;
+  double get availableBalance => _latestAvailableBalance;
 
   bool _isNetworkError(FirebaseException e) {
     final String code = e.code.toLowerCase();
@@ -63,6 +65,203 @@ class UserFirestoreService {
       return normalized == 'true' || normalized == '1' || normalized == 'yes';
     }
     return false;
+  }
+
+  bool _parseBool(dynamic value) {
+    if (value is bool) {
+      return value;
+    }
+    if (value is num) {
+      return value != 0;
+    }
+    if (value is String) {
+      final String normalized = value.trim().toLowerCase();
+      return normalized == 'true' || normalized == '1' || normalized == 'yes';
+    }
+    return false;
+  }
+
+  double _parseBalance(dynamic value) {
+    if (value is num) {
+      return value.toDouble();
+    }
+    if (value is String) {
+      final String trimmed = value.trim();
+      if (trimmed.isEmpty) {
+        return 0;
+      }
+
+      final double? direct = double.tryParse(trimmed.replaceAll(',', '.'));
+      if (direct != null) {
+        return direct;
+      }
+
+      final String normalized = trimmed.replaceAll(RegExp(r'[^0-9.-]'), '');
+      if (normalized.isEmpty || normalized == '-' || normalized == '.') {
+        return 0;
+      }
+      return double.tryParse(normalized) ?? 0;
+    }
+    return 0;
+  }
+
+  bool _isActiveStatus(dynamic value) {
+    final String status = (value ?? '').toString().trim().toLowerCase();
+    if (status.isEmpty) {
+      return true;
+    }
+    return status == 'active';
+  }
+
+  bool isCardAvailableForTransactions({
+    required String cardId,
+    required Map<String, dynamic> cardData,
+    required Map<String, dynamic> userData,
+  }) {
+    final String normalizedCardId = cardId.trim().toLowerCase();
+    final bool hasVipCard = _parseHasVipCard(userData['hasVipCard']);
+
+    if (normalizedCardId == 'vip' && !hasVipCard) {
+      return false;
+    }
+
+    final bool lockFromCard =
+        _parseBool(cardData['is_locked']) || _parseBool(cardData['isLocked']);
+
+    final bool lockFromUser = normalizedCardId == 'standard'
+        ? _parseBool(userData['is_standard_locked'])
+        : (normalizedCardId == 'vip'
+              ? _parseBool(userData['is_vip_locked'])
+              : false);
+
+    if (lockFromCard || lockFromUser) {
+      return false;
+    }
+
+    return _isActiveStatus(cardData['status']);
+  }
+
+  double calculateAvailableBalanceFromMaps({
+    required Map<String, dynamic> userData,
+    required Map<String, Map<String, dynamic>> cardsById,
+  }) {
+    double total = 0;
+
+    cardsById.forEach((String cardId, Map<String, dynamic> cardData) {
+      if (!isCardAvailableForTransactions(
+        cardId: cardId,
+        cardData: cardData,
+        userData: userData,
+      )) {
+        return;
+      }
+
+      total += _parseBalance(cardData['balance']);
+    });
+
+    return total;
+  }
+
+  double calculateAvailableBalance({
+    required Map<String, dynamic> userData,
+    required Iterable<QueryDocumentSnapshot<Map<String, dynamic>>> cardDocs,
+  }) {
+    final Map<String, Map<String, dynamic>> cardsById =
+        <String, Map<String, dynamic>>{};
+    for (final QueryDocumentSnapshot<Map<String, dynamic>> doc in cardDocs) {
+      cardsById[doc.id.toLowerCase()] = doc.data();
+    }
+
+    return calculateAvailableBalanceFromMaps(
+      userData: userData,
+      cardsById: cardsById,
+    );
+  }
+
+  Future<double> fetchAvailableBalance(String uid) async {
+    if (uid.trim().isEmpty) {
+      return 0;
+    }
+
+    final DocumentReference<Map<String, dynamic>> userRef = FirebaseFirestore
+        .instance
+        .collection('users')
+        .doc(uid);
+
+    final List<dynamic> snapshots = await Future.wait<dynamic>(
+      <Future<dynamic>>[userRef.get(), userRef.collection('cards').get()],
+    );
+
+    final DocumentSnapshot<Map<String, dynamic>> userSnapshot =
+        snapshots[0] as DocumentSnapshot<Map<String, dynamic>>;
+    final QuerySnapshot<Map<String, dynamic>> cardsSnapshot =
+        snapshots[1] as QuerySnapshot<Map<String, dynamic>>;
+
+    final double resolved = calculateAvailableBalance(
+      userData: userSnapshot.data() ?? <String, dynamic>{},
+      cardDocs: cardsSnapshot.docs,
+    );
+    _latestAvailableBalance = resolved;
+    return resolved;
+  }
+
+  Stream<double> availableBalanceStream(String uid) {
+    final String normalizedUid = uid.trim();
+    if (normalizedUid.isEmpty) {
+      return Stream<double>.value(0);
+    }
+
+    final DocumentReference<Map<String, dynamic>> userRef = FirebaseFirestore
+        .instance
+        .collection('users')
+        .doc(normalizedUid);
+
+    return Stream<double>.multi((StreamController<double> controller) {
+      Map<String, dynamic> userData = <String, dynamic>{};
+      Map<String, Map<String, dynamic>> cardsById =
+          <String, Map<String, dynamic>>{};
+      bool hasUserSnapshot = false;
+      bool hasCardsSnapshot = false;
+
+      void emit() {
+        if (!hasUserSnapshot || !hasCardsSnapshot) {
+          return;
+        }
+        final double resolved = calculateAvailableBalanceFromMaps(
+          userData: userData,
+          cardsById: cardsById,
+        );
+        _latestAvailableBalance = resolved;
+        controller.add(resolved);
+      }
+
+      final StreamSubscription<DocumentSnapshot<Map<String, dynamic>>> userSub =
+          userRef.snapshots().listen((
+            DocumentSnapshot<Map<String, dynamic>> snapshot,
+          ) {
+            userData = snapshot.data() ?? <String, dynamic>{};
+            hasUserSnapshot = true;
+            emit();
+          }, onError: controller.addError);
+
+      final StreamSubscription<QuerySnapshot<Map<String, dynamic>>> cardsSub =
+          userRef.collection('cards').snapshots().listen((
+            QuerySnapshot<Map<String, dynamic>> snapshot,
+          ) {
+            cardsById = <String, Map<String, dynamic>>{
+              for (final QueryDocumentSnapshot<Map<String, dynamic>> doc
+                  in snapshot.docs)
+                doc.id.toLowerCase(): doc.data(),
+            };
+            hasCardsSnapshot = true;
+            emit();
+          }, onError: controller.addError);
+
+      controller.onCancel = () async {
+        await userSub.cancel();
+        await cardsSub.cancel();
+      };
+    });
   }
 
   String _resolveCardNumberFromData(

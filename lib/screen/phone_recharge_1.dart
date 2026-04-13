@@ -4,7 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../core/app_translations.dart';
-import '../data/user_firestore_service.dart';
+import '../services/user_firestore_service.dart';
 import '../l10n/app_text.dart';
 import '../services/card_number_service.dart';
 import '../services/notification_service.dart';
@@ -34,7 +34,7 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
 
   String _amountDisplay() {
     if (widget.selectedAmount == _otherAmountKey) {
-      return _t('Số khác', 'Other');
+      return _t('S? khÄ‚Â¡c', 'Other');
     }
     return '${widget.selectedAmount} VND';
   }
@@ -73,20 +73,6 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
     return 0;
   }
 
-  bool _parseHasVipCard(dynamic value) {
-    if (value is bool) {
-      return value;
-    }
-    if (value is num) {
-      return value != 0;
-    }
-    if (value is String) {
-      final String normalized = value.trim().toLowerCase();
-      return normalized == 'true' || normalized == '1' || normalized == 'yes';
-    }
-    return false;
-  }
-
   String _resolveTransactionUid() {
     final String? fromAuth = FirebaseAuth.instance.currentUser?.uid;
     if (fromAuth != null && fromAuth.isNotEmpty) {
@@ -112,7 +98,7 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
     if (uid.isEmpty) {
       return _buildSourceCardRichText(
         primaryColor: primaryColor,
-        cardDisplay: _t('Đang tải...', 'Loading...'),
+        cardDisplay: _t('Ã„Âang t?i...', 'Loading...'),
       );
     }
 
@@ -122,7 +108,7 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
           .doc(uid)
           .snapshots(),
       builder: (context, snapshot) {
-        String cardDisplay = _t('Đang tải...', 'Loading...');
+        String cardDisplay = _t('Ã„Âang t?i...', 'Loading...');
 
         if (snapshot.hasData) {
           final Map<String, dynamic> userData =
@@ -154,7 +140,7 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
           fontSize: 14,
         ),
         children: [
-          TextSpan(text: '${_t('Số thẻ', 'Card number')}: '),
+          TextSpan(text: '${_t('S? th?', 'Card number')}: '),
           TextSpan(
             text: cardDisplay,
             style: GoogleFonts.poppins(
@@ -173,14 +159,14 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
     }
 
     // ignore: avoid_print
-    print('--- BẮT ĐẦU GIAO DỊCH ---');
+    print('--- B?T Ã„Â?U GIAO D?CH ---');
 
     final int amount = _parseAmountValue(widget.selectedAmount);
     if (amount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            _t('Số tiền nạp không hợp lệ.', 'Invalid top-up amount.'),
+            _t('S? ti?n n?p khÄ‚Â´ng h?p l?.', 'Invalid top-up amount.'),
           ),
           behavior: SnackBarBehavior.floating,
           backgroundColor: Colors.red,
@@ -199,14 +185,14 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
 
     final String uid = _resolveTransactionUid();
     // ignore: avoid_print
-    print('Resolved UID dùng để giao dịch: $uid');
+    print('Resolved UID dÄ‚Â¹ng d? giao d?ch: $uid');
     // ignore: avoid_print
-    print('Firebase projectId hiện tại: ${Firebase.app().options.projectId}');
+    print('Firebase projectId hi?n t?i: ${Firebase.app().options.projectId}');
 
     if (uid.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(_t('Lỗi: Chưa đăng nhập', 'Error: Not logged in')),
+          content: Text(_t('L?i: Chua dang nh?p', 'Error: Not logged in')),
           behavior: SnackBarBehavior.floating,
           backgroundColor: Colors.red,
         ),
@@ -231,29 +217,28 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
 
     try {
       // ignore: avoid_print
-      print('Đang tìm document user: users/$uid');
+      print('Ã„Âang tÌ€Âm document user: users/$uid');
       final bool ensured = await UserFirestoreService.instance
           .ensureUserDataExists(userId: uid);
       // ignore: avoid_print
       print('ensureUserDataExists(users/$uid) => $ensured');
       // ignore: avoid_print
-      print('Số tiền cần trừ: $amount');
+      print('S? ti?n c?n tr?: $amount');
 
-      // Bắt buộc await để transaction hoàn tất trước khi điều hướng màn hình.
+      // B?t bu?c await d? transaction hoÄ‚Â n t?t tru?c khi di?u hu?ng mÄ‚Â n hÌ€Ânh.
       await firestore.runTransaction((transaction) async {
         final DocumentSnapshot<Map<String, dynamic>> userDoc = await transaction
             .get(userRef);
 
         if (!userDoc.exists) {
-          throw Exception('Không tìm thấy document user: users/$uid');
+          throw Exception('KhÄ‚Â´ng tÌ€Âm th?y document user: users/$uid');
         }
 
         // ignore: avoid_print
-        print('Số dư hiện tại trên Firestore: ${userDoc.data()?['balance']}');
+        print('S? du hi?n t?i trÄ‚Âªn Firestore: ${userDoc.data()?['balance']}');
 
         final Map<String, dynamic> userData =
             userDoc.data() ?? <String, dynamic>{};
-        final bool hasVipCard = _parseHasVipCard(userData['hasVipCard']);
         final DocumentReference<Map<String, dynamic>> standardCardRef = userRef
             .collection('cards')
             .doc('standard');
@@ -266,69 +251,88 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
         final DocumentSnapshot<Map<String, dynamic>> vipCardSnap =
             await transaction.get(vipCardRef);
 
-        num standardBalance = _readNumericBalance(
-          standardCardSnap.data()?['balance'],
-        );
-        num vipBalance = _readNumericBalance(vipCardSnap.data()?['balance']);
-        final num cardsBalance = hasVipCard
-            ? (standardBalance + vipBalance)
-            : standardBalance;
-        final num userBalance = _readNumericBalance(userData['balance']);
+        final Map<String, dynamic> standardCardData =
+            standardCardSnap.data() ?? <String, dynamic>{};
+        final Map<String, dynamic> vipCardData =
+            vipCardSnap.data() ?? <String, dynamic>{};
+        final Map<String, Map<String, dynamic>> cardsById =
+            <String, Map<String, dynamic>>{
+              'standard': standardCardData,
+              'vip': vipCardData,
+            };
 
-        final bool hasAnyCardBalance = cardsBalance > 0;
-        final num currentBalance = hasAnyCardBalance
-            ? cardsBalance
-            : userBalance;
+        final bool standardAvailable = UserFirestoreService.instance
+            .isCardAvailableForTransactions(
+              cardId: 'standard',
+              cardData: standardCardData,
+              userData: userData,
+            );
+        final bool vipAvailable = UserFirestoreService.instance
+            .isCardAvailableForTransactions(
+              cardId: 'vip',
+              cardData: vipCardData,
+              userData: userData,
+            );
 
-        if (currentBalance < amount) {
-          throw Exception('Số dư không đủ');
+        final double availableBalance = UserFirestoreService.instance
+            .calculateAvailableBalanceFromMaps(
+              userData: userData,
+              cardsById: cardsById,
+            );
+
+        if (availableBalance < amount) {
+          throw Exception('S? du khÄ‚Â´ng d?');
         }
 
-        num newBalance;
+        num standardBalance = _readNumericBalance(standardCardData['balance']);
+        num vipBalance = _readNumericBalance(vipCardData['balance']);
+        num remaining = amount;
+        num standardDeduction = 0;
+        num vipDeduction = 0;
 
-        if (hasAnyCardBalance) {
-          if (standardBalance >= amount) {
-            standardBalance -= amount;
-          } else {
-            final num remaining = amount - standardBalance;
-            standardBalance = 0;
-
-            if (!hasVipCard || vipBalance < remaining) {
-              throw Exception('Số dư không đủ');
-            }
-            vipBalance -= remaining;
-          }
-
-          newBalance = hasVipCard
-              ? (standardBalance + vipBalance)
+        if (standardAvailable && remaining > 0) {
+          standardDeduction = remaining <= standardBalance
+              ? remaining
               : standardBalance;
+          remaining -= standardDeduction;
+        }
 
+        if (vipAvailable && remaining > 0) {
+          vipDeduction = remaining <= vipBalance ? remaining : vipBalance;
+          remaining -= vipDeduction;
+        }
+
+        if (remaining > 0) {
+          throw Exception('S? du khÄ‚Â´ng d?');
+        }
+
+        if (standardDeduction > 0) {
           transaction.set(standardCardRef, <String, dynamic>{
-            'balance': standardBalance,
+            'balance': FieldValue.increment(-standardDeduction),
             'updatedAt': FieldValue.serverTimestamp(),
           }, SetOptions(merge: true));
+        }
 
-          if (hasVipCard) {
-            transaction.set(vipCardRef, <String, dynamic>{
-              'balance': vipBalance,
-              'updatedAt': FieldValue.serverTimestamp(),
-            }, SetOptions(merge: true));
-          }
-        } else {
-          newBalance = userBalance - amount;
+        if (vipDeduction > 0) {
+          transaction.set(vipCardRef, <String, dynamic>{
+            'balance': FieldValue.increment(-vipDeduction),
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
         }
 
         // ignore: avoid_print
-        print('Đang trừ tiền...');
+        print('Ã„Âang tr? ti?n...');
         transaction.set(userRef, <String, dynamic>{
-          'balance': newBalance,
+          'balance': FieldValue.increment(-amount),
+          'availableBalance': FieldValue.increment(-amount),
+          'totalBalance': FieldValue.increment(-amount),
           'updatedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
 
         // ignore: avoid_print
-        print('Đang chuẩn bị ghi vào: users/$uid/phone_recharge/ID_TU_DONG');
+        print('Ã„Âang chu?n b? ghi vÄ‚Â o: users/$uid/phone_recharge/ID_TU_DONG');
         // ignore: avoid_print
-        print('Đường dẫn thực tế: users/$uid/phone_recharge/${rechargeRef.id}');
+        print('Ã„Âu?ng d?n th?c t?: users/$uid/phone_recharge/${rechargeRef.id}');
         transaction.set(rechargeRef, <String, dynamic>{
           'uid': uid,
           'phoneNumber': widget.selectedPhoneNumber.trim(),
@@ -358,9 +362,9 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
       final DocumentSnapshot<Map<String, dynamic>> savedRecharge =
           await rechargeRef.get();
       // ignore: avoid_print
-      print('Sau commit, document tồn tại: ${savedRecharge.exists}');
+      print('Sau commit, document t?n t?i: ${savedRecharge.exists}');
       if (!savedRecharge.exists) {
-        throw Exception('Không lưu được hóa đơn nạp tiền');
+        throw Exception('KhÄ‚Â´ng luu du?c hÄ‚Â³a don n?p ti?n');
       }
 
       await NotificationService().showNotification(
@@ -393,7 +397,7 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
       );
     } catch (e, stackTrace) {
       // ignore: avoid_print
-      print('❌ LỖI THỰC TẾ: $e');
+      print('? L?I TH?C T?: $e');
       debugPrint(stackTrace.toString());
       if (!mounted) {
         return;
@@ -406,12 +410,12 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
       await showDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
-          title: Text(_t('Lỗi giao dịch', 'Transaction error')),
+          title: Text(_t('L?i giao d?ch', 'Transaction error')),
           content: Text(e.toString()),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: Text(_t('Đóng', 'Close')),
+              child: Text(_t('Ã„ÂÄ‚Â³ng', 'Close')),
             ),
           ],
         ),
@@ -433,7 +437,7 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          _t('Nạp tiền điện thoại', 'Phone Top-Up'),
+          _t('N?p ti?n di?n tho?i', 'Phone Top-Up'),
           style: GoogleFonts.poppins(
             color: const Color(0xFF1A1A1A),
             fontWeight: FontWeight.bold,
@@ -442,7 +446,7 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
       ),
       body: Column(
         children: [
-          // Header hiển thị số tiền
+          // Header hi?n th? s? ti?n
           Container(
             width: double.infinity,
             padding: const EdgeInsets.fromLTRB(20, 18, 20, 22),
@@ -481,10 +485,10 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
                 Text(
                   widget.selectedAmount == _otherAmountKey
                       ? _t(
-                          'Vui lòng nhập số tiền mong muốn',
+                          'Vui lÌ€Â£ng nh?p s? ti?n mong mu?n',
                           'Please enter your desired amount',
                         )
-                      : _t('Số tiền bạn đã chọn', 'Selected amount'),
+                      : _t('S? ti?n b?n dÃ„Æ’ ch?n', 'Selected amount'),
                   style: GoogleFonts.poppins(
                     color: Colors.white.withValues(alpha: 0.85),
                     fontSize: 13,
@@ -528,7 +532,7 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
                         Expanded(
                           child: Text(
                             _t(
-                              'Vui lòng kiểm tra kỹ thông tin trước khi xác nhận giao dịch.',
+                              'Vui lÌ€Â£ng ki?m tra k? thÄ‚Â´ng tin tru?c khi xÄ‚Â¡c nh?n giao d?ch.',
                               'Please verify details carefully before confirming.',
                             ),
                             style: GoogleFonts.poppins(
@@ -544,9 +548,9 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
 
                   const SizedBox(height: 18),
 
-                  // Mục Trích từ
+                  // M?c TrÄ‚Â­ch t?
                   Text(
-                    _t('Trích từ', 'From account'),
+                    _t('TrÄ‚Â­ch t?', 'From account'),
                     style: GoogleFonts.poppins(
                       color: const Color(0xFF6D7693),
                       fontWeight: FontWeight.w700,
@@ -589,7 +593,7 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              _t('Tài khoản nguồn', 'Source account'),
+                              _t('TÄ‚Â i kho?n ngu?n', 'Source account'),
                               style: GoogleFonts.poppins(
                                 color: const Color(0xFF6E7490),
                                 fontSize: 12,
@@ -611,10 +615,10 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
                                 snapshot.data ??
                                 UserFirestoreService.instance.latestProfile;
                             final String senderName = snapshot.hasError
-                                ? _t('Không tìm thấy user', 'User not found')
+                                ? _t('KhÄ‚Â´ng tÌ€Âm th?y user', 'User not found')
                                 : ((profile?.fullname.isNotEmpty == true)
                                       ? profile!.fullname
-                                      : _t('Khách hàng', 'Customer'));
+                                      : _t('KhÄ‚Â¡ch hÄ‚Â ng', 'Customer'));
 
                             return Text(
                               senderName.toUpperCase(),
@@ -631,9 +635,9 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
 
                   const SizedBox(height: 30),
 
-                  // Mục Thông tin chi tiết
+                  // M?c ThÄ‚Â´ng tin chi ti?t
                   Text(
-                    _t('Thông tin chi tiết', 'Details'),
+                    _t('ThÄ‚Â´ng tin chi ti?t', 'Details'),
                     style: GoogleFonts.poppins(
                       color: const Color(0xFF6D7693),
                       fontWeight: FontWeight.w700,
@@ -657,25 +661,25 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
                     child: Column(
                       children: [
                         _buildInfoRow(
-                          _t('Loại dịch vụ', 'Service type'),
-                          _t('Nạp ĐTDD', 'Mobile top-up'),
+                          _t('Lo?i d?ch v?', 'Service type'),
+                          _t('N?p Ã„ÂTDD', 'Mobile top-up'),
                           isBlue: true,
                         ),
                         const Divider(height: 1),
                         _buildInfoRow(
-                          _t('Nhà cung cấp', 'Provider'),
+                          _t('NhÄ‚Â  cung c?p', 'Provider'),
                           widget.selectedProvider,
                           isBlue: true,
                         ),
                         const Divider(height: 1),
                         _buildInfoRow(
-                          _t('Số điện thoại', 'Phone number'),
+                          _t('S? di?n tho?i', 'Phone number'),
                           widget.selectedPhoneNumber,
                           isBlue: true,
                         ),
                         const Divider(height: 1),
                         _buildInfoRow(
-                          _t('Mệnh giá (VND)', 'Amount (VND)'),
+                          _t('M?nh giÄ‚Â¡ (VND)', 'Amount (VND)'),
                           _amountDisplay(),
                           isBlue: true,
                         ),
@@ -685,7 +689,7 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
 
                   const SizedBox(height: 40),
 
-                  // Nút Xác nhận
+                  // NÄ‚Âºt XÄ‚Â¡c nh?n
                   SizedBox(
                     width: double.infinity,
                     height: 54,
@@ -720,7 +724,7 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
                               ),
                             )
                           : Text(
-                              _t('Xác nhận', 'Confirm'),
+                              _t('XÄ‚Â¡c nh?n', 'Confirm'),
                               style: GoogleFonts.poppins(
                                 color: Colors.white,
                                 fontSize: 17,
@@ -738,7 +742,7 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
     );
   }
 
-  // Widget con để vẽ từng dòng thông tin
+  // Widget con d? v? t?ng dÌ€Â£ng thÄ‚Â´ng tin
   Widget _buildInfoRow(String label, String value, {bool isBlue = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 15),
@@ -864,7 +868,7 @@ class TopUpReceiptScreen extends StatelessWidget {
         elevation: 0,
         automaticallyImplyLeading: false,
         title: Text(
-          _t(context, 'Biên lai nạp tiền', 'Top-up receipt'),
+          _t(context, 'BiÄ‚Âªn lai n?p ti?n', 'Top-up receipt'),
           style: GoogleFonts.poppins(
             color: const Color(0xFF1A1A1A),
             fontWeight: FontWeight.w700,
@@ -902,7 +906,7 @@ class TopUpReceiptScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  _t(context, 'Giao dịch thành công', 'Transaction successful'),
+                  _t(context, 'Giao d?ch thÄ‚Â nh cÄ‚Â´ng', 'Transaction successful'),
                   style: GoogleFonts.poppins(
                     color: Colors.white,
                     fontSize: 20,
@@ -938,33 +942,33 @@ class TopUpReceiptScreen extends StatelessWidget {
                 child: Column(
                   children: [
                     _buildInfoTile(
-                      _t(context, 'Mã giao dịch', 'Transaction ID'),
+                      _t(context, 'MÃ„Æ’ giao d?ch', 'Transaction ID'),
                       transactionId,
                     ),
                     const Divider(height: 1),
                     _buildInfoTile(
-                      _t(context, 'Số điện thoại', 'Phone number'),
+                      _t(context, 'S? di?n tho?i', 'Phone number'),
                       phoneNumber,
                     ),
                     const Divider(height: 1),
                     _buildInfoTile(
-                      _t(context, 'Nhà mạng', 'Provider'),
+                      _t(context, 'NhÄ‚Â  m?ng', 'Provider'),
                       provider,
                     ),
                     const Divider(height: 1),
                     _buildInfoTile(
-                      _t(context, 'Số tiền', 'Amount'),
+                      _t(context, 'S? ti?n', 'Amount'),
                       '${_formatAmountWithDots(amount)} VND',
                     ),
                     const Divider(height: 1),
                     _buildInfoTile(
-                      _t(context, 'Thời gian', 'Created at'),
+                      _t(context, 'Th?i gian', 'Created at'),
                       _formatDateTime(createdAt),
                     ),
                     const Divider(height: 1),
-                    _buildInfoTile(_t(context, 'Trạng thái', 'Status'), status),
+                    _buildInfoTile(_t(context, 'Tr?ng thÄ‚Â¡i', 'Status'), status),
                     const Divider(height: 1),
-                    _buildInfoTile(_t(context, 'Loại', 'Type'), type),
+                    _buildInfoTile(_t(context, 'Lo?i', 'Type'), type),
                   ],
                 ),
               ),
@@ -987,7 +991,7 @@ class TopUpReceiptScreen extends StatelessWidget {
                   elevation: 0,
                 ),
                 child: Text(
-                  _t(context, 'Về trang chủ', 'Back to home'),
+                  _t(context, 'V? trang ch?', 'Back to home'),
                   style: GoogleFonts.poppins(
                     color: Colors.white,
                     fontSize: 16,
@@ -1002,3 +1006,5 @@ class TopUpReceiptScreen extends StatelessWidget {
     );
   }
 }
+
+

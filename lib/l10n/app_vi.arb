@@ -2,7 +2,9 @@
   "tab_cards": "Thẻ",
   "card_standard": "Thẻ Thường",
   "card_vip": "Thẻ VIP",
-  "status_active": "Đang hoạt động",
+  "status_active": "Đang hiệu lực",
+  "status_expired": "Đã hết hạn",
+  "status_cancelled": "Đã hủy",
   "status_locked": "Đã khóa",
   "lock_card": "Khóa thẻ",
   "unlock_card": "Mở thẻ",
@@ -41,5 +43,84 @@
     "placeholders": {
       "serviceName": {}
     }
-  }
+  },
+  "atm_withdrawal": "Rút tiền ATM",
+  "withdraw_history": "Lịch sử rút tiền",
+  "withdraw_code_created": "Mã rút tiền đã được tạo: {code}",
+  "@withdraw_code_created": {
+    "placeholders": {
+      "code": {}
+    }
+  },
+  "create_code": "Tạo mã",
+  "cancel_code": "Hủy mã",
+  "confirm_delete_service_title": "Xác nhận xóa",
+  "confirm_delete_service_message": "Bạn có chắc chắn muốn xóa dịch vụ {serviceName} không? Hành động này không thể hoàn tác và sẽ xóa dịch vụ khỏi màn hình của người dùng ngay lập tức.",
+  "@confirm_delete_service_message": {
+    "placeholders": {
+      "serviceName": {}
+    }
+  },
+  "service_deleted_success": "Đã xóa dịch vụ thành công",
+  "delete_account_title": "Xóa tài khoản",
+  "delete_account_confirm_message": "Bạn có chắc chắn muốn xóa tài khoản này không? Mọi dữ liệu giao dịch và số dư sẽ bị xóa vĩnh viễn và không thể khôi phục.",
+  "chat_delete_history_title": "Xóa lịch sử?",
+  "chat_delete_history_confirm": "Bạn có chắc chắn muốn xóa toàn bộ cuộc hội thoại này?",
+  "withdraw_invalid_amount": "Số tiền không hợp lệ. Vui lòng nhập bội số của 50.000đ.",
+  "withdraw_create_failed": "Không thể tạo mã rút tiền. Vui lòng thử lại.",
+  "withdraw_code_cancelled": "Đã hủy mã rút tiền.",
+  "withdraw_cancel_failed": "Không thể hủy mã rút tiền. Vui lòng thử lại.",
+  "remaining_time": "Thời gian còn lại: {time}",
+  "@remaining_time": {
+    "placeholders": {
+      "time": {}
+    }
+  },
+  "loading": "Đang tải...",
+  "source_account": "TÀI KHOẢN NGUỒN",
+  "available_balance": "SỐ DƯ KHẢ DỤNG",
+  "enter_withdraw_amount": "Nhập số tiền muốn rút",
+  "max_transaction_limit": "Hạn mức tối đa theo số dư khả dụng: {amount}",
+  "@max_transaction_limit": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "currency_vnd": "VNĐ",
+  "quick_amount_selection": "Chọn nhanh mệnh giá",
+  "withdraw_limit_text": "Hạn mức rút: {min}đ - {max}đ / lần",
+  "@withdraw_limit_text": {
+    "placeholders": {
+      "min": {},
+      "max": {}
+    }
+  },
+  "security_ssl_notice": "Giao dịch được bảo mật bởi SSL 256-bit",
+  "no_withdraw_history": "Chưa có lịch sử rút tiền ATM.",
+  "code_label": "Mã",
+  "created_at_label": "Tạo lúc",
+  "menu_settings": "Cài đặt",
+  "menu_switch_language": "Ngôn ngữ (VI/EN)",
+  "menu_logout": "Đăng xuất",
+  "confirm_logout_title": "Xác nhận đăng xuất",
+  "confirm_logout_msg": "Bạn có chắc chắn muốn đăng xuất khỏi hệ thống Admin?",
+  "confirm_logout_msg_user": "Bạn có chắc chắn muốn đăng xuất khỏi tài khoản này?",
+  "cancel_withdraw_code_title": "Xác nhận hủy mã",
+  "cancel_withdraw_code_confirm": "Bạn có chắc chắn muốn hủy mã không?",
+  "atm_withdrawal_code_created_heads_up": "Mã rút tiền ATM {code} đã được tạo thành công. Hiệu lực 15 phút.",
+  "@atm_withdrawal_code_created_heads_up": {
+    "placeholders": {
+      "code": {}
+    }
+  },
+  "btn_yes": "Có",
+  "btn_no": "Không",
+  "btn_cancel": "Hủy",
+  "btn_delete": "Xóa",
+  "action_confirm": "Xác nhận",
+  "action_cancel": "Hủy",
+  "logout_failed": "Không thể đăng xuất. Vui lòng thử lại.",
+  "select_language": "Chọn ngôn ngữ",
+  "language_vietnamese": "Tiếng Việt",
+  "language_english": "English"
 }

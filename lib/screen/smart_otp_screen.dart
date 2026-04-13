@@ -6,12 +6,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../data/services/user_service.dart';
+import '../services/user_service.dart';
 import '../effect/gentle_page_route.dart';
 import '../l10n/app_text.dart';
 import '../services/notification_service.dart';
 import '../widget/ccp_app_bar.dart';
-import 'OTP_screen.dart';
+import 'package:doan_nganhang/screen/OTP_screen.dart';
 import 'set_new_pin_screen.dart';
 import 'verify_current_pin_screen.dart';
 

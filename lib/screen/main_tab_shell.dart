@@ -5,14 +5,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../l10n/app_text.dart';
-import '../data/user_firestore_service.dart';
+import '../services/user_firestore_service.dart';
 import '../services/home_cache_service.dart';
+import 'package:doan_nganhang/screen/chat_placeholder_screen.dart';
+import 'package:doan_nganhang/screen/home_screen.dart';
+import 'package:doan_nganhang/screen/setting_screen.dart';
 
-import 'chat_placeholder_screen.dart';
-import 'home_screen.dart';
 import 'login.dart';
 import 'search_screen.dart';
-import 'setting_screen.dart';
 
 class MainTabShell extends StatefulWidget {
   const MainTabShell({super.key, this.initialIndex = 0});

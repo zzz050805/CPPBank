@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class CCPLogoWidget extends StatelessWidget {
@@ -16,7 +16,7 @@ class CCPLogoWidget extends StatelessWidget {
           child: Stack(
             alignment: Alignment.center,
             children: [
-              // Vòng tròn Cyan ở dưới
+              // Ṿng tṛn Cyan ? du?i
               Positioned(
                 bottom: 0,
                 right: 0,
@@ -36,7 +36,7 @@ class CCPLogoWidget extends StatelessWidget {
                   ),
                 ),
               ),
-              // Vòng tròn Blue ở trên
+              // Ṿng tṛn Blue ? trên
               Positioned(
                 top: 0,
                 left: 0,
@@ -70,7 +70,7 @@ class CCPLogoWidget extends StatelessWidget {
         ),
         const SizedBox(height: 5),
         Text(
-          "Tài chính của mọi nhà",
+          "Tài chính c?a m?i nhà",
           style: GoogleFonts.poppins(
             fontSize: 16,
             fontWeight: FontWeight.w600,

@@ -3,13 +3,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
-import '../data/user_firestore_service.dart';
+import '../services/user_firestore_service.dart';
 import '../l10n/app_text.dart';
 import '../services/payment_service.dart';
 import '../widget/pin_popup.dart';
 import '../widget/ccp_app_bar.dart';
 import 'data_bill_success.dart';
-import 'main_tab_shell.dart';
 
 class DataBillConfirmScreen extends StatefulWidget {
   const DataBillConfirmScreen({
@@ -43,13 +42,6 @@ class _DataBillConfirmScreenState extends State<DataBillConfirmScreen> {
   void initState() {
     super.initState();
     _profileStream = UserFirestoreService.instance.currentUserProfileStream();
-  }
-
-  void _goHome() {
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const MainTabShell(initialIndex: 0)),
-      (Route<dynamic> route) => false,
-    );
   }
 
   Future<void> _processPayment() async {
@@ -297,13 +289,6 @@ class _DataBillConfirmScreenState extends State<DataBillConfirmScreen> {
         title: _t('Thanh toán hoá đơn', 'Bill payment'),
         backgroundColor: _surface,
         onBackPressed: () => Navigator.pop(context),
-        actions: <Widget>[
-          IconButton(
-            onPressed: _goHome,
-            icon: const Icon(Icons.home_rounded),
-            color: _primaryBlue,
-          ),
-        ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:pin_code_fields/pin_code_fields.dart';
 
-import '../data/services/user_service.dart';
+import '../services/user_service.dart';
 import '../l10n/app_text.dart';
 import '../widget/ccp_app_bar.dart';
 

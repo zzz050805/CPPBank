@@ -7,7 +7,7 @@ import 'package:intl/intl.dart';
 
 import '../app_preferences.dart';
 import '../core/app_translations.dart';
-import '../data/user_firestore_service.dart';
+import '../services/user_firestore_service.dart';
 import '../services/card_number_service.dart';
 import '../widget/pin_popup.dart';
 import 'payment_success_screen.dart';
@@ -373,20 +373,6 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
     return 0;
   }
 
-  bool _parseHasVipCard(dynamic value) {
-    if (value is bool) {
-      return value;
-    }
-    if (value is num) {
-      return value != 0;
-    }
-    if (value is String) {
-      final String normalized = value.trim().toLowerCase();
-      return normalized == 'true' || normalized == '1' || normalized == 'yes';
-    }
-    return false;
-  }
-
   Future<_ShoppingReceiptData> _processShoppingTransaction() async {
     final String uid = _resolveUid();
     if (uid.isEmpty) {
@@ -454,67 +440,89 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
 
       final Map<String, dynamic> userData =
           userDoc.data() ?? <String, dynamic>{};
-      final bool hasVipCard = _parseHasVipCard(userData['hasVipCard']);
       final DocumentSnapshot<Map<String, dynamic>> standardCardSnap =
           await transaction.get(standardCardRef);
       final DocumentSnapshot<Map<String, dynamic>> vipCardSnap =
           await transaction.get(vipCardRef);
-
-      num standardBalance = _readBalance(standardCardSnap.data()?['balance']);
-      num vipBalance = _readBalance(vipCardSnap.data()?['balance']);
-      final num cardsBalance = hasVipCard
-          ? (standardBalance + vipBalance)
-          : standardBalance;
-      final num userBalance = _readBalance(userData['balance']);
       final num paymentAmount = widget.selectedAmount;
 
-      final bool hasAnyCardBalance = cardsBalance > 0;
-      final num currentBalance = hasAnyCardBalance ? cardsBalance : userBalance;
+      final Map<String, dynamic> standardCardData =
+          standardCardSnap.data() ?? <String, dynamic>{};
+      final Map<String, dynamic> vipCardData =
+          vipCardSnap.data() ?? <String, dynamic>{};
+      final Map<String, Map<String, dynamic>> cardsById =
+          <String, Map<String, dynamic>>{
+            'standard': standardCardData,
+            'vip': vipCardData,
+          };
 
-      if (currentBalance < paymentAmount) {
+      final bool standardAvailable = UserFirestoreService.instance
+          .isCardAvailableForTransactions(
+            cardId: 'standard',
+            cardData: standardCardData,
+            userData: userData,
+          );
+      final bool vipAvailable = UserFirestoreService.instance
+          .isCardAvailableForTransactions(
+            cardId: 'vip',
+            cardData: vipCardData,
+            userData: userData,
+          );
+
+      final double availableBalance = UserFirestoreService.instance
+          .calculateAvailableBalanceFromMaps(
+            userData: userData,
+            cardsById: cardsById,
+          );
+
+      if (availableBalance < paymentAmount) {
         throw Exception(
           _languageCode == 'en' ? 'Insufficient balance.' : 'Số dư không đủ.',
         );
       }
 
-      num newBalance;
-      if (hasAnyCardBalance) {
-        if (standardBalance >= paymentAmount) {
-          standardBalance -= paymentAmount;
-        } else {
-          final num remaining = paymentAmount - standardBalance;
-          standardBalance = 0;
-          if (!hasVipCard || vipBalance < remaining) {
-            throw Exception(
-              _languageCode == 'en'
-                  ? 'Insufficient balance.'
-                  : 'Số dư không đủ.',
-            );
-          }
-          vipBalance -= remaining;
-        }
+      num standardBalance = _readBalance(standardCardData['balance']);
+      num vipBalance = _readBalance(vipCardData['balance']);
+      num remaining = paymentAmount;
+      num standardDeduction = 0;
+      num vipDeduction = 0;
 
-        newBalance = hasVipCard
-            ? (standardBalance + vipBalance)
+      if (standardAvailable && remaining > 0) {
+        standardDeduction = remaining <= standardBalance
+            ? remaining
             : standardBalance;
+        remaining -= standardDeduction;
+      }
 
+      if (vipAvailable && remaining > 0) {
+        vipDeduction = remaining <= vipBalance ? remaining : vipBalance;
+        remaining -= vipDeduction;
+      }
+
+      if (remaining > 0) {
+        throw Exception(
+          _languageCode == 'en' ? 'Insufficient balance.' : 'Số dư không đủ.',
+        );
+      }
+
+      if (standardDeduction > 0) {
         transaction.set(standardCardRef, <String, dynamic>{
-          'balance': standardBalance,
+          'balance': FieldValue.increment(-standardDeduction),
           'updatedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
+      }
 
-        if (hasVipCard) {
-          transaction.set(vipCardRef, <String, dynamic>{
-            'balance': vipBalance,
-            'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
-        }
-      } else {
-        newBalance = userBalance - paymentAmount;
+      if (vipDeduction > 0) {
+        transaction.set(vipCardRef, <String, dynamic>{
+          'balance': FieldValue.increment(-vipDeduction),
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
       }
 
       transaction.set(userRef, <String, dynamic>{
-        'balance': newBalance,
+        'balance': FieldValue.increment(-paymentAmount),
+        'availableBalance': FieldValue.increment(-paymentAmount),
+        'totalBalance': FieldValue.increment(-paymentAmount),
         'spending_stats.shopping': FieldValue.increment(widget.selectedAmount),
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));

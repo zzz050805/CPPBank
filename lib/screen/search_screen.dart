@@ -6,9 +6,9 @@ import 'branch_screen.dart';
 import 'exchange_rate_screen.dart';
 import 'currency_convert_screen.dart';
 import 'interest_rate_screen.dart';
-import 'home_screen.dart';
-import 'setting_screen.dart';
-import 'chat_placeholder_screen.dart';
+import 'package:doan_nganhang/screen/home_screen.dart';
+import 'package:doan_nganhang/screen/setting_screen.dart';
+import 'package:doan_nganhang/screen/chat_placeholder_screen.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key, this.showBottomNav = true});

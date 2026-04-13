@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -10,8 +10,8 @@ import 'package:carousel_slider/carousel_slider.dart';
 import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart';
 import '../core/app_translations.dart';
-import '../data/notification_firestore_service.dart';
-import '../data/user_firestore_service.dart';
+import '../services/notification_firestore_service.dart';
+import '../services/user_firestore_service.dart';
 import '../l10n/app_text.dart';
 import '../shoppingservice/service_data.dart';
 import '../shoppingservice/service_model.dart';
@@ -24,7 +24,7 @@ import '../widget/transaction_detail_popup.dart';
 import 'search_screen.dart';
 import 'setting_screen.dart';
 import 'transfer_money.dart';
-import 'phone_recharge.dart';
+import 'package:doan_nganhang/screen/phone_recharge.dart';
 import 'bill.dart';
 import 'QR.dart';
 import 'credit_card.dart';
@@ -48,9 +48,6 @@ class _HomeScreenState extends State<HomeScreen> {
   int touchedIndex = -1;
   String? _spendingDataUid;
   Future<Map<String, double>>? _spendingDataFutureCache;
-  String? _recentTransactionsUid;
-  String? _recentTransactionsLanguageCode;
-  Future<List<_HomeTransactionModel>>? _recentTransactionsFutureCache;
   double _lastKnownTotalBalance = 0;
   bool _hasLoadedBalance = false;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
@@ -104,9 +101,6 @@ class _HomeScreenState extends State<HomeScreen> {
       touchedIndex = -1;
       _spendingDataUid = null;
       _spendingDataFutureCache = null;
-      _recentTransactionsUid = null;
-      _recentTransactionsLanguageCode = null;
-      _recentTransactionsFutureCache = null;
     });
   }
 
@@ -244,22 +238,6 @@ class _HomeScreenState extends State<HomeScreen> {
     return DateTime.fromMillisecondsSinceEpoch(0);
   }
 
-  String _billTypeToTextKey(String billType) {
-    switch (billType.trim().toLowerCase()) {
-      case 'electric':
-        return 'bill_type_electric';
-      case 'water':
-        return 'bill_type_water';
-      case 'internet':
-        return 'bill_type_internet';
-      case 'mobile':
-      case 'mobile_postpaid':
-        return 'bill_type_mobile';
-      default:
-        return 'service';
-    }
-  }
-
   Map<String, String> _readNotificationParams(dynamic raw) {
     final Map<String, String> result = <String, String>{};
     if (raw is! Map) {
@@ -304,10 +282,10 @@ class _HomeScreenState extends State<HomeScreen> {
     final String fallback = rawTitle.isNotEmpty
         ? rawTitle
         : (type == 'uu_dai'
-              ? _t('Ưu đãi mới', 'New offer')
+              ? _t('Uu d�i m?i', 'New offer')
               : (type == 'new_service'
                     ? AppText.text(context, 'notify_new_service_title')
-                    : _t('Thông báo mới', 'New notification')));
+                    : _t('Th�ng b�o m?i', 'New notification')));
 
     String titleKey = (data['titleKey'] ?? '').toString().trim();
     if (titleKey.isEmpty) {
@@ -340,14 +318,14 @@ class _HomeScreenState extends State<HomeScreen> {
     final String fallback = rawBody.isNotEmpty
         ? rawBody
         : (type == 'uu_dai'
-              ? _t('Bạn vừa nhận được ưu đãi mới.', 'You received a new offer.')
+              ? _t('B?n v?a nh?n du?c uu d�i m?i.', 'You received a new offer.')
               : (type == 'new_service'
                     ? AppText.textWithParams(
                         context,
                         'notify_new_service_body',
                         <String, String>{'serviceName': serviceName},
                       )
-                    : _t('Không có mô tả', 'No description')));
+                    : _t('Kh�ng c� m� t?', 'No description')));
 
     String bodyKey = (data['bodyKey'] ?? '').toString().trim();
     if (bodyKey.isEmpty) {
@@ -594,15 +572,15 @@ class _HomeScreenState extends State<HomeScreen> {
     final String uid = _resolveUid();
     if (uid.isEmpty) {
       // ignore: avoid_print
-      print('--- DEBUG TỔNG CHI TIÊU ---');
+      print('--- DEBUG T?NG CHI TI�U ---');
       // ignore: avoid_print
-      print('Tổng Chuyển khoản: 0.0');
+      print('T?ng Chuy?n kho?n: 0.0');
       // ignore: avoid_print
-      print('Tổng Nạp ĐT: 0.0');
+      print('T?ng N?p �T: 0.0');
       // ignore: avoid_print
-      print('Tổng Hóa đơn: 0.0');
+      print('T?ng H�a don: 0.0');
       // ignore: avoid_print
-      print('Tổng Mua sắm: 0.0');
+      print('T?ng Mua s?m: 0.0');
       return <String, double>{
         'transfer': 0,
         'bill': 0,
@@ -707,15 +685,15 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     // ignore: avoid_print
-    print('--- DEBUG TỔNG CHI TIÊU ---');
+    print('--- DEBUG T?NG CHI TI�U ---');
     // ignore: avoid_print
-    print('Tổng Chuyển khoản: $transferTotal');
+    print('T?ng Chuy?n kho?n: $transferTotal');
     // ignore: avoid_print
-    print('Tổng Nạp ĐT: $phoneTotal');
+    print('T?ng N?p �T: $phoneTotal');
     // ignore: avoid_print
-    print('Tổng Hóa đơn: $billTotal');
+    print('T?ng H�a don: $billTotal');
     // ignore: avoid_print
-    print('Tổng Mua sắm: $shoppingTotal');
+    print('T?ng Mua s?m: $shoppingTotal');
 
     return <String, double>{
       'transfer': transferTotal,
@@ -855,11 +833,11 @@ class _HomeScreenState extends State<HomeScreen> {
           ]);
 
           title = provider.isEmpty
-              ? _t('Nạp ĐT', 'Top-up')
-              : '${_t('Nạp ĐT', 'Top-up')} $provider';
+              ? _t('N?p �T', 'Top-up')
+              : '${_t('N?p �T', 'Top-up')} $provider';
           subtitle = phoneNumber.isEmpty
-              ? _t('SĐT không xác định', 'Unknown phone number')
-              : '${_t('SĐT', 'Phone')}: $phoneNumber';
+              ? _t('S�T kh�ng x�c d?nh', 'Unknown phone number')
+              : '${_t('S�T', 'Phone')}: $phoneNumber';
           amount = _extractFirstAmount(data, <String>[
             'amount',
             'amountVnd',
@@ -875,10 +853,10 @@ class _HomeScreenState extends State<HomeScreen> {
             data['transactionCode'],
           ]);
 
-          title = _t('Rút tiền mặt', 'Cash withdrawal');
+          title = _t('R�t ti?n m?t', 'Cash withdrawal');
           subtitle = withdrawCode.isEmpty
-              ? _t('Rút tiền ATM', 'ATM withdrawal')
-              : '${_t('Mã GD', 'Txn code')}: $withdrawCode';
+              ? _t('R�t ti?n ATM', 'ATM withdrawal')
+              : '${_t('M� GD', 'Txn code')}: $withdrawCode';
           amount = _extractFirstAmount(data, <String>[
             'amount',
             'amountVnd',
@@ -906,11 +884,11 @@ class _HomeScreenState extends State<HomeScreen> {
           ]);
 
           title = serviceName.isEmpty
-              ? _t('Thanh toán dịch vụ', 'Service payment')
-              : '${_t('Thanh toán', 'Payment')} $serviceName';
+              ? _t('Thanh to�n d?ch v?', 'Service payment')
+              : '${_t('Thanh to�n', 'Payment')} $serviceName';
           subtitle = targetAccount.isEmpty
-              ? _t('TK đích không xác định', 'Unknown destination account')
-              : '${_t('TK đích', 'To')}: $targetAccount';
+              ? _t('TK d�ch kh�ng x�c d?nh', 'Unknown destination account')
+              : '${_t('TK d�ch', 'To')}: $targetAccount';
           amount = _extractFirstAmount(data, <String>[
             'amount',
             'amountVnd',
@@ -937,11 +915,11 @@ class _HomeScreenState extends State<HomeScreen> {
           ]);
 
           title = recipientName.isEmpty
-              ? _t('Chuyển khoản', 'Transfer')
-              : '${_t('Chuyển khoản đến', 'Transfer to')} $recipientName';
+              ? _t('Chuy?n kho?n', 'Transfer')
+              : '${_t('Chuy?n kho?n d?n', 'Transfer to')} $recipientName';
           subtitle = destinationAccount.isEmpty
-              ? _t('TK đích không xác định', 'Unknown destination account')
-              : '${_t('TK đích', 'To')}: $destinationAccount';
+              ? _t('TK d�ch kh�ng x�c d?nh', 'Unknown destination account')
+              : '${_t('TK d�ch', 'To')}: $destinationAccount';
           amount = _extractFirstAmount(data, <String>[
             'amount',
             'transferAmount',
@@ -981,21 +959,9 @@ class _HomeScreenState extends State<HomeScreen> {
     return transactions.take(5).toList(growable: false);
   }
 
-  Future<List<_HomeTransactionModel>> _recentTransactionsFuture(String uid) {
-    final String languageCode = Localizations.localeOf(context).languageCode;
-
-    if (_recentTransactionsUid != uid ||
-        _recentTransactionsLanguageCode != languageCode ||
-        _recentTransactionsFutureCache == null) {
-      _recentTransactionsUid = uid;
-      _recentTransactionsLanguageCode = languageCode;
-      _recentTransactionsFutureCache = fetchRecentTransactions();
-    }
-    return _recentTransactionsFutureCache!;
-  }
-
   IconData _iconForTransactionType(String type) {
     switch (type) {
+      case 'atm_withdrawal':
       case 'withdraw':
         return Icons.atm_rounded;
       case 'transfer':
@@ -1006,6 +972,117 @@ class _HomeScreenState extends State<HomeScreen> {
       default:
         return Icons.phone_android_rounded;
     }
+  }
+
+  _HomeTransactionModel? _mapUnifiedTransactionRecord(
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
+    final Map<String, dynamic> data = doc.data();
+    final String rawType = (data['type'] ?? '').toString().trim().toLowerCase();
+
+    String type;
+    switch (rawType) {
+      case 'atm_withdrawal':
+      case 'withdraw':
+        type = 'atm_withdrawal';
+        break;
+      case 'transfer':
+        type = 'transfer';
+        break;
+      case 'shopping':
+        type = 'shopping';
+        break;
+      case 'phone_recharge':
+        type = 'phone_recharge';
+        break;
+      default:
+        return null;
+    }
+
+    final double amount = _extractFirstAmount(data, <String>[
+      'amount',
+      'transferAmount',
+      'amountVnd',
+      'amountText',
+    ]);
+    if (amount <= 0) {
+      return null;
+    }
+
+    final DateTime timestamp = _readTimestamp(
+      data['timestamp_client'] ??
+          data['timestamp'] ??
+          data['createdAt_client'] ??
+          data['createdAt'] ??
+          data['updatedAt'],
+    );
+
+    String title;
+    String subtitle;
+
+    if (type == 'atm_withdrawal') {
+      final String withdrawCode = _firstNonEmpty(<dynamic>[
+        data['withdrawCode'],
+        data['code'],
+        data['transactionCode'],
+      ]);
+      title = AppText.text(context, 'atm_withdrawal');
+      subtitle = withdrawCode.isEmpty
+          ? _t('R�t ti?n ATM', 'ATM withdrawal')
+          : '${AppText.text(context, 'code_label')}: $withdrawCode';
+    } else if (type == 'transfer') {
+      final String recipientName = _firstNonEmpty(<dynamic>[
+        data['recipientName'],
+        data['receiverName'],
+        data['accountName'],
+      ]);
+      final String destinationAccount = _firstNonEmpty(<dynamic>[
+        data['toCardNumber'],
+        data['card_number'],
+        data['cardNumber'],
+        data['toAccountNumber'],
+        data['accountNumber'],
+      ]);
+
+      title = recipientName.isEmpty
+          ? _t('Chuy?n kho?n', 'Transfer')
+          : '${_t('Chuy?n kho?n d?n', 'Transfer to')} $recipientName';
+      subtitle = destinationAccount.isEmpty
+          ? _t('TK d�ch kh�ng x�c d?nh', 'Unknown destination account')
+          : '${_t('TK d�ch', 'To')}: $destinationAccount';
+    } else if (type == 'shopping') {
+      final String serviceName = _firstNonEmpty(<dynamic>[
+        data['serviceName'],
+        data['title'],
+      ]);
+      title = serviceName.isEmpty
+          ? _t('Thanh to�n d?ch v?', 'Service payment')
+          : '${_t('Thanh to�n', 'Payment')} $serviceName';
+      subtitle = _t('Mua s?m', 'Shopping');
+    } else {
+      title = _t('N?p �T', 'Top-up');
+      subtitle = _t('N?p di?n tho?i', 'Phone recharge');
+    }
+
+    return _HomeTransactionModel(
+      id: doc.id,
+      title: title,
+      subtitle: subtitle,
+      amount: amount,
+      timestamp: timestamp,
+      type: type,
+      isNegative: true,
+      data: <String, dynamic>{
+        ...data,
+        'id': doc.id,
+        'title': title,
+        'subtitle': subtitle,
+        'amount': amount,
+        'timestamp': timestamp,
+        'type': type,
+        'isNegative': true,
+      },
+    );
   }
 
   Widget _buildNotificationBell() {
@@ -1081,7 +1158,7 @@ class _HomeScreenState extends State<HomeScreen> {
         }
 
         final String name = cacheData.userName.trim().isEmpty
-            ? _t('Khách hàng', 'Customer')
+            ? _t('Kh�ch h�ng', 'Customer')
             : cacheData.userName;
 
         return Align(
@@ -1241,7 +1318,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: const Color(
         0xFF000DC0,
-      ), // Nền xanh để mép header không hở trắng
+      ), // N?n xanh d? m�p header kh�ng h? tr?ng
       body: widget.showBottomNav
           ? Stack(children: [_buildSlivers(), _buildPillBottomNav()])
           : _buildSlivers(),
@@ -1254,15 +1331,15 @@ class _HomeScreenState extends State<HomeScreen> {
         return <Widget>[
           SliverAppBar(
             pinned: true,
-            // SỬA CHÍNH: Tạo Header Xanh Bo Tròn Mượt Mà
-            backgroundColor: const Color(0xFF000DC0), // Xanh đậm CCP
+            // S?A CH�NH: T?o Header Xanh Bo Tr�n Mu?t M�
+            backgroundColor: const Color(0xFF000DC0), // Xanh d?m CCP
             elevation: 0,
-            expandedHeight: 120, // Tăng nhẹ chiều cao
+            expandedHeight: 120, // Tang nh? chi?u cao
             collapsedHeight: 120,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.vertical(
                 bottom: Radius.circular(20),
-              ), // Bo mượt phần đuôi header
+              ), // Bo mu?t ph?n du�i header
             ),
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
@@ -1286,7 +1363,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
-                            _t("Xin chào,", "Hello,"),
+                            _t("Xin ch�o,", "Hello,"),
                             style: GoogleFonts.poppins(
                               color: Colors.white70,
                               fontSize: 16,
@@ -1305,7 +1382,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ];
       },
-      // --- PHẦN BODY BÊN DƯỚI ---
+      // --- PH?N BODY B�N DU?I ---
       body: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -1413,18 +1490,18 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- SỬA CHÍNH: THẺ SỐ DƯ NỔI LÊN, BO GÓC CHUẨN XỊN ---
+  // --- S?A CH�NH: TH? S? DU N?I L�N, BO G�C CHU?N X?N ---
   Widget _buildBalanceCard() {
     return Transform.translate(
       offset: const Offset(
         0,
         16,
-      ), // Giữ vị trí thẻ cân hơn với viền trắng bo góc
+      ), // Gi? v? tr� th? c�n hon v?i vi?n tr?ng bo g�c
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 30),
         child: Container(
           height: 140,
-          // Chỉnh gradient và bo góc cho xịn
+          // Ch?nh gradient v� bo g�c cho x?n
           decoration: BoxDecoration(
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
@@ -1432,19 +1509,19 @@ class _HomeScreenState extends State<HomeScreen> {
               colors: [
                 Color(0xFF3122AB),
                 Color(0xFF050C9C),
-              ], // Gradient xanh chuyên nghiệp
+              ], // Gradient xanh chuy�n nghi?p
             ),
-            borderRadius: BorderRadius.circular(20), // Bo góc chuẩn 20
+            borderRadius: BorderRadius.circular(20), // Bo g�c chu?n 20
             border: Border.all(
               color: Colors.white.withOpacity(0.1),
               width: 1,
-            ), // Viền trắng mảnh, dịu hơn
+            ), // Vi?n tr?ng m?nh, d?u hon
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.18),
                 blurRadius: 14,
                 offset: const Offset(0, 7),
-              ), // Bóng đổ sâu
+              ), // B�ng d? s�u
               BoxShadow(
                 color: const Color(0xFF000B7A).withOpacity(0.22),
                 blurRadius: 24,
@@ -1454,7 +1531,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 color: const Color(0xFF4BD4FF).withOpacity(0.15),
                 blurRadius: 20,
                 offset: const Offset(0, 2),
-              ), // Ánh xanh nhẹ thò ra
+              ), // �nh xanh nh? th� ra
             ],
           ),
           child: ClipRRect(
@@ -1493,7 +1570,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 ),
-                // Thêm xíu họa tiết vòng tròn chìm cho thẻ nó sang
+                // Th�m x�u h?a ti?t v�ng tr�n ch�m cho th? n� sang
                 Positioned(
                   left: 0,
                   right: 0,
@@ -1555,7 +1632,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         children: [
                           Text(
                             _t(
-                              'Tổng số dư khả dụng',
+                              'T?ng s? du kh? d?ng',
                               'Total available balance',
                             ),
                             style: GoogleFonts.poppins(
@@ -1600,7 +1677,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 children: [
                                   Text(
                                     _t(
-                                      'Lịch sử giao dịch',
+                                      'L?ch s? giao d?ch',
                                       'Transaction history',
                                     ),
                                     style: GoogleFonts.poppins(
@@ -1620,7 +1697,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ),
                           const Spacer(),
-                          // Icon 2 vòng tròn lồng nhau
+                          // Icon 2 v�ng tr�n l?ng nhau
                           SizedBox(
                             width: 28,
                             height: 18,
@@ -1859,46 +1936,46 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- CÁC PHẦN DƯỚI GIỮ NGUYÊN ---
+  // --- C�C PH?N DU?I GI? NGUY�N ---
   Widget _buildActionGrid() {
     final List<_ActionItemData> items = <_ActionItemData>[
       _ActionItemData(
         icon: Icons.account_balance_wallet,
         color: Colors.purple,
-        title: _t('Chuyển tiền', 'Transfer'),
+        title: _t('Chuy?n ti?n', 'Transfer'),
         onTap: () =>
             _pushPremium(const TransferMoneyScreen(), refreshOnReturn: true),
       ),
       _ActionItemData(
         icon: Icons.receipt_long,
         color: Colors.green,
-        title: _t('Thanh toán\nhóa đơn', 'Bill\npayment'),
+        title: _t('Thanh to�n\nh�a don', 'Bill\npayment'),
         onTap: () => _pushPremium(const BillScreen(), refreshOnReturn: true),
       ),
       _ActionItemData(
         icon: Icons.atm,
         color: Colors.blue,
-        title: _t('Rút tiền', 'Withdraw'),
+        title: _t('R�t ti?n', 'Withdraw'),
         onTap: () =>
             _pushPremium(const WithdrawATMPage(), refreshOnReturn: true),
       ),
       _ActionItemData(
         icon: Icons.qr_code_scanner,
         color: Colors.pink,
-        title: _t('Quét QR', 'Scan QR'),
+        title: _t('Qu�t QR', 'Scan QR'),
         onTap: () => _pushPremium(const QrScreen()),
       ),
       _ActionItemData(
         icon: Icons.phone_android,
         color: Colors.orange,
-        title: _t('Nạp tiền\nđiện thoại', 'Phone\nTop up'),
+        title: _t('N?p ti?n\ndi?n tho?i', 'Phone\nTop up'),
         onTap: () =>
             _pushPremium(const PhoneRechargeScreen(), refreshOnReturn: true),
       ),
       _ActionItemData(
         icon: Icons.credit_card,
         color: Colors.deepOrange,
-        title: _t('Thẻ tín dụng', 'Credit card'),
+        title: _t('Th? t�n d?ng', 'Credit card'),
         onTap: () {
           _pushPremium(const CreditCardScreen(), refreshOnReturn: true);
         },
@@ -2216,7 +2293,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         children: [
                           Text(
                             _t(
-                              "Mua sắm - Giải trí",
+                              "Mua s?m - Gi?i tr�",
                               "Shopping - Entertainment",
                             ),
                             style: GoogleFonts.poppins(
@@ -2332,7 +2409,7 @@ class _HomeScreenState extends State<HomeScreen> {
           if (hasPromotion) ...<Widget>[
             const SizedBox(height: 2),
             Text(
-              _t('Đang giảm giá', 'On sale'),
+              _t('�ang gi?m gi�', 'On sale'),
               textAlign: TextAlign.center,
               maxLines: 2,
               softWrap: true,
@@ -2451,7 +2528,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     );
                   },
                   child: Text(
-                    _t('Tiếp tục →', 'Continue →'),
+                    _t('Ti?p t?c ?', 'Continue ?'),
                     style: GoogleFonts.poppins(
                       color: Colors.white,
                       fontSize: 16,
@@ -2536,28 +2613,28 @@ class _HomeScreenState extends State<HomeScreen> {
 
           final List<_SpendingSlice> displaySlices = <_SpendingSlice>[
             _SpendingSlice(
-              labelVi: 'Chuyển khoản',
+              labelVi: 'Chuy?n kho?n',
               labelEn: 'Transfer',
               value: transferValue,
               color: darkBlue,
               gradientColors: transferGradient,
             ),
             _SpendingSlice(
-              labelVi: 'Thanh toán hóa đơn',
+              labelVi: 'Thanh to�n h�a don',
               labelEn: 'Bill payment',
               value: billValue,
               color: lightBlue,
               gradientColors: billGradient,
             ),
             _SpendingSlice(
-              labelVi: 'Nạp ĐT',
+              labelVi: 'N?p �T',
               labelEn: 'Top up',
               value: phoneValue,
               color: silverGrey,
               gradientColors: phoneGradient,
             ),
             _SpendingSlice(
-              labelVi: 'Mua sắm - Giải trí',
+              labelVi: 'Mua s?m - Gi?i tr�',
               labelEn: 'Shopping & Entertainment',
               value: shoppingValue,
               color: shoppingPurple,
@@ -2582,7 +2659,7 @@ class _HomeScreenState extends State<HomeScreen> {
               : -1;
 
           final String centerLabel = activeIndex == -1
-              ? _t('Tổng chi tiêu', 'Total spending')
+              ? _t('T?ng chi ti�u', 'Total spending')
               : _t(
                   displaySlices[activeIndex].labelVi,
                   displaySlices[activeIndex].labelEn,
@@ -2599,7 +2676,7 @@ class _HomeScreenState extends State<HomeScreen> {
           final List<_SpendingSlice> pieSlices = totalSpending == 0
               ? const <_SpendingSlice>[
                   _SpendingSlice(
-                    labelVi: 'Không có chi tiêu',
+                    labelVi: 'Kh�ng c� chi ti�u',
                     labelEn: 'No spending',
                     value: 1,
                     color: emptyGrey,
@@ -2608,272 +2685,254 @@ class _HomeScreenState extends State<HomeScreen> {
                 ]
               : displaySlices;
 
-          return ClipRRect(
-            borderRadius: BorderRadius.circular(24),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(20, 22, 20, 18),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.7),
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: Colors.white.withOpacity(0.68)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.blueGrey.withOpacity(0.08),
-                      blurRadius: 24,
-                      offset: const Offset(0, 10),
-                    ),
-                    BoxShadow(
-                      color: Colors.white.withOpacity(0.48),
-                      blurRadius: 12,
-                      offset: const Offset(-2, -2),
-                    ),
-                  ],
+          return Container(
+            padding: const EdgeInsets.fromLTRB(20, 22, 20, 18),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: const Color(0xFFE8ECF4)),
+              boxShadow: <BoxShadow>[
+                BoxShadow(
+                  color: Colors.grey.withOpacity(0.15),
+                  blurRadius: 10,
+                  spreadRadius: 2,
+                  offset: const Offset(0, 4),
                 ),
-                child: DefaultTextStyle.merge(
-                  style: GoogleFonts.poppins(),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Text(
-                        _t('Thống kê tiêu dùng', 'Spending statistics'),
-                        style: GoogleFonts.poppins(
-                          color: Colors.grey.shade700,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
+              ],
+            ),
+            child: DefaultTextStyle.merge(
+              style: GoogleFonts.poppins(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Text(
+                    _t('Th?ng k� ti�u d�ng', 'Spending statistics'),
+                    style: GoogleFonts.poppins(
+                      color: Colors.grey.shade700,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: 230,
+                    height: 230,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        IgnorePointer(
+                          child: Container(
+                            width: 215,
+                            height: 215,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(
+                                    0xFF0B1D3A,
+                                  ).withOpacity(0.12),
+                                  blurRadius: 22,
+                                  offset: const Offset(0, 14),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 24),
-                      SizedBox(
-                        width: 230,
-                        height: 230,
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            IgnorePointer(
-                              child: Container(
-                                width: 215,
-                                height: 215,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: const Color(
-                                        0xFF0B1D3A,
-                                      ).withOpacity(0.12),
-                                      blurRadius: 22,
-                                      offset: const Offset(0, 14),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            PieChart(
-                              PieChartData(
-                                centerSpaceRadius: centerSpaceRadius,
-                                sectionsSpace: 2,
-                                startDegreeOffset: -90,
-                                borderData: FlBorderData(show: false),
-                                pieTouchData: PieTouchData(
-                                  touchCallback:
-                                      (
-                                        FlTouchEvent event,
-                                        PieTouchResponse? pieTouchResponse,
-                                      ) {
-                                        if (!event
-                                                .isInterestedForInteractions ||
-                                            pieTouchResponse == null ||
-                                            pieTouchResponse.touchedSection ==
-                                                null) {
-                                          if (touchedIndex != -1) {
-                                            setState(() {
-                                              touchedIndex = -1;
-                                            });
-                                          }
-                                          return;
-                                        }
+                        PieChart(
+                          PieChartData(
+                            centerSpaceRadius: centerSpaceRadius,
+                            sectionsSpace: 2,
+                            startDegreeOffset: -90,
+                            borderData: FlBorderData(show: false),
+                            pieTouchData: PieTouchData(
+                              touchCallback:
+                                  (
+                                    FlTouchEvent event,
+                                    PieTouchResponse? pieTouchResponse,
+                                  ) {
+                                    if (!event.isInterestedForInteractions ||
+                                        pieTouchResponse == null ||
+                                        pieTouchResponse.touchedSection ==
+                                            null) {
+                                      if (touchedIndex != -1) {
+                                        setState(() {
+                                          touchedIndex = -1;
+                                        });
+                                      }
+                                      return;
+                                    }
 
-                                        final int nextIndex = pieTouchResponse
-                                            .touchedSection!
-                                            .touchedSectionIndex;
-                                        if (nextIndex != touchedIndex) {
-                                          setState(() {
-                                            touchedIndex = nextIndex;
-                                          });
-                                        }
-                                      },
-                                ),
-                                sections: List<PieChartSectionData>.generate(
-                                  pieSlices.length,
-                                  (int index) {
-                                    final bool isTouched = activeIndex == index;
-                                    final _SpendingSlice slice =
-                                        pieSlices[index];
-                                    final List<Color> sectionGradientColors =
-                                        isTouched
-                                        ? slice.gradientColors
-                                              .map(
-                                                (Color color) => Color.lerp(
-                                                  color,
-                                                  Colors.black,
-                                                  0.14,
-                                                )!,
-                                              )
-                                              .toList()
-                                        : slice.gradientColors;
-
-                                    return PieChartSectionData(
-                                      value: slice.value,
-                                      gradient: LinearGradient(
-                                        begin: Alignment.topLeft,
-                                        end: Alignment.bottomRight,
-                                        colors: sectionGradientColors,
-                                      ),
-                                      borderSide: BorderSide(
-                                        color: Colors.white.withOpacity(0.26),
-                                        width: 1.2,
-                                      ),
-                                      title: '',
-                                      showTitle: false,
-                                      radius: isTouched
-                                          ? touchedRadius
-                                          : normalRadius,
-                                    );
+                                    final int nextIndex = pieTouchResponse
+                                        .touchedSection!
+                                        .touchedSectionIndex;
+                                    if (nextIndex != touchedIndex) {
+                                      setState(() {
+                                        touchedIndex = nextIndex;
+                                      });
+                                    }
                                   },
-                                ),
-                              ),
-                              swapAnimationDuration: const Duration(
-                                milliseconds: 500,
-                              ),
-                              swapAnimationCurve: Curves.easeOutCubic,
                             ),
-                            ClipOval(
-                              child: BackdropFilter(
-                                filter: ImageFilter.blur(
-                                  sigmaX: 10,
-                                  sigmaY: 10,
-                                ),
-                                child: Container(
-                                  width: centerSpaceRadius * 2,
-                                  height: centerSpaceRadius * 2,
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.72),
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: Colors.white.withOpacity(0.5),
-                                      width: 5,
-                                    ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.white.withOpacity(0.3),
-                                        blurRadius: 10,
-                                        offset: const Offset(-2, -2),
-                                      ),
-                                      BoxShadow(
-                                        color: const Color(
-                                          0xFF0D1D38,
-                                        ).withOpacity(0.1),
-                                        blurRadius: 12,
-                                        offset: const Offset(2, 5),
-                                      ),
-                                    ],
+                            sections: List<PieChartSectionData>.generate(
+                              pieSlices.length,
+                              (int index) {
+                                final bool isTouched = activeIndex == index;
+                                final _SpendingSlice slice = pieSlices[index];
+                                final List<Color> sectionGradientColors =
+                                    isTouched
+                                    ? slice.gradientColors
+                                          .map(
+                                            (Color color) => Color.lerp(
+                                              color,
+                                              Colors.black,
+                                              0.14,
+                                            )!,
+                                          )
+                                          .toList()
+                                    : slice.gradientColors;
+
+                                return PieChartSectionData(
+                                  value: slice.value,
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: sectionGradientColors,
                                   ),
-                                  child: Stack(
-                                    fit: StackFit.expand,
-                                    children: [
-                                      IgnorePointer(
-                                        child: Container(
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            gradient: RadialGradient(
-                                              center: const Alignment(
-                                                -0.2,
-                                                -0.4,
-                                              ),
-                                              radius: 1.1,
-                                              colors: [
-                                                Colors.white.withOpacity(0.36),
-                                                Colors.transparent,
-                                                const Color(
-                                                  0xFF0F1F39,
-                                                ).withOpacity(0.08),
-                                              ],
-                                              stops: const [0, 0.62, 1],
+                                  borderSide: BorderSide(
+                                    color: Colors.white.withOpacity(0.26),
+                                    width: 1.2,
+                                  ),
+                                  title: '',
+                                  showTitle: false,
+                                  radius: isTouched
+                                      ? touchedRadius
+                                      : normalRadius,
+                                );
+                              },
+                            ),
+                          ),
+                          swapAnimationDuration: const Duration(
+                            milliseconds: 500,
+                          ),
+                          swapAnimationCurve: Curves.easeOutCubic,
+                        ),
+                        ClipOval(
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                            child: Container(
+                              width: centerSpaceRadius * 2,
+                              height: centerSpaceRadius * 2,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.72),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white.withOpacity(0.5),
+                                  width: 5,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.white.withOpacity(0.3),
+                                    blurRadius: 10,
+                                    offset: const Offset(-2, -2),
+                                  ),
+                                  BoxShadow(
+                                    color: const Color(
+                                      0xFF0D1D38,
+                                    ).withOpacity(0.1),
+                                    blurRadius: 12,
+                                    offset: const Offset(2, 5),
+                                  ),
+                                ],
+                              ),
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  IgnorePointer(
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        gradient: RadialGradient(
+                                          center: const Alignment(-0.2, -0.4),
+                                          radius: 1.1,
+                                          colors: [
+                                            Colors.white.withOpacity(0.36),
+                                            Colors.transparent,
+                                            const Color(
+                                              0xFF0F1F39,
+                                            ).withOpacity(0.08),
+                                          ],
+                                          stops: const [0, 0.62, 1],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                    ),
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Text(
+                                          centerLabel,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: GoogleFonts.poppins(
+                                            color: Colors.grey.shade600,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        FittedBox(
+                                          fit: BoxFit.scaleDown,
+                                          child: Text(
+                                            currencyFormatter.format(
+                                              centerAmount,
+                                            ),
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 23,
+                                              fontWeight: FontWeight.bold,
+                                              color: centerAmountColor,
+                                              height: 1,
                                             ),
                                           ),
                                         ),
-                                      ),
-                                      Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                        ),
-                                        child: Column(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            Text(
-                                              centerLabel,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: GoogleFonts.poppins(
-                                                color: Colors.grey.shade600,
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w500,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 4),
-                                            FittedBox(
-                                              fit: BoxFit.scaleDown,
-                                              child: Text(
-                                                currencyFormatter.format(
-                                                  centerAmount,
-                                                ),
-                                                style: GoogleFonts.poppins(
-                                                  fontSize: 23,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: centerAmountColor,
-                                                  height: 1,
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
-                                ),
+                                ],
                               ),
                             ),
-                          ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 32),
-                      Wrap(
-                        alignment: WrapAlignment.center,
-                        spacing: 10,
-                        runSpacing: 10,
-                        children: List<Widget>.generate(displaySlices.length, (
-                          int index,
-                        ) {
-                          final _SpendingSlice slice = displaySlices[index];
-                          final bool isActive = index == activeIndex;
-                          return _buildSpendingLegendChip(
-                            gradientColors: slice.gradientColors,
-                            label: _t(slice.labelVi, slice.labelEn),
-                            textColor: textPrimary,
-                            isActive: isActive,
-                            onTap: () {
-                              setState(() {
-                                touchedIndex = isActive ? -1 : index;
-                              });
-                            },
-                          );
-                        }),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 32),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: List<Widget>.generate(displaySlices.length, (
+                      int index,
+                    ) {
+                      final _SpendingSlice slice = displaySlices[index];
+                      final bool isActive = index == activeIndex;
+                      return _buildSpendingLegendChip(
+                        gradientColors: slice.gradientColors,
+                        label: _t(slice.labelVi, slice.labelEn),
+                        textColor: textPrimary,
+                        isActive: isActive,
+                        onTap: () {
+                          setState(() {
+                            touchedIndex = isActive ? -1 : index;
+                          });
+                        },
+                      );
+                    }),
+                  ),
+                ],
               ),
             ),
           );
@@ -2896,26 +2955,20 @@ class _HomeScreenState extends State<HomeScreen> {
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
         decoration: BoxDecoration(
-          color: isActive
-              ? Colors.white.withOpacity(0.82)
-              : Colors.white.withOpacity(0.58),
+          color: isActive ? Colors.white : const Color(0xFFF8FAFF),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isActive
-                ? gradientColors.last.withOpacity(0.75)
-                : Colors.white.withOpacity(0.66),
+                ? gradientColors.last.withOpacity(0.72)
+                : const Color(0xFFE3E8F2),
             width: isActive ? 1.3 : 1,
           ),
-          boxShadow: [
+          boxShadow: <BoxShadow>[
             BoxShadow(
-              color: const Color(0xFF0F1F39).withOpacity(0.06),
-              blurRadius: 12,
+              color: Colors.grey.withOpacity(isActive ? 0.18 : 0.12),
+              blurRadius: isActive ? 10 : 8,
+              spreadRadius: isActive ? 1.6 : 1,
               offset: const Offset(0, 4),
-            ),
-            BoxShadow(
-              color: Colors.white.withOpacity(0.34),
-              blurRadius: 8,
-              offset: const Offset(-1, -1),
             ),
           ],
         ),
@@ -2968,7 +3021,7 @@ class _HomeScreenState extends State<HomeScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                _t('Giao dịch gần đây', 'Recent transactions'),
+                _t('Giao d?ch g?n d�y', 'Recent transactions'),
                 style: GoogleFonts.poppins(
                   fontWeight: FontWeight.bold,
                   fontSize: 14,
@@ -2984,7 +3037,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
                 child: Text(
-                  _t('Xem tất cả', 'View all'),
+                  _t('Xem t?t c?', 'View all'),
                   style: GoogleFonts.poppins(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -2998,13 +3051,19 @@ class _HomeScreenState extends State<HomeScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 10),
               child: Text(
-                _t('Bạn chưa đăng nhập.', 'You are not logged in.'),
+                _t('B?n chua dang nh?p.', 'You are not logged in.'),
                 style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey),
               ),
             )
           else
-            FutureBuilder<List<_HomeTransactionModel>>(
-              future: _recentTransactionsFuture(uid),
+            StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(uid)
+                  .collection('transactions')
+                  .orderBy('timestamp_client', descending: true)
+                  .limit(5)
+                  .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting &&
                     !snapshot.hasData) {
@@ -3025,7 +3084,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     child: Text(
                       _t(
-                        'Không tải được lịch sử giao dịch.',
+                        'Kh�ng t?i du?c l?ch s? giao d?ch.',
                         'Unable to load transaction history.',
                       ),
                       style: GoogleFonts.poppins(
@@ -3037,13 +3096,17 @@ class _HomeScreenState extends State<HomeScreen> {
                 }
 
                 final List<_HomeTransactionModel> transactions =
-                    snapshot.data ?? <_HomeTransactionModel>[];
+                    (snapshot.data?.docs ??
+                            <QueryDocumentSnapshot<Map<String, dynamic>>>[])
+                        .map(_mapUnifiedTransactionRecord)
+                        .whereType<_HomeTransactionModel>()
+                        .toList(growable: false);
 
                 if (transactions.isEmpty) {
                   return Padding(
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     child: Text(
-                      _t('Chưa có giao dịch nào.', 'No transactions yet.'),
+                      _t('Chua c� giao d?ch n�o.', 'No transactions yet.'),
                       style: GoogleFonts.poppins(
                         fontSize: 12,
                         color: Colors.grey,
@@ -3173,7 +3236,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            _pillNavItem(Icons.home, _t("Trang chính", "Home"), 0),
+            _pillNavItem(Icons.home, _t("Trang ch�nh", "Home"), 0),
             _pillNavItem(Icons.search, "", 1),
             _pillNavItem(Icons.chat_bubble_outline, "", 2),
             _pillNavItem(Icons.settings_outlined, "", 3),

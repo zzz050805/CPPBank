@@ -1,12 +1,12 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'app_preferences.dart';
-import 'data/user_firestore_service.dart';
-import 'data/firebase_helper.dart';
+import 'services/user_firestore_service.dart';
+import 'services/firebase_helper.dart';
 import 'effect/app_transitions.dart';
 import 'services/notification_service.dart';
 import 'screen/welcome.dart';
@@ -55,6 +55,8 @@ void _handleNotificationTapPayload(Map<String, dynamic> payload) {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  await AppPreferences.instance.loadSavedLocale();
+
   NotificationService().setOnNotificationTapHandler(
     _handleNotificationTapPayload,
   );
@@ -68,30 +70,30 @@ void main() async {
 
   try {
     await dotenv.load(fileName: ".env");
-    print('Kiểm tra .env: ${dotenv.env.keys}');
+    print('Ki?m tra .env: ${dotenv.env.keys}');
     debugPrint(
-      '✅ DotEnv loaded: ${dotenv.env['VIETQR_CLIENT_ID']?.substring(0, 5)}***',
+      '? DotEnv loaded: ${dotenv.env['VIETQR_CLIENT_ID']?.substring(0, 5)}***',
     );
   } catch (e) {
-    debugPrint('❌ Error loading .env: $e');
+    debugPrint('? Error loading .env: $e');
   }
 
   try {
     await FirebaseHelper.initializeFirebase();
   } catch (e) {
-    debugPrint('❌ Firebase init failed: $e');
+    debugPrint('? Firebase init failed: $e');
   }
 
   try {
     await UserFirestoreService.instance.syncCurrentUserData();
   } catch (e) {
-    debugPrint('❌ Initial user sync failed: $e');
+    debugPrint('? Initial user sync failed: $e');
   }
 
   try {
     await NotificationService().init();
   } catch (e) {
-    debugPrint('❌ Local notification init failed: $e');
+    debugPrint('? Local notification init failed: $e');
   }
 
   runApp(const MyApp());

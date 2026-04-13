@@ -85,7 +85,9 @@ class AppText {
       'en': 'Standard Card',
     },
     'card_vip': <String, String>{'vi': 'Thẻ VIP', 'en': 'VIP Card'},
-    'status_active': <String, String>{'vi': 'Đang hoạt động', 'en': 'Active'},
+    'status_active': <String, String>{'vi': 'Đang hiệu lực', 'en': 'Active'},
+    'status_expired': <String, String>{'vi': 'Đã hết hạn', 'en': 'Expired'},
+    'status_cancelled': <String, String>{'vi': 'Đã hủy', 'en': 'Cancelled'},
     'status_locked': <String, String>{'vi': 'Đã khóa', 'en': 'Locked'},
     'lock_card': <String, String>{'vi': 'Khóa thẻ', 'en': 'Lock card'},
     'unlock_card': <String, String>{'vi': 'Mở thẻ', 'en': 'Unlock card'},
@@ -121,6 +123,158 @@ class AppText {
       'vi': 'Số tiền {amount} đã được rút về tài khoản liên kết',
       'en': '{amount} has been withdrawn to the linked account',
     },
+    'atm_withdrawal': <String, String>{
+      'vi': 'Rút tiền ATM',
+      'en': 'ATM withdrawal',
+    },
+    'withdraw_history': <String, String>{
+      'vi': 'Lịch sử rút tiền',
+      'en': 'Withdrawal history',
+    },
+    'withdraw_code_created': <String, String>{
+      'vi': 'Mã rút tiền đã được tạo: {code}',
+      'en': 'Withdrawal code created: {code}',
+    },
+    'create_code': <String, String>{'vi': 'Tạo mã', 'en': 'Create code'},
+    'cancel_code': <String, String>{'vi': 'Hủy mã', 'en': 'Cancel code'},
+    'confirm_delete_service_title': <String, String>{
+      'vi': 'Xác nhận xóa',
+      'en': 'Confirm deletion',
+    },
+    'confirm_delete_service_message': <String, String>{
+      'vi':
+          'Bạn có chắc chắn muốn xóa dịch vụ {serviceName} không? Hành động này không thể hoàn tác và sẽ xóa dịch vụ khỏi màn hình của người dùng ngay lập tức.',
+      'en':
+          'Are you sure you want to delete service {serviceName}? This action cannot be undone and will remove the service from user screens immediately.',
+    },
+    'service_deleted_success': <String, String>{
+      'vi': 'Đã xóa dịch vụ thành công',
+      'en': 'Service deleted successfully',
+    },
+    'delete_account_title': <String, String>{
+      'vi': 'Xóa tài khoản',
+      'en': 'Delete account',
+    },
+    'delete_account_confirm_message': <String, String>{
+      'vi':
+          'Bạn có chắc chắn muốn xóa tài khoản này không? Mọi dữ liệu giao dịch và số dư sẽ bị xóa vĩnh viễn và không thể khôi phục.',
+      'en':
+          'Are you sure you want to delete this account? All transaction data and balances will be permanently removed and cannot be restored.',
+    },
+    'chat_delete_history_title': <String, String>{
+      'vi': 'Xóa lịch sử?',
+      'en': 'Delete history?',
+    },
+    'chat_delete_history_confirm': <String, String>{
+      'vi': 'Bạn có chắc chắn muốn xóa toàn bộ cuộc hội thoại này?',
+      'en': 'Are you sure you want to delete this entire conversation?',
+    },
+    'withdraw_invalid_amount': <String, String>{
+      'vi': 'Số tiền không hợp lệ. Vui lòng nhập bội số của 50.000đ.',
+      'en': 'Invalid amount. Please enter a multiple of 50,000 VND.',
+    },
+    'withdraw_create_failed': <String, String>{
+      'vi': 'Không thể tạo mã rút tiền. Vui lòng thử lại.',
+      'en': 'Failed to create withdrawal code. Please try again.',
+    },
+    'withdraw_code_cancelled': <String, String>{
+      'vi': 'Đã hủy mã rút tiền.',
+      'en': 'Withdrawal code has been cancelled.',
+    },
+    'withdraw_cancel_failed': <String, String>{
+      'vi': 'Không thể hủy mã rút tiền. Vui lòng thử lại.',
+      'en': 'Failed to cancel withdrawal code. Please try again.',
+    },
+    'remaining_time': <String, String>{
+      'vi': 'Thời gian còn lại: {time}',
+      'en': 'Remaining time: {time}',
+    },
+    'loading': <String, String>{'vi': 'Đang tải...', 'en': 'Loading...'},
+    'source_account': <String, String>{
+      'vi': 'TÀI KHOẢN NGUỒN',
+      'en': 'SOURCE ACCOUNT',
+    },
+    'available_balance': <String, String>{
+      'vi': 'SỐ DƯ KHẢ DỤNG',
+      'en': 'AVAILABLE BALANCE',
+    },
+    'enter_withdraw_amount': <String, String>{
+      'vi': 'Nhập số tiền muốn rút',
+      'en': 'Enter withdrawal amount',
+    },
+    'max_transaction_limit': <String, String>{
+      'vi': 'Hạn mức tối đa theo số dư khả dụng: {amount}',
+      'en': 'Maximum limit based on available balance: {amount}',
+    },
+    'currency_vnd': <String, String>{'vi': 'VNĐ', 'en': 'VND'},
+    'quick_amount_selection': <String, String>{
+      'vi': 'Chọn nhanh mệnh giá',
+      'en': 'Quick amount selection',
+    },
+    'withdraw_limit_text': <String, String>{
+      'vi': 'Hạn mức rút: {min}đ - {max}đ / lần',
+      'en': 'Withdrawal limit: {min} VND - {max} VND / transaction',
+    },
+    'security_ssl_notice': <String, String>{
+      'vi': 'Giao dịch được bảo mật bởi SSL 256-bit',
+      'en': 'Transactions are secured by 256-bit SSL',
+    },
+    'no_withdraw_history': <String, String>{
+      'vi': 'Chưa có lịch sử rút tiền ATM.',
+      'en': 'No ATM withdrawal history yet.',
+    },
+    'code_label': <String, String>{'vi': 'Mã', 'en': 'Code'},
+    'created_at_label': <String, String>{'vi': 'Tạo lúc', 'en': 'Created at'},
+    'menu_settings': <String, String>{'vi': 'Cài đặt', 'en': 'Settings'},
+    'menu_switch_language': <String, String>{
+      'vi': 'Ngôn ngữ (VI/EN)',
+      'en': 'Language (VI/EN)',
+    },
+    'menu_logout': <String, String>{'vi': 'Đăng xuất', 'en': 'Logout'},
+    'confirm_logout_title': <String, String>{
+      'vi': 'Xác nhận đăng xuất',
+      'en': 'Confirm logout',
+    },
+    'confirm_logout_msg': <String, String>{
+      'vi': 'Bạn có chắc chắn muốn đăng xuất khỏi hệ thống Admin?',
+      'en': 'Are you sure you want to log out of the Admin system?',
+    },
+    'confirm_logout_msg_user': <String, String>{
+      'vi': 'Bạn có chắc chắn muốn đăng xuất khỏi tài khoản này?',
+      'en': 'Are you sure you want to log out of this account?',
+    },
+    'cancel_withdraw_code_title': <String, String>{
+      'vi': 'Xác nhận hủy mã',
+      'en': 'Confirm code cancellation',
+    },
+    'cancel_withdraw_code_confirm': <String, String>{
+      'vi': 'Bạn có chắc chắn muốn hủy mã không?',
+      'en': 'Are you sure you want to cancel this code?',
+    },
+    'atm_withdrawal_code_created_heads_up': <String, String>{
+      'vi': 'Mã rút tiền ATM {code} đã được tạo thành công. Hiệu lực 15 phút.',
+      'en':
+          'ATM withdrawal code {code} has been created successfully. Valid for 15 minutes.',
+    },
+    'btn_yes': <String, String>{'vi': 'Có', 'en': 'Yes'},
+    'btn_no': <String, String>{'vi': 'Không', 'en': 'No'},
+    'btn_cancel': <String, String>{'vi': 'Hủy', 'en': 'Cancel'},
+    'btn_delete': <String, String>{'vi': 'Xóa', 'en': 'Delete'},
+    'action_confirm': <String, String>{'vi': 'Xác nhận', 'en': 'Confirm'},
+    'action_cancel': <String, String>{'vi': 'Hủy', 'en': 'Cancel'},
+    'logout_failed': <String, String>{
+      'vi': 'Không thể đăng xuất. Vui lòng thử lại.',
+      'en': 'Unable to log out. Please try again.',
+    },
+    'select_language': <String, String>{
+      'vi': 'Chọn ngôn ngữ',
+      'en': 'Choose language',
+    },
+    'language_vietnamese': <String, String>{
+      'vi': 'Tiếng Việt',
+      'en': 'Vietnamese',
+    },
+    'language_english': <String, String>{'vi': 'English', 'en': 'English'},
     'title_shopping': <String, String>{
       'vi': 'Thanh toán mua sắm thành công',
       'en': 'Shopping payment successful',

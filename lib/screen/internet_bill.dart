@@ -118,13 +118,6 @@ class _InternetBillScreenState extends State<InternetBillScreen>
     );
   }
 
-  void _goHome() {
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const MainTabShell(initialIndex: 0)),
-      (Route<dynamic> route) => false,
-    );
-  }
-
   void _fillCode(String code) {
     setState(() {
       _customerCodeController.text = code;
@@ -542,54 +535,6 @@ class _InternetBillScreenState extends State<InternetBillScreen>
     );
   }
 
-  Widget _buildServiceTabs() {
-    final List<Map<String, String>> tabs = <Map<String, String>>[
-      <String, String>{'type': 'internet', 'label': _tr('internet_service')},
-    ];
-
-    return Row(
-      children: List<Widget>.generate(tabs.length, (int index) {
-        final String type = tabs[index]['type']!;
-        final bool selected = _selectedServiceType == type;
-
-        return Expanded(
-          child: Padding(
-            padding: EdgeInsets.only(right: index == tabs.length - 1 ? 0 : 8),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(999),
-              onTap: () {
-                setState(() {
-                  _selectedServiceType = type;
-                  _lookupError = null;
-                  _lookupResult = null;
-                  _customerCodeController.clear();
-                });
-              },
-              child: Container(
-                height: 38,
-                decoration: BoxDecoration(
-                  color: selected
-                      ? _primaryBlue.withValues(alpha: 0.9)
-                      : const Color(0xFFE5DEF9),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  tabs[index]['label']!,
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: selected ? Colors.white : const Color(0xFF69708A),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-      }),
-    );
-  }
-
   Widget _buildLookupCard() {
     return Container(
       width: double.infinity,
@@ -765,13 +710,6 @@ class _InternetBillScreenState extends State<InternetBillScreen>
         title: _t('Thanh toán hoá đơn', 'Bill payment'),
         backgroundColor: _surface,
         onBackPressed: () => Navigator.maybePop(context),
-        actions: <Widget>[
-          IconButton(
-            onPressed: _goHome,
-            icon: const Icon(Icons.home_rounded),
-            color: _primaryBlue,
-          ),
-        ],
       ),
       body: Stack(
         children: <Widget>[
@@ -842,12 +780,10 @@ class _InternetBillScreenState extends State<InternetBillScreen>
                     ),
                   ),
                   const SizedBox(height: 16),
-                  _reveal(4, _buildServiceTabs()),
-                  const SizedBox(height: 14),
-                  _reveal(5, _buildLookupCard()),
+                  _reveal(4, _buildLookupCard()),
                   const SizedBox(height: 24),
                   _reveal(
-                    6,
+                    5,
                     Text(
                       _t('Hóa đơn gần đây', 'Recent bills'),
                       style: GoogleFonts.poppins(
@@ -953,13 +889,13 @@ class InternetBillSuccessScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final String paidTime = DateFormat(
-      'HH:mm, dd/MM/yyyy',
+      'dd/MM/yyyy HH:mm:ss',
     ).format(receipt.paidAt);
 
     return Scaffold(
       backgroundColor: _surface,
       appBar: CCPAppBar(
-        title: _t(context, 'Thanh toán hoá đơn', 'Bill payment'),
+        title: _t(context, 'Hoàn tất', 'Bill payment'),
         backgroundColor: _surface,
         onBackPressed: () => _goHome(context),
       ),
@@ -968,100 +904,95 @@ class InternetBillSuccessScreen extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
           child: Column(
             children: <Widget>[
-              const _BillStepLine(activeCount: 3),
-              const SizedBox(height: 20),
-              Container(
-                width: 104,
-                height: 104,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: <Color>[
-                      _primaryBlue.withValues(alpha: 0.75),
-                      _primaryBlue,
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.check_rounded,
-                  size: 54,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                _tr(context, 'payment_success'),
-                style: GoogleFonts.poppins(
-                  fontSize: 31,
-                  height: 1.05,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF252A49),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                _t(
-                  context,
-                  'Giao dịch của bạn đã được xử lý thành công.',
-                  'Your transaction has been completed successfully.',
-                ),
-                textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(
-                  fontSize: 12,
-                  color: const Color(0xFF8288A2),
-                  height: 1.4,
-                ),
-              ),
-              const SizedBox(height: 14),
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(14),
+                padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Column(
+                  children: <Widget>[
+                    Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        color: _primaryBlue.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.check_rounded,
+                        size: 36,
+                        color: _primaryBlue,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      _t(
+                        context,
+                        'Thanh toán hoá đơn internet thành công',
+                        'Internet bill payment completed',
+                      ),
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.poppins(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF1C2035),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _formatAmount(context, receipt.amountVnd),
+                      style: GoogleFonts.poppins(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                        color: _primaryBlue,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
                 ),
                 child: Column(
                   children: <Widget>[
                     _row(
                       context,
-                      _tr(context, 'transaction_id'),
-                      receipt.transactionCode,
-                    ),
-                    const Divider(height: 18),
-                    _row(
-                      context,
                       _tr(context, 'service'),
                       receipt.serviceLabel,
                     ),
-                    const Divider(height: 18),
+                    const Divider(height: 22),
                     _row(
                       context,
                       _t(context, 'Nhà cung cấp', 'Provider'),
                       receipt.provider,
                     ),
-                    const Divider(height: 18),
+                    const Divider(height: 22),
                     _row(
                       context,
                       _t(context, 'Mã khách hàng', 'Customer code'),
                       receipt.customerCode,
                     ),
-                    const Divider(height: 18),
+                    const Divider(height: 22),
                     _row(
                       context,
                       _t(context, 'Khách hàng', 'Customer'),
                       receipt.customerName,
                     ),
-                    const Divider(height: 18),
-                    _row(context, _tr(context, 'time'), paidTime),
-                    const Divider(height: 18),
+                    const Divider(height: 22),
                     _row(
                       context,
-                      _tr(context, 'total'),
-                      _formatAmount(context, receipt.amountVnd),
-                      strong: true,
+                      _tr(context, 'transaction_id'),
+                      receipt.transactionCode,
                     ),
+                    const Divider(height: 22),
+                    _row(context, _tr(context, 'time'), paidTime),
                   ],
                 ),
               ),
@@ -1091,20 +1022,16 @@ class InternetBillSuccessScreen extends StatelessWidget {
     );
   }
 
-  Widget _row(
-    BuildContext context,
-    String label,
-    String value, {
-    bool strong = false,
-  }) {
+  Widget _row(BuildContext context, String label, String value) {
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Expanded(
           child: Text(
             label,
             style: GoogleFonts.poppins(
               fontSize: 12,
-              color: const Color(0xFF7D839D),
+              color: const Color(0xFF7A8099),
             ),
           ),
         ),
@@ -1113,44 +1040,13 @@ class InternetBillSuccessScreen extends StatelessWidget {
             value,
             textAlign: TextAlign.right,
             style: GoogleFonts.poppins(
-              fontSize: strong ? 24 : 13,
-              fontWeight: strong ? FontWeight.w800 : FontWeight.w700,
-              color: strong ? _primaryBlue : const Color(0xFF2F3554),
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF1E243A),
             ),
           ),
         ),
       ],
-    );
-  }
-}
-
-class _BillStepLine extends StatelessWidget {
-  const _BillStepLine({required this.activeCount});
-
-  final int activeCount;
-
-  @override
-  Widget build(BuildContext context) {
-    const Color primaryBlue = Color(0xFF000DC0);
-
-    return Row(
-      children: List<Widget>.generate(3, (int index) {
-        final bool active = index < activeCount;
-        return Expanded(
-          child: Padding(
-            padding: EdgeInsets.only(right: index == 2 ? 0 : 8),
-            child: Container(
-              height: 4,
-              decoration: BoxDecoration(
-                color: active
-                    ? primaryBlue
-                    : primaryBlue.withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(30),
-              ),
-            ),
-          ),
-        );
-      }),
     );
   }
 }

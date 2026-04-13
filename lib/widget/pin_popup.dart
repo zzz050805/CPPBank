@@ -5,7 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:pin_code_fields/pin_code_fields.dart';
 
 import '../core/app_translations.dart';
-import '../data/user_firestore_service.dart';
+import '../services/user_firestore_service.dart';
 
 class PinPopupWidget extends StatefulWidget {
   const PinPopupWidget({super.key, required this.onSuccess});

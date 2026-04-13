@@ -24,6 +24,8 @@ class DataBillSuccessScreen extends StatelessWidget {
   String _t(BuildContext context, String vi, String en) =>
       AppText.tr(context, vi, en);
 
+  String _tr(BuildContext context, String key) => AppText.text(context, key);
+
   void _goHome(BuildContext context) {
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const MainTabShell(initialIndex: 0)),
@@ -38,14 +40,14 @@ class DataBillSuccessScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String now = DateFormat('HH:mm, dd/MM/yyyy').format(DateTime.now());
+    final String now = DateFormat('dd/MM/yyyy HH:mm:ss').format(DateTime.now());
     final String transactionCode =
         '#PAY${DateTime.now().millisecondsSinceEpoch.toString().substring(6)}';
 
     return Scaffold(
       backgroundColor: _surface,
       appBar: CCPAppBar(
-        title: _t(context, 'Thanh toán hoá đơn', 'Bill payment'),
+        title: _t(context, 'Hoàn tất', 'Bill payment'),
         backgroundColor: _surface,
         onBackPressed: () => _goHome(context),
       ),
@@ -54,59 +56,61 @@ class DataBillSuccessScreen extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
           child: Column(
             children: <Widget>[
-              const _StepLine(activeCount: 3),
-              const SizedBox(height: 20),
-              Container(
-                width: 104,
-                height: 104,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: <Color>[
-                      _primaryBlue.withValues(alpha: 0.75),
-                      _primaryBlue,
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.check_rounded,
-                  size: 54,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                _t(context, 'Nạp data thành công', 'Top-up successful'),
-                style: GoogleFonts.poppins(
-                  fontSize: 31,
-                  height: 1.05,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF252A49),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                _t(
-                  context,
-                  'Giao dịch của bạn đã được xử lý thành công. Dung lượng data đã được cộng vào tài khoản.',
-                  'Your transaction has been completed successfully.',
-                ),
-                textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(
-                  fontSize: 12,
-                  color: const Color(0xFF8288A2),
-                  height: 1.4,
-                ),
-              ),
-              const SizedBox(height: 14),
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(14),
+                padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Column(
+                  children: <Widget>[
+                    Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        color: _primaryBlue.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.check_rounded,
+                        size: 36,
+                        color: _primaryBlue,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      _t(
+                        context,
+                        'Thanh toán data thành công',
+                        'Data payment completed',
+                      ),
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.poppins(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF1C2035),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      totalText,
+                      style: GoogleFonts.poppins(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                        color: _primaryBlue,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
                 ),
                 child: Column(
                   children: <Widget>[
@@ -114,21 +118,15 @@ class DataBillSuccessScreen extends StatelessWidget {
                       _t(context, 'Mã giao dịch', 'Transaction ID'),
                       transactionCode,
                     ),
-                    const Divider(height: 18),
+                    const Divider(height: 22),
                     _row(
                       _t(context, 'Số điện thoại', 'Phone number'),
                       _maskedPhone(),
                     ),
-                    const Divider(height: 18),
+                    const Divider(height: 22),
                     _row(_t(context, 'Gói cước', 'Package'), planName),
-                    const Divider(height: 18),
+                    const Divider(height: 22),
                     _row(_t(context, 'Thời gian', 'Time'), now),
-                    const Divider(height: 18),
-                    _row(
-                      _t(context, 'Tổng thanh toán', 'Total payment'),
-                      totalText,
-                      strong: true,
-                    ),
                   ],
                 ),
               ),
@@ -146,7 +144,7 @@ class DataBillSuccessScreen extends StatelessWidget {
                     ),
                   ),
                   child: Text(
-                    _t(context, 'QUAY VỀ TRANG CHỦ', 'BACK TO HOME'),
+                    _tr(context, 'back_to_home').toUpperCase(),
                     style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
                   ),
                 ),
@@ -158,15 +156,16 @@ class DataBillSuccessScreen extends StatelessWidget {
     );
   }
 
-  Widget _row(String label, String value, {bool strong = false}) {
+  Widget _row(String label, String value) {
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Expanded(
           child: Text(
             label,
             style: GoogleFonts.poppins(
               fontSize: 12,
-              color: const Color(0xFF7D839D),
+              color: const Color(0xFF7A8099),
             ),
           ),
         ),
@@ -175,44 +174,13 @@ class DataBillSuccessScreen extends StatelessWidget {
             value,
             textAlign: TextAlign.right,
             style: GoogleFonts.poppins(
-              fontSize: strong ? 24 : 13,
-              fontWeight: strong ? FontWeight.w800 : FontWeight.w700,
-              color: strong ? _primaryBlue : const Color(0xFF2F3554),
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF1E243A),
             ),
           ),
         ),
       ],
-    );
-  }
-}
-
-class _StepLine extends StatelessWidget {
-  const _StepLine({required this.activeCount});
-
-  final int activeCount;
-
-  @override
-  Widget build(BuildContext context) {
-    const Color primaryBlue = Color(0xFF000DC0);
-
-    return Row(
-      children: List<Widget>.generate(3, (int index) {
-        final bool active = index < activeCount;
-        return Expanded(
-          child: Padding(
-            padding: EdgeInsets.only(right: index == 2 ? 0 : 8),
-            child: Container(
-              height: 4,
-              decoration: BoxDecoration(
-                color: active
-                    ? primaryBlue
-                    : primaryBlue.withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(30),
-              ),
-            ),
-          ),
-        );
-      }),
     );
   }
 }

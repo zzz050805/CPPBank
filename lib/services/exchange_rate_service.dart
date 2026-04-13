@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 
-import '../models/currency_rate.dart';
+import '../data/models/currency_rate.dart';
 
 class ExchangeRateService {
   static const String _apiKey = '04a8fc4d30b3c2b56e6e8d0c';

@@ -1,10 +1,11 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'chat_service.dart';
+import '../services/chat_service.dart';
 import 'search_screen.dart';
 import '../l10n/app_text.dart';
-import '../data/user_firestore_service.dart';
+import '../services/user_firestore_service.dart';
+import '../widget/custom_confirm_dialog.dart';
 
 class ChatPlaceholderScreen extends StatefulWidget {
   const ChatPlaceholderScreen({
@@ -83,7 +84,7 @@ class _ChatPlaceholderScreenState extends State<ChatPlaceholderScreen> {
         setState(() {
           _localMessages.add({
             'text': _t(
-              'Không thể gửi tin nhắn lúc này. Vui lòng thử lại.',
+              'Không th? g?i tin nh?n lúc này. Vui ḷng th? l?i.',
               'Unable to send message right now. Please try again.',
             ),
             'role': 'bot',
@@ -107,7 +108,7 @@ class _ChatPlaceholderScreenState extends State<ChatPlaceholderScreen> {
         backgroundColor: const Color(0xFF000DC0),
         elevation: 0,
         title: Text(
-          _t('Trợ lý ảo CCPBank', 'CCPBank virtual assistant'),
+          _t('Tr? lư ?o CCPBank', 'CCPBank virtual assistant'),
           style: GoogleFonts.poppins(
             color: Colors.white,
             fontWeight: FontWeight.bold,
@@ -125,7 +126,7 @@ class _ChatPlaceholderScreenState extends State<ChatPlaceholderScreen> {
               ),
         ),
         actions: [
-          // Nút xóa lịch sử (Tùy chọn thêm cho Pro)
+          // Nút xóa l?ch s? (Tùy ch?n thêm cho Pro)
           IconButton(
             icon: const Icon(Icons.delete_sweep, color: Colors.white),
             onPressed: _confirmDeleteHistory,
@@ -134,10 +135,10 @@ class _ChatPlaceholderScreenState extends State<ChatPlaceholderScreen> {
       ),
       body: Column(
         children: [
-          // 1. HIỂN THỊ LỊCH SỬ CHAT TỪ FIRESTORE
+          // 1. HI?N TH? L?CH S? CHAT T? FIRESTORE
           Expanded(child: _buildChatHistory()),
 
-          // Hiệu ứng khi AI đang suy nghĩ
+          // Hi?u ?ng khi AI dang suy nghi
           if (_isLoading)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -154,7 +155,7 @@ class _ChatPlaceholderScreenState extends State<ChatPlaceholderScreen> {
                   const SizedBox(width: 10),
                   Text(
                     _t(
-                      'AI đang kiểm tra dữ liệu hệ thống...',
+                      'AI dang ki?m tra d? li?u h? th?ng...',
                       'AI is checking system data...',
                     ),
                     style: GoogleFonts.poppins(
@@ -166,7 +167,7 @@ class _ChatPlaceholderScreenState extends State<ChatPlaceholderScreen> {
               ),
             ),
 
-          // 2. Ô nhập liệu
+          // 2. Ô nh?p li?u
           _buildInputArea(),
         ],
       ),
@@ -195,7 +196,7 @@ class _ChatPlaceholderScreenState extends State<ChatPlaceholderScreen> {
           return Center(
             child: Text(
               _t(
-                'Đã xảy ra lỗi khi tải tin nhắn',
+                'Đă x?y ra l?i khi t?i tin nh?n',
                 'An error occurred while loading messages',
               ),
             ),
@@ -278,7 +279,7 @@ class _ChatPlaceholderScreenState extends State<ChatPlaceholderScreen> {
     );
   }
 
-  // Widget thanh nhập liệu
+  // Widget thanh nh?p li?u
   Widget _buildInputArea() {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 10, 10, 30),
@@ -306,7 +307,7 @@ class _ChatPlaceholderScreenState extends State<ChatPlaceholderScreen> {
                 style: GoogleFonts.poppins(fontSize: 14),
                 decoration: InputDecoration(
                   hintText: _t(
-                    'Hỏi tôi về dịch vụ CCPBank...',
+                    'H?i tôi v? d?ch v? CCPBank...',
                     'Ask me about CCPBank services...',
                   ),
                   hintStyle: GoogleFonts.poppins(
@@ -337,46 +338,28 @@ class _ChatPlaceholderScreenState extends State<ChatPlaceholderScreen> {
     );
   }
 
-  // Hàm xóa lịch sử chat (Để demo cho xịn)
-  void _confirmDeleteHistory() {
-    showDialog(
+  // Hàm xóa l?ch s? chat (Đ? demo cho x?n)
+  Future<void> _confirmDeleteHistory() async {
+    await showCustomConfirmDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(_t('Xóa lịch sử?', 'Delete history?')),
-        content: Text(
-          _t(
-            'Bạn có chắc chắn muốn xóa toàn bộ cuộc hội thoại này?',
-            'Are you sure you want to delete this entire conversation?',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(_t('Hủy', 'Cancel')),
-          ),
-          TextButton(
-            onPressed: () async {
-              final String? docId =
-                  UserFirestoreService.instance.currentUserDocId;
-              if (docId != null) {
-                final collection = FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(docId)
-                    .collection('chat_history');
-                final snapshots = await collection.get();
-                for (var doc in snapshots.docs) {
-                  await doc.reference.delete();
-                }
-              }
-              if (mounted) Navigator.pop(context);
-            },
-            child: Text(
-              _t('Xóa', 'Delete'),
-              style: const TextStyle(color: Colors.red),
-            ),
-          ),
-        ],
-      ),
+      title: AppText.text(context, 'chat_delete_history_title'),
+      message: AppText.text(context, 'chat_delete_history_confirm'),
+      confirmText: AppText.text(context, 'btn_delete'),
+      cancelText: AppText.text(context, 'btn_cancel'),
+      confirmColor: Colors.red,
+      onConfirm: () async {
+        final String? docId = UserFirestoreService.instance.currentUserDocId;
+        if (docId != null) {
+          final collection = FirebaseFirestore.instance
+              .collection('users')
+              .doc(docId)
+              .collection('chat_history');
+          final snapshots = await collection.get();
+          for (final doc in snapshots.docs) {
+            await doc.reference.delete();
+          }
+        }
+      },
     );
   }
 }

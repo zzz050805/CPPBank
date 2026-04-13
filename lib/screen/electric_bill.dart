@@ -4,7 +4,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 import 'electric_bill_pay.dart';
-import 'main_tab_shell.dart';
 import 'bill_mock_data.dart';
 import '../l10n/app_text.dart';
 import '../widget/ccp_app_bar.dart';
@@ -84,13 +83,6 @@ class _ElectricBillScreenState extends State<ElectricBillScreen>
 
   String _formatVnd(num value) {
     return '${_moneyFormat.format(value)} VND';
-  }
-
-  void _goHome() {
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const MainTabShell(initialIndex: 0)),
-      (Route<dynamic> route) => false,
-    );
   }
 
   Future<void> _lookupBill() async {
@@ -384,13 +376,6 @@ class _ElectricBillScreenState extends State<ElectricBillScreen>
         title: _t('Thanh toán hóa đơn', 'Bill payment'),
         backgroundColor: _surface,
         onBackPressed: () => Navigator.maybePop(context),
-        actions: [
-          IconButton(
-            onPressed: _goHome,
-            icon: const Icon(Icons.home_rounded),
-            color: _primaryBlue,
-          ),
-        ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(

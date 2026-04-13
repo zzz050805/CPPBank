@@ -4,8 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 import 'electric_bill_success.dart';
-import 'main_tab_shell.dart';
-import '../data/user_firestore_service.dart';
+import '../services/user_firestore_service.dart';
 import '../l10n/app_text.dart';
 import '../services/payment_service.dart';
 import '../widget/pin_popup.dart';
@@ -67,13 +66,6 @@ class _ElectricBillPayScreenState extends State<ElectricBillPayScreen>
 
   String _formatBalanceLine(double amount) {
     return '${_t('Số dư', 'Balance')}: ${_moneyFormat.format(amount)} đ';
-  }
-
-  void _goHome() {
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const MainTabShell(initialIndex: 0)),
-      (Route<dynamic> route) => false,
-    );
   }
 
   Future<void> _processPayment() async {
@@ -280,13 +272,6 @@ class _ElectricBillPayScreenState extends State<ElectricBillPayScreen>
         title: _t('Thanh toán hoá đơn', 'Payment'),
         backgroundColor: _surface,
         onBackPressed: () => Navigator.maybePop(context),
-        actions: <Widget>[
-          IconButton(
-            onPressed: _goHome,
-            icon: const Icon(Icons.home_rounded),
-            color: _primaryBlue,
-          ),
-        ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(

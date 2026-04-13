@@ -1,6 +1,6 @@
-﻿import 'package:flutter/material.dart';
-import 'login.dart';
-import '../widget/ccp_logo.dart';
+import 'package:flutter/material.dart';
+import 'package:doan_nganhang/screen/login.dart';
+import 'package:doan_nganhang/widget/ccp_logo.dart';
 
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
