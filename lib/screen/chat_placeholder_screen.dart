@@ -84,7 +84,7 @@ class _ChatPlaceholderScreenState extends State<ChatPlaceholderScreen> {
         setState(() {
           _localMessages.add({
             'text': _t(
-              'Không th? g?i tin nh?n lúc này. Vui ḷng th? l?i.',
+              'Không thể gửi tin nhắn lúc này. Vui lòng thử lại.',
               'Unable to send message right now. Please try again.',
             ),
             'role': 'bot',
@@ -108,7 +108,7 @@ class _ChatPlaceholderScreenState extends State<ChatPlaceholderScreen> {
         backgroundColor: const Color(0xFF000DC0),
         elevation: 0,
         title: Text(
-          _t('Tr? lư ?o CCPBank', 'CCPBank virtual assistant'),
+          _t('Trợ lý ảo CCPBank', 'CCPBank virtual assistant'),
           style: GoogleFonts.poppins(
             color: Colors.white,
             fontWeight: FontWeight.bold,
@@ -126,7 +126,7 @@ class _ChatPlaceholderScreenState extends State<ChatPlaceholderScreen> {
               ),
         ),
         actions: [
-          // Nút xóa l?ch s? (Tùy ch?n thêm cho Pro)
+          // Nút xóa lịch sử (tùy chọn thêm cho Pro)
           IconButton(
             icon: const Icon(Icons.delete_sweep, color: Colors.white),
             onPressed: _confirmDeleteHistory,
@@ -135,10 +135,10 @@ class _ChatPlaceholderScreenState extends State<ChatPlaceholderScreen> {
       ),
       body: Column(
         children: [
-          // 1. HI?N TH? L?CH S? CHAT T? FIRESTORE
+          // 1. HIỂN THỊ LỊCH SỬ CHAT TỪ FIRESTORE
           Expanded(child: _buildChatHistory()),
 
-          // Hi?u ?ng khi AI dang suy nghi
+          // Hiệu ứng khi AI đang suy nghĩ
           if (_isLoading)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -155,7 +155,7 @@ class _ChatPlaceholderScreenState extends State<ChatPlaceholderScreen> {
                   const SizedBox(width: 10),
                   Text(
                     _t(
-                      'AI dang ki?m tra d? li?u h? th?ng...',
+                      'AI đang kiểm tra dữ liệu hệ thống...',
                       'AI is checking system data...',
                     ),
                     style: GoogleFonts.poppins(
@@ -167,7 +167,7 @@ class _ChatPlaceholderScreenState extends State<ChatPlaceholderScreen> {
               ),
             ),
 
-          // 2. Ô nh?p li?u
+          // 2. Ô nhập liệu
           _buildInputArea(),
         ],
       ),
@@ -196,7 +196,7 @@ class _ChatPlaceholderScreenState extends State<ChatPlaceholderScreen> {
           return Center(
             child: Text(
               _t(
-                'Đă x?y ra l?i khi t?i tin nh?n',
+                'Đã xảy ra lỗi khi tải tin nhắn',
                 'An error occurred while loading messages',
               ),
             ),
@@ -279,7 +279,7 @@ class _ChatPlaceholderScreenState extends State<ChatPlaceholderScreen> {
     );
   }
 
-  // Widget thanh nh?p li?u
+  // Widget thanh nhập liệu
   Widget _buildInputArea() {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 10, 10, 30),
@@ -307,7 +307,7 @@ class _ChatPlaceholderScreenState extends State<ChatPlaceholderScreen> {
                 style: GoogleFonts.poppins(fontSize: 14),
                 decoration: InputDecoration(
                   hintText: _t(
-                    'H?i tôi v? d?ch v? CCPBank...',
+                    'Hỏi tôi về dịch vụ CCPBank...',
                     'Ask me about CCPBank services...',
                   ),
                   hintStyle: GoogleFonts.poppins(
@@ -338,7 +338,7 @@ class _ChatPlaceholderScreenState extends State<ChatPlaceholderScreen> {
     );
   }
 
-  // Hàm xóa l?ch s? chat (Đ? demo cho x?n)
+  // Hàm xóa lịch sử chat (để demo cho xịn)
   Future<void> _confirmDeleteHistory() async {
     await showCustomConfirmDialog(
       context: context,

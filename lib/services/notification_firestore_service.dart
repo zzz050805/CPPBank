@@ -20,6 +20,10 @@ class NotificationFirestoreService {
     required String type,
     String? relatedId,
     num? amount,
+    String? titleKey,
+    String? bodyKey,
+    Map<String, String>? titleParams,
+    Map<String, String>? bodyParams,
   }) async {
     await userNotificationsRef(uid).add(<String, dynamic>{
       'title': title,
@@ -29,6 +33,11 @@ class NotificationFirestoreService {
       'isRead': false,
       if (relatedId != null && relatedId.isNotEmpty) 'relatedId': relatedId,
       'amount': ?amount,
+      if (titleKey != null && titleKey.isNotEmpty) 'titleKey': titleKey,
+      if (bodyKey != null && bodyKey.isNotEmpty) 'bodyKey': bodyKey,
+      if (titleParams != null && titleParams.isNotEmpty)
+        'titleParams': titleParams,
+      if (bodyParams != null && bodyParams.isNotEmpty) 'bodyParams': bodyParams,
     });
   }
 

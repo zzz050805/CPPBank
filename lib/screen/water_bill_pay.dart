@@ -19,6 +19,7 @@ class WaterBillPayScreen extends StatefulWidget {
     this.usageM3 = 36,
     this.billingPeriod = '03/2026',
     this.totalAmount = 426000,
+    this.sourceCardId,
   });
 
   final String customerCode;
@@ -27,6 +28,7 @@ class WaterBillPayScreen extends StatefulWidget {
   final double usageM3;
   final String billingPeriod;
   final double totalAmount;
+  final String? sourceCardId;
 
   @override
   State<WaterBillPayScreen> createState() => _WaterBillPayScreenState();
@@ -82,6 +84,7 @@ class _WaterBillPayScreenState extends State<WaterBillPayScreen>
         amount: widget.totalAmount,
         billType: 'water',
         billId: widget.customerCode,
+        sourceCardId: widget.sourceCardId,
       );
 
       if (!mounted) {

@@ -129,6 +129,7 @@ class PaymentService {
     required double amount,
     required String billType,
     required String billId,
+    String? sourceCardId,
   }) async {
     final String uid = _resolveUid();
     final String languageCode = _languageCode();
@@ -174,6 +175,12 @@ class PaymentService {
     final DocumentReference<Map<String, dynamic>> payBillRef = userRef
         .collection('pay_bill')
         .doc();
+    final DocumentReference<Map<String, dynamic>> billPaymentRef = userRef
+        .collection('bill_payment')
+        .doc(payBillRef.id);
+    final DocumentReference<Map<String, dynamic>> transactionRef = userRef
+        .collection('transactions')
+        .doc(payBillRef.id);
     final DocumentReference<Map<String, dynamic>> spendingStatsRef = userRef
         .collection('spending_stats')
         .doc('summary');
@@ -237,18 +244,49 @@ class PaymentService {
       final double standardBalance = _parseBalance(standardCardData['balance']);
       final double vipBalance = _parseBalance(vipCardData['balance']);
 
+      final String requestedCardId = (sourceCardId ?? '').trim().toLowerCase();
+      final bool hasRequestedCard =
+          requestedCardId == 'standard' || requestedCardId == 'vip';
+      final String effectiveCardId = hasRequestedCard ? requestedCardId : '';
+
       double remaining = amount;
       double standardDeduction = 0;
       double vipDeduction = 0;
 
-      if (standardAvailable && remaining > 0) {
+      if (hasRequestedCard) {
+        final bool selectedAvailable = effectiveCardId == 'standard'
+            ? standardAvailable
+            : vipAvailable;
+        final double selectedBalance = effectiveCardId == 'standard'
+            ? standardBalance
+            : vipBalance;
+
+        if (!selectedAvailable) {
+          throw PaymentServiceException(
+            AppText.textByCode(languageCode, 'card_unavailable'),
+          );
+        }
+
+        if (selectedBalance < amount) {
+          throw PaymentServiceException(insufficientBalanceMessage);
+        }
+
+        if (effectiveCardId == 'standard') {
+          standardDeduction = amount;
+        } else {
+          vipDeduction = amount;
+        }
+        remaining = 0;
+      }
+
+      if (!hasRequestedCard && standardAvailable && remaining > 0) {
         standardDeduction = remaining <= standardBalance
             ? remaining
             : standardBalance;
         remaining -= standardDeduction;
       }
 
-      if (vipAvailable && remaining > 0) {
+      if (!hasRequestedCard && vipAvailable && remaining > 0) {
         vipDeduction = remaining <= vipBalance ? remaining : vipBalance;
         remaining -= vipDeduction;
       }
@@ -287,6 +325,15 @@ class PaymentService {
         billId: billId,
         balance: balanceText,
       );
+      final Map<String, String> titleParams = <String, String>{
+        'serviceName': billTypeLabel,
+      };
+      final Map<String, String> bodyParams = <String, String>{
+        'amount': amountText,
+        'billType': billTypeLabel,
+        'billId': billId,
+        'balance': balanceText,
+      };
 
       final Map<String, dynamic> spendingStatsUpdate = <String, dynamic>{
         'bill': FieldValue.increment(amount),
@@ -326,6 +373,7 @@ class PaymentService {
       transaction.set(payBillRef, <String, dynamic>{
         'type': billType,
         'billType': billType,
+        if (effectiveCardId.isNotEmpty) 'cardId': effectiveCardId,
         'id': billId,
         'customerCode': billId,
         'amount': amount,
@@ -339,19 +387,60 @@ class PaymentService {
         'relatedId': payBillRef.id,
       }, SetOptions(merge: true));
 
+      transaction.set(billPaymentRef, <String, dynamic>{
+        'type': 'bill_payment',
+        'billType': billType,
+        if (effectiveCardId.isNotEmpty) 'cardId': effectiveCardId,
+        'id': billId,
+        'customerCode': billId,
+        'amount': amount,
+        'amountText': amountText,
+        'isNegative': true,
+        'date': FieldValue.serverTimestamp(),
+        'timestamp': FieldValue.serverTimestamp(),
+        'timestamp_client': Timestamp.fromDate(now),
+        'createdAt': FieldValue.serverTimestamp(),
+        'createdAt_client': Timestamp.fromDate(now),
+        'status': 'completed',
+        'transactionCode': payBillRef.id,
+        'relatedId': payBillRef.id,
+      }, SetOptions(merge: true));
+
+      transaction.set(transactionRef, <String, dynamic>{
+        'type': 'bill_payment',
+        'billType': billType,
+        if (effectiveCardId.isNotEmpty) 'cardId': effectiveCardId,
+        'amount': amount,
+        'amountText': amountText,
+        'status': 'success',
+        'timestamp': FieldValue.serverTimestamp(),
+        'timestamp_client': Timestamp.fromDate(now),
+        'createdAt': FieldValue.serverTimestamp(),
+        'createdAt_client': Timestamp.fromDate(now),
+        'transactionCode': payBillRef.id,
+        'relatedId': payBillRef.id,
+        'customerCode': billId,
+        'isNegative': true,
+      }, SetOptions(merge: true));
+
       transaction.set(notificationRef, <String, dynamic>{
         'title': notificationTitle,
         'titleKey': 'payment_success_specific',
+        'titleParams': titleParams,
         'serviceType': billType,
         'serviceTypeKey': billTypeKey,
         'body': notificationBody,
+        'bodyKey': 'payment_notification_body',
+        'bodyParams': bodyParams,
         'timestamp': FieldValue.serverTimestamp(),
         'createdAt': FieldValue.serverTimestamp(),
-        'type': 'payment',
+        'type': 'bill_payment',
         'isRead': false,
+        'isNegative': true,
         'status': 'completed',
         'amount': amount,
         'billType': billType,
+        if (effectiveCardId.isNotEmpty) 'cardId': effectiveCardId,
         'billId': billId,
         'relatedId': payBillRef.id,
       }, SetOptions(merge: true));

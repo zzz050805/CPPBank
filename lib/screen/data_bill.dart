@@ -7,7 +7,9 @@ import '../widget/ccp_app_bar.dart';
 import 'data_bill_pay.dart';
 
 class DataBillScreen extends StatefulWidget {
-  const DataBillScreen({super.key});
+  const DataBillScreen({super.key, this.sourceCardId});
+
+  final String? sourceCardId;
 
   @override
   State<DataBillScreen> createState() => _DataBillScreenState();
@@ -551,6 +553,7 @@ class _DataBillScreenState extends State<DataBillScreen>
                             planName: plan.code,
                             planData: plan.dataText,
                             planPriceText: plan.priceText,
+                            sourceCardId: widget.sourceCardId,
                           ),
                         ),
                       );

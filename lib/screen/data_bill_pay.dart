@@ -17,12 +17,14 @@ class DataBillConfirmScreen extends StatefulWidget {
     required this.planName,
     required this.planData,
     required this.planPriceText,
+    this.sourceCardId,
   });
 
   final String phoneNumber;
   final String planName;
   final String planData;
   final String planPriceText;
+  final String? sourceCardId;
 
   @override
   State<DataBillConfirmScreen> createState() => _DataBillConfirmScreenState();
@@ -58,6 +60,7 @@ class _DataBillConfirmScreenState extends State<DataBillConfirmScreen> {
         amount: _parseAmount(_totalText(widget.planPriceText)),
         billType: 'mobile',
         billId: widget.phoneNumber,
+        sourceCardId: widget.sourceCardId,
       );
 
       if (!mounted) {

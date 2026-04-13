@@ -1,18 +1,61 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 
 import '../l10n/app_text.dart';
+import '../services/user_firestore_service.dart';
 import '../widget/ccp_app_bar.dart';
+import '../widget/custom_card_selector.dart';
 import 'data_bill.dart';
 import 'electric_bill.dart';
 import 'internet_bill.dart';
 import 'water_bill.dart';
 
-class BillScreen extends StatelessWidget {
+class BillScreen extends StatefulWidget {
   const BillScreen({super.key});
+
+  @override
+  State<BillScreen> createState() => _BillScreenState();
+}
+
+class _BillScreenState extends State<BillScreen> {
+  final NumberFormat _moneyFormat = NumberFormat.decimalPattern('vi_VN');
+  String? _selectedCardId;
 
   String _t(BuildContext context, String vi, String en) =>
       AppText.tr(context, vi, en);
+
+  String _uid() {
+    return (UserFirestoreService.instance.currentUserDocId ??
+            FirebaseAuth.instance.currentUser?.uid ??
+            '')
+        .trim();
+  }
+
+  String _formatBalance(num value) => '${_moneyFormat.format(value)} VND';
+
+  Widget _buildSourceCardSelector(BuildContext context) {
+    final String uid = _uid();
+    if (uid.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return CustomCardSelector(
+      uid: uid,
+      selectedCardId: _selectedCardId,
+      margin: const EdgeInsets.only(bottom: 12),
+      onChanged: (CustomCardSelection selection) {
+        if (!mounted || _selectedCardId == selection.id) {
+          return;
+        }
+        setState(() {
+          _selectedCardId = selection.id;
+        });
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -32,6 +75,7 @@ class BillScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              _buildSourceCardSelector(context),
               Text(
                 _t(context, 'TẤT CẢ DỊCH VỤ', 'ALL SERVICES'),
                 style: GoogleFonts.poppins(
@@ -72,7 +116,8 @@ class BillScreen extends StatelessWidget {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const ElectricBillScreen(),
+                      builder: (context) =>
+                          ElectricBillScreen(sourceCardId: _selectedCardId),
                     ),
                   );
                 },
@@ -95,7 +140,7 @@ class BillScreen extends StatelessWidget {
                     context,
                     MaterialPageRoute(
                       builder: (BuildContext context) =>
-                          const WaterBillScreen(),
+                          WaterBillScreen(sourceCardId: _selectedCardId),
                     ),
                   );
                 },
@@ -118,7 +163,7 @@ class BillScreen extends StatelessWidget {
                     context,
                     MaterialPageRoute(
                       builder: (BuildContext context) =>
-                          const InternetBillScreen(),
+                          InternetBillScreen(sourceCardId: _selectedCardId),
                     ),
                   );
                 },
@@ -136,7 +181,8 @@ class BillScreen extends StatelessWidget {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const DataBillScreen(),
+                      builder: (context) =>
+                          DataBillScreen(sourceCardId: _selectedCardId),
                     ),
                   );
                 },

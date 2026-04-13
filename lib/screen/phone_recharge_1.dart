@@ -3,11 +3,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../core/app_translations.dart';
 import '../services/user_firestore_service.dart';
 import '../l10n/app_text.dart';
 import '../services/card_number_service.dart';
 import '../services/notification_service.dart';
+import '../widget/custom_card_selector.dart';
 import '../widget/pin_popup.dart';
 
 class ConfirmTopUpScreen extends StatefulWidget {
@@ -29,12 +29,14 @@ class ConfirmTopUpScreen extends StatefulWidget {
 class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
   static const String _otherAmountKey = '__other_amount__';
   bool _isSubmitting = false;
+  String? _selectedCardId;
+  String _selectedCardDisplay = '****';
 
   String _t(String vi, String en) => AppText.tr(context, vi, en);
 
   String _amountDisplay() {
     if (widget.selectedAmount == _otherAmountKey) {
-      return _t('S? khÄ‚Â¡c', 'Other');
+      return _t('Số khác', 'Other');
     }
     return '${widget.selectedAmount} VND';
   }
@@ -98,7 +100,7 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
     if (uid.isEmpty) {
       return _buildSourceCardRichText(
         primaryColor: primaryColor,
-        cardDisplay: _t('Ã„Âang t?i...', 'Loading...'),
+        cardDisplay: _t('Đang tải...', 'Loading...'),
       );
     }
 
@@ -108,7 +110,7 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
           .doc(uid)
           .snapshots(),
       builder: (context, snapshot) {
-        String cardDisplay = _t('Ã„Âang t?i...', 'Loading...');
+        String cardDisplay = _t('Đang tải...', 'Loading...');
 
         if (snapshot.hasData) {
           final Map<String, dynamic> userData =
@@ -140,7 +142,7 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
           fontSize: 14,
         ),
         children: [
-          TextSpan(text: '${_t('S? th?', 'Card number')}: '),
+          TextSpan(text: '${_t('Số thẻ', 'Card number')}: '),
           TextSpan(
             text: cardDisplay,
             style: GoogleFonts.poppins(
@@ -158,15 +160,27 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
       return;
     }
 
+    final String selectedCardId = (_selectedCardId ?? '').trim().toLowerCase();
+    if (selectedCardId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppText.text(context, 'select_source_card')),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     // ignore: avoid_print
-    print('--- B?T Ã„Â?U GIAO D?CH ---');
+    print('--- BẮT ĐẦU GIAO DỊCH ---');
 
     final int amount = _parseAmountValue(widget.selectedAmount);
     if (amount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            _t('S? ti?n n?p khÄ‚Â´ng h?p l?.', 'Invalid top-up amount.'),
+            _t('Số tiền nạp không hợp lệ.', 'Invalid top-up amount.'),
           ),
           behavior: SnackBarBehavior.floating,
           backgroundColor: Colors.red,
@@ -235,7 +249,9 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
         }
 
         // ignore: avoid_print
-        print('S? du hi?n t?i trÄ‚Âªn Firestore: ${userDoc.data()?['balance']}');
+        print(
+          'S? du hi?n t?i trÄ‚Âªn Firestore: ${userDoc.data()?['balance']}',
+        );
 
         final Map<String, dynamic> userData =
             userDoc.data() ?? <String, dynamic>{};
@@ -284,57 +300,49 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
           throw Exception('S? du khÄ‚Â´ng d?');
         }
 
-        num standardBalance = _readNumericBalance(standardCardData['balance']);
-        num vipBalance = _readNumericBalance(vipCardData['balance']);
-        num remaining = amount;
-        num standardDeduction = 0;
-        num vipDeduction = 0;
-
-        if (standardAvailable && remaining > 0) {
-          standardDeduction = remaining <= standardBalance
-              ? remaining
-              : standardBalance;
-          remaining -= standardDeduction;
+        final bool useStandard = selectedCardId == 'standard';
+        final bool useVip = selectedCardId == 'vip';
+        if (!useStandard && !useVip) {
+          throw Exception(AppText.text(context, 'card_unavailable'));
         }
 
-        if (vipAvailable && remaining > 0) {
-          vipDeduction = remaining <= vipBalance ? remaining : vipBalance;
-          remaining -= vipDeduction;
+        final bool selectedAvailable = useStandard
+            ? standardAvailable
+            : vipAvailable;
+        if (!selectedAvailable) {
+          throw Exception(AppText.text(context, 'card_unavailable'));
         }
 
-        if (remaining > 0) {
+        final num selectedBalance = useStandard
+            ? _readNumericBalance(standardCardData['balance'])
+            : _readNumericBalance(vipCardData['balance']);
+        if (selectedBalance < amount) {
           throw Exception('S? du khÄ‚Â´ng d?');
         }
 
-        if (standardDeduction > 0) {
+        if (useStandard) {
           transaction.set(standardCardRef, <String, dynamic>{
-            'balance': FieldValue.increment(-standardDeduction),
+            'balance': FieldValue.increment(-amount),
             'updatedAt': FieldValue.serverTimestamp(),
           }, SetOptions(merge: true));
-        }
-
-        if (vipDeduction > 0) {
+        } else {
           transaction.set(vipCardRef, <String, dynamic>{
-            'balance': FieldValue.increment(-vipDeduction),
+            'balance': FieldValue.increment(-amount),
             'updatedAt': FieldValue.serverTimestamp(),
           }, SetOptions(merge: true));
         }
 
         // ignore: avoid_print
-        print('Ã„Âang tr? ti?n...');
-        transaction.set(userRef, <String, dynamic>{
-          'balance': FieldValue.increment(-amount),
-          'availableBalance': FieldValue.increment(-amount),
-          'totalBalance': FieldValue.increment(-amount),
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-
+        print(
+          'Ã„Âang chu?n b? ghi vÄ‚Â o: users/$uid/phone_recharge/ID_TU_DONG',
+        );
         // ignore: avoid_print
-        print('Ã„Âang chu?n b? ghi vÄ‚Â o: users/$uid/phone_recharge/ID_TU_DONG');
-        // ignore: avoid_print
-        print('Ã„Âu?ng d?n th?c t?: users/$uid/phone_recharge/${rechargeRef.id}');
+        print(
+          'Ã„Âu?ng d?n th?c t?: users/$uid/phone_recharge/${rechargeRef.id}',
+        );
         transaction.set(rechargeRef, <String, dynamic>{
           'uid': uid,
+          'cardId': selectedCardId,
           'phoneNumber': widget.selectedPhoneNumber.trim(),
           'provider': widget.selectedProvider.trim(),
           'amount': amount,
@@ -352,6 +360,7 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
           'serviceName': widget.selectedProvider.trim(),
           'targetAccount': widget.selectedPhoneNumber.trim(),
           'transactionCode': rechargeRef.id,
+          'cardId': selectedCardId,
           'status': 'success',
           'isRead': false,
           'relatedId': rechargeRef.id,
@@ -367,10 +376,18 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
         throw Exception('KhÄ‚Â´ng luu du?c hÄ‚Â³a don n?p ti?n');
       }
 
+      final String languageCode = AppText.currentLanguageCode(context);
+      final String amountText = '$amount VND';
       await NotificationService().showNotification(
-        title: AppTranslations.getText(context, 'success_title'),
-        body:
-            '${AppTranslations.getText(context, 'top_up_for')} ${widget.selectedProvider.trim()} - $amount VND',
+        title: AppText.textByCode(languageCode, 'notify_phone_recharge_title'),
+        body: AppText.textByCodeWithParams(
+          languageCode,
+          'notify_phone_recharge_body',
+          <String, String>{
+            'amount': amountText,
+            'provider': widget.selectedProvider.trim(),
+          },
+        ),
       );
 
       if (!mounted) {
@@ -603,7 +620,29 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
                           ],
                         ),
                         const SizedBox(height: 10),
-                        _buildSourceCardText(primaryColor),
+                        CustomCardSelector(
+                          uid: _resolveTransactionUid(),
+                          selectedCardId: _selectedCardId,
+                          onChanged: (CustomCardSelection selection) {
+                            if (!mounted) {
+                              return;
+                            }
+                            setState(() {
+                              _selectedCardId = selection.id;
+                              _selectedCardDisplay = selection.account;
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _selectedCardDisplay,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.poppins(
+                            color: primaryColor,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                         const SizedBox(height: 6),
                         StreamBuilder<UserProfileData?>(
                           stream: UserFirestoreService.instance
@@ -615,7 +654,10 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
                                 snapshot.data ??
                                 UserFirestoreService.instance.latestProfile;
                             final String senderName = snapshot.hasError
-                                ? _t('KhÄ‚Â´ng tÌ€Âm th?y user', 'User not found')
+                                ? _t(
+                                    'KhÄ‚Â´ng tÌ€Âm th?y user',
+                                    'User not found',
+                                  )
                                 : ((profile?.fullname.isNotEmpty == true)
                                       ? profile!.fullname
                                       : _t('KhÄ‚Â¡ch hÄ‚Â ng', 'Customer'));
@@ -906,7 +948,11 @@ class TopUpReceiptScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  _t(context, 'Giao d?ch thÄ‚Â nh cÄ‚Â´ng', 'Transaction successful'),
+                  _t(
+                    context,
+                    'Giao d?ch thÄ‚Â nh cÄ‚Â´ng',
+                    'Transaction successful',
+                  ),
                   style: GoogleFonts.poppins(
                     color: Colors.white,
                     fontSize: 20,
@@ -966,7 +1012,10 @@ class TopUpReceiptScreen extends StatelessWidget {
                       _formatDateTime(createdAt),
                     ),
                     const Divider(height: 1),
-                    _buildInfoTile(_t(context, 'Tr?ng thÄ‚Â¡i', 'Status'), status),
+                    _buildInfoTile(
+                      _t(context, 'Tr?ng thÄ‚Â¡i', 'Status'),
+                      status,
+                    ),
                     const Divider(height: 1),
                     _buildInfoTile(_t(context, 'Lo?i', 'Type'), type),
                   ],
@@ -1006,5 +1055,3 @@ class TopUpReceiptScreen extends StatelessWidget {
     );
   }
 }
-
-

@@ -11,7 +11,9 @@ import 'bill_mock_data.dart';
 import 'main_tab_shell.dart';
 
 class InternetBillScreen extends StatefulWidget {
-  const InternetBillScreen({super.key});
+  const InternetBillScreen({super.key, this.sourceCardId});
+
+  final String? sourceCardId;
 
   @override
   State<InternetBillScreen> createState() => _InternetBillScreenState();
@@ -23,12 +25,12 @@ class _InternetBillScreenState extends State<InternetBillScreen>
   static const Color _surface = Color(0xFFF6F7FF);
 
   final TextEditingController _customerCodeController = TextEditingController();
+
   final NumberFormat _moneyFormat = NumberFormat.decimalPattern('vi_VN');
   late final AnimationController _introController;
 
   bool _isLookingUp = false;
-  bool _isPaying = false;
-  String _selectedServiceType = 'internet';
+  final String _selectedServiceType = 'internet';
   String? _lookupError;
   _InternetBillLookupResult? _lookupResult;
 
@@ -209,7 +211,7 @@ class _InternetBillScreenState extends State<InternetBillScreen>
       });
 
       _saveToRecent(result);
-      _showLookupSheet(result);
+      _openConfirmationScreen(result);
     } on FirebaseException catch (e) {
       final _InternetBillLookupResult? demoResult = _demoBills[code];
       if (demoResult != null) {
@@ -221,7 +223,7 @@ class _InternetBillScreenState extends State<InternetBillScreen>
           _lookupError = null;
         });
         _saveToRecent(demoResult);
-        _showLookupSheet(demoResult);
+        _openConfirmationScreen(demoResult);
         return;
       }
 
@@ -287,194 +289,15 @@ class _InternetBillScreenState extends State<InternetBillScreen>
     }
   }
 
-  void _showLookupSheet(_InternetBillLookupResult result) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (BuildContext sheetContext) {
-        return Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          padding: const EdgeInsets.fromLTRB(18, 16, 18, 22),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Center(
-                child: Container(
-                  width: 44,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE2E5F2),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                AppText.lookupResult(context),
-                style: GoogleFonts.poppins(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF1B1E30),
-                ),
-              ),
-              const SizedBox(height: 12),
-              _sheetRow(AppText.customerCode(context), result.customerCode),
-              _sheetRow(
-                AppText.alias(context),
-                _t(result.aliasVi, result.aliasEn),
-              ),
-              _sheetRow(
-                _t('Dịch vụ', 'Service'),
-                _serviceLabel(result.serviceType),
-              ),
-              _sheetRow(AppText.provider(context), result.provider),
-              _sheetRow(AppText.billingCycle(context), result.billingPeriod),
-              _sheetRow(AppText.dueDate(context), result.dueDate),
-              _sheetRow(
-                AppText.paymentAmount(context),
-                _formatVnd(result.amountVnd),
-                valueColor: _primaryBlue,
-              ),
-              const SizedBox(height: 14),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(sheetContext);
-                    showModalBottomSheet<void>(
-                      context: context,
-                      isScrollControlled: true,
-                      backgroundColor: Colors.transparent,
-                      builder: (_) => PinPopupWidget(
-                        onSuccess: () {
-                          _handlePaymentSuccess(result);
-                        },
-                      ),
-                    );
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _primaryBlue,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  child: Text(
-                    _t('Tiếp tục thanh toán', 'Continue to pay'),
-                    style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _handlePaymentSuccess(_InternetBillLookupResult result) async {
-    if (_isPaying) {
-      return;
-    }
-
-    setState(() {
-      _isPaying = true;
-    });
-
-    try {
-      final String billType = 'internet';
-
-      final PaymentProcessResult paymentResult = await PaymentService.instance
-          .processPayment(
-            amount: result.amountVnd,
-            billType: billType,
-            billId: result.customerCode,
-          );
-
-      if (!mounted) {
-        return;
-      }
-
-      final InternetBillReceipt receipt = InternetBillReceipt(
-        transactionCode: paymentResult.transactionId,
-        paidAt: paymentResult.processedAt,
-        customerCode: result.customerCode,
-        customerName: result.customerName,
-        provider: result.provider,
-        serviceLabel: _serviceLabel(result.serviceType),
-        amountVnd: paymentResult.amount,
-      );
-
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => InternetBillSuccessScreen(receipt: receipt),
+  void _openConfirmationScreen(_InternetBillLookupResult result) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => InternetBillConfirmationScreen(
+          lookupResult: result,
+          serviceLabel: _serviceLabel(result.serviceType),
+          sourceCardId: widget.sourceCardId,
         ),
-      );
-    } catch (e) {
-      if (!mounted) {
-        return;
-      }
-      final String message = e
-          .toString()
-          .replaceFirst('Exception: ', '')
-          .trim();
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            message.isEmpty
-                ? _t(
-                    'Thanh toán thất bại, vui lòng thử lại.',
-                    'Payment failed, please try again.',
-                  )
-                : message,
-          ),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isPaying = false;
-        });
-      }
-    }
-  }
-
-  Widget _sheetRow(String label, String value, {Color? valueColor}) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: Text(
-              label,
-              style: GoogleFonts.poppins(
-                fontSize: 12,
-                color: const Color(0xFF767C96),
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Flexible(
-            child: Text(
-              value,
-              textAlign: TextAlign.right,
-              style: GoogleFonts.poppins(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: valueColor ?? const Color(0xFF1B1E30),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -813,48 +636,6 @@ class _InternetBillScreenState extends State<InternetBillScreen>
               ),
             ),
           ),
-          if (_isPaying)
-            Positioned.fill(
-              child: Container(
-                color: Colors.black.withValues(alpha: 0.25),
-                child: Center(
-                  child: Container(
-                    width: 170,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 16,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: <Widget>[
-                        const SizedBox(
-                          width: 26,
-                          height: 26,
-                          child: CircularProgressIndicator(strokeWidth: 2.8),
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          _t(
-                            'Đang xử lý thanh toán...',
-                            'Processing payment...',
-                          ),
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.poppins(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: const Color(0xFF2A2F4E),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
         ],
       ),
     );
@@ -1150,4 +931,329 @@ class InternetBillReceipt {
   final String provider;
   final String serviceLabel;
   final double amountVnd;
+}
+
+class InternetBillConfirmationScreen extends StatefulWidget {
+  const InternetBillConfirmationScreen({
+    super.key,
+    required this.lookupResult,
+    required this.serviceLabel,
+    this.sourceCardId,
+  });
+
+  final _InternetBillLookupResult lookupResult;
+  final String serviceLabel;
+  final String? sourceCardId;
+
+  @override
+  State<InternetBillConfirmationScreen> createState() =>
+      _InternetBillConfirmationScreenState();
+}
+
+class _InternetBillConfirmationScreenState
+    extends State<InternetBillConfirmationScreen> {
+  static const Color _primaryBlue = Color(0xFF000DC0);
+  static const Color _surface = Color(0xFFF6F7FF);
+
+  final NumberFormat _moneyFormat = NumberFormat.decimalPattern('vi_VN');
+  bool _isPaying = false;
+
+  String _t(String vi, String en) => AppText.tr(context, vi, en);
+
+  String _formatVnd(double amount) {
+    return '${_moneyFormat.format(amount)} VND';
+  }
+
+  Future<void> _confirmAndPay() async {
+    if (_isPaying) {
+      return;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => PinPopupWidget(
+        onSuccess: () async {
+          if (!mounted || _isPaying) {
+            return;
+          }
+
+          setState(() {
+            _isPaying = true;
+          });
+
+          try {
+            final PaymentProcessResult paymentResult = await PaymentService
+                .instance
+                .processPayment(
+                  amount: widget.lookupResult.amountVnd,
+                  billType: 'internet',
+                  billId: widget.lookupResult.customerCode,
+                  sourceCardId: widget.sourceCardId,
+                );
+
+            if (!mounted) {
+              return;
+            }
+
+            final InternetBillReceipt receipt = InternetBillReceipt(
+              transactionCode: paymentResult.transactionId,
+              paidAt: paymentResult.processedAt,
+              customerCode: widget.lookupResult.customerCode,
+              customerName: widget.lookupResult.customerName,
+              provider: widget.lookupResult.provider,
+              serviceLabel: widget.serviceLabel,
+              amountVnd: paymentResult.amount,
+            );
+
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (_) => InternetBillSuccessScreen(receipt: receipt),
+              ),
+            );
+          } catch (e) {
+            if (!mounted) {
+              return;
+            }
+
+            final String message = e
+                .toString()
+                .replaceFirst('Exception: ', '')
+                .replaceFirst('PaymentServiceException: ', '')
+                .trim();
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  message.isEmpty
+                      ? _t(
+                          'Thanh toán thất bại, vui lòng thử lại.',
+                          'Payment failed, please try again.',
+                        )
+                      : message,
+                ),
+                backgroundColor: Colors.redAccent,
+              ),
+            );
+          } finally {
+            if (mounted) {
+              setState(() {
+                _isPaying = false;
+              });
+            }
+          }
+        },
+      ),
+    );
+  }
+
+  Widget _row(String label, String value, {Color? valueColor}) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Expanded(
+          child: Text(
+            label,
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              color: const Color(0xFF7A8099),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: valueColor ?? const Color(0xFF1E243A),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _surface,
+      appBar: CCPAppBar(
+        title: _t('Xác nhận hóa đơn Internet', 'Internet bill confirmation'),
+        backgroundColor: _surface,
+        onBackPressed: () => Navigator.maybePop(context),
+      ),
+      body: Stack(
+        children: <Widget>[
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    _t('BƯỚC 2/3', 'STEP 2/3'),
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.6,
+                      color: _primaryBlue,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Container(
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: _primaryBlue,
+                            borderRadius: BorderRadius.circular(30),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Container(
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: _primaryBlue,
+                            borderRadius: BorderRadius.circular(30),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Container(
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: _primaryBlue.withValues(alpha: 0.14),
+                            borderRadius: BorderRadius.circular(30),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    _t(
+                      'Xác nhận thông tin thanh toán',
+                      'Confirm payment details',
+                    ),
+                    style: GoogleFonts.poppins(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF23274B),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Column(
+                      children: <Widget>[
+                        _row(
+                          _t('Tên khách hàng', 'Customer name'),
+                          widget.lookupResult.customerName,
+                        ),
+                        const Divider(height: 22),
+                        _row(
+                          AppText.customerCode(context),
+                          widget.lookupResult.customerCode,
+                        ),
+                        const Divider(height: 22),
+                        _row(_t('Dịch vụ', 'Service'), widget.serviceLabel),
+                        const Divider(height: 22),
+                        _row(
+                          AppText.provider(context),
+                          widget.lookupResult.provider,
+                        ),
+                        const Divider(height: 22),
+                        _row(
+                          _t('Số tiền', 'Amount'),
+                          _formatVnd(widget.lookupResult.amountVnd),
+                          valueColor: _primaryBlue,
+                        ),
+                        const Divider(height: 22),
+                        _row(_t('Phí', 'Fee'), _formatVnd(0)),
+                      ],
+                    ),
+                  ),
+                  const Spacer(),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton(
+                      onPressed: _isPaying ? null : _confirmAndPay,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _primaryBlue,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: Text(
+                        _t('Thanh toán', 'Pay now'),
+                        style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (_isPaying)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black.withValues(alpha: 0.25),
+                child: Center(
+                  child: Container(
+                    width: 170,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 16,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        const SizedBox(
+                          width: 26,
+                          height: 26,
+                          child: CircularProgressIndicator(strokeWidth: 2.8),
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          _t(
+                            'Đang xử lý thanh toán...',
+                            'Processing payment...',
+                          ),
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF2A2F4E),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }

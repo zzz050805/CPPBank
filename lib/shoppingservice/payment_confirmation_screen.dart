@@ -7,8 +7,10 @@ import 'package:intl/intl.dart';
 
 import '../app_preferences.dart';
 import '../core/app_translations.dart';
+import '../l10n/app_text.dart';
 import '../services/user_firestore_service.dart';
 import '../services/card_number_service.dart';
+import '../widget/custom_card_selector.dart';
 import '../widget/pin_popup.dart';
 import 'payment_success_screen.dart';
 import 'service_model.dart';
@@ -41,6 +43,7 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
   bool _isProcessing = false;
   bool _isButtonEnabled = false;
   bool _isEmailValid = true;
+  String? _selectedCardId;
   String _sourceAccount = '****';
 
   List<ServiceAccountField> get _accountFields => widget.service.accountFields;
@@ -390,6 +393,11 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
       );
     }
 
+    final String selectedCardId = (_selectedCardId ?? '').trim().toLowerCase();
+    if (selectedCardId.isEmpty) {
+      throw Exception(AppText.text(context, 'select_source_card'));
+    }
+
     final Map<String, String> targetAccountFields = _buildTargetAccountFields();
     final String targetAccount = _buildTargetAccountSummary(
       targetAccountFields,
@@ -481,54 +489,43 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
         );
       }
 
-      num standardBalance = _readBalance(standardCardData['balance']);
-      num vipBalance = _readBalance(vipCardData['balance']);
-      num remaining = paymentAmount;
-      num standardDeduction = 0;
-      num vipDeduction = 0;
-
-      if (standardAvailable && remaining > 0) {
-        standardDeduction = remaining <= standardBalance
-            ? remaining
-            : standardBalance;
-        remaining -= standardDeduction;
+      final bool useStandard = selectedCardId == 'standard';
+      final bool useVip = selectedCardId == 'vip';
+      if (!useStandard && !useVip) {
+        throw Exception(AppText.text(context, 'card_unavailable'));
       }
 
-      if (vipAvailable && remaining > 0) {
-        vipDeduction = remaining <= vipBalance ? remaining : vipBalance;
-        remaining -= vipDeduction;
+      final bool selectedAvailable = useStandard
+          ? standardAvailable
+          : vipAvailable;
+      if (!selectedAvailable) {
+        throw Exception(AppText.text(context, 'card_unavailable'));
       }
 
-      if (remaining > 0) {
+      final num selectedBalance = useStandard
+          ? _readBalance(standardCardData['balance'])
+          : _readBalance(vipCardData['balance']);
+      if (selectedBalance < paymentAmount) {
         throw Exception(
           _languageCode == 'en' ? 'Insufficient balance.' : 'Số dư không đủ.',
         );
       }
 
-      if (standardDeduction > 0) {
+      if (useStandard) {
         transaction.set(standardCardRef, <String, dynamic>{
-          'balance': FieldValue.increment(-standardDeduction),
+          'balance': FieldValue.increment(-paymentAmount),
           'updatedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
-      }
-
-      if (vipDeduction > 0) {
+      } else {
         transaction.set(vipCardRef, <String, dynamic>{
-          'balance': FieldValue.increment(-vipDeduction),
+          'balance': FieldValue.increment(-paymentAmount),
           'updatedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
       }
-
-      transaction.set(userRef, <String, dynamic>{
-        'balance': FieldValue.increment(-paymentAmount),
-        'availableBalance': FieldValue.increment(-paymentAmount),
-        'totalBalance': FieldValue.increment(-paymentAmount),
-        'spending_stats.shopping': FieldValue.increment(widget.selectedAmount),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
 
       transaction.set(shoppingRef, <String, dynamic>{
         'uid': uid,
+        'cardId': selectedCardId,
         'serviceId': widget.service.id,
         'serviceName': serviceName,
         'amount': widget.selectedAmount,
@@ -561,6 +558,7 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
         'targetAccount': targetAccount,
         'amount': widget.selectedAmount,
         'transactionCode': transactionCode,
+        'cardId': selectedCardId,
         'relatedId': shoppingRef.id,
         'status': 'success',
         'isNegative': true,
@@ -888,6 +886,20 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
                     for (int i = 0; i < _accountFields.length; i++)
                       _buildAccountField(_accountFields[i], i),
                     const SizedBox(height: 2),
+                    CustomCardSelector(
+                      uid: _resolveUid(),
+                      selectedCardId: _selectedCardId,
+                      margin: const EdgeInsets.only(bottom: 12),
+                      onChanged: (CustomCardSelection selection) {
+                        if (!mounted) {
+                          return;
+                        }
+                        setState(() {
+                          _selectedCardId = selection.id;
+                          _sourceAccount = selection.account;
+                        });
+                      },
+                    ),
                     Container(
                       padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
                       decoration: BoxDecoration(

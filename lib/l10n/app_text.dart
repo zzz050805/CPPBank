@@ -85,6 +85,31 @@ class AppText {
       'en': 'Standard Card',
     },
     'card_vip': <String, String>{'vi': 'Thẻ VIP', 'en': 'VIP Card'},
+    'vip_perks_title': <String, String>{
+      'vi': '👑 Đặc quyền thẻ VIP:',
+      'en': '👑 VIP card privileges:',
+    },
+    'vip_perk_interest': <String, String>{
+      'vi': '+ 7.5% lãi suất tiết kiệm mỗi năm',
+      'en': '+ 7.5% annual savings interest',
+    },
+    'vip_perk_fee': <String, String>{
+      'vi': 'Miễn phí 100% phí giao dịch',
+      'en': '100% transaction fee waiver',
+    },
+    'vip_perk_support': <String, String>{
+      'vi': 'Đặc quyền chăm sóc khách hàng 24/7',
+      'en': '24/7 premium customer care',
+    },
+    'select_source_card': <String, String>{
+      'vi': 'Chọn nguồn tiền',
+      'en': 'Select source card',
+    },
+    'source_card': <String, String>{'vi': 'Thẻ', 'en': 'Source card'},
+    'card_unavailable': <String, String>{
+      'vi': 'Thẻ không khả dụng',
+      'en': 'Card unavailable',
+    },
     'status_active': <String, String>{'vi': 'Đang hiệu lực', 'en': 'Active'},
     'status_expired': <String, String>{'vi': 'Đã hết hạn', 'en': 'Expired'},
     'status_cancelled': <String, String>{'vi': 'Đã hủy', 'en': 'Cancelled'},
@@ -298,6 +323,30 @@ class AppText {
     'notify_new_service_body': <String, String>{
       'vi': '{serviceName} đã có mặt trên CCPBank. Khám phá ngay!',
       'en': '{serviceName} is now available on CCPBank. Explore now!',
+    },
+    'notification_default_title': <String, String>{
+      'vi': 'Thông báo mới',
+      'en': 'New notification',
+    },
+    'notification_no_description': <String, String>{
+      'vi': 'Không có mô tả',
+      'en': 'No description',
+    },
+    'otp_notification_title': <String, String>{
+      'vi': 'CCP BANK',
+      'en': 'CCP BANK',
+    },
+    'otp_notification_body': <String, String>{
+      'vi': 'Mã OTP của bạn là {otp}. Vui lòng không chia sẻ cho bất kỳ ai.',
+      'en': 'Your OTP code is {otp}. Please do not share it with anyone.',
+    },
+    'notify_phone_recharge_title': <String, String>{
+      'vi': 'Nạp tiền điện thoại thành công',
+      'en': 'Phone top-up successful',
+    },
+    'notify_phone_recharge_body': <String, String>{
+      'vi': 'Đã nạp {amount} cho {provider}.',
+      'en': 'Top-up {amount} for {provider}.',
     },
   };
 

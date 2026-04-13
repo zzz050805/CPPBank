@@ -92,9 +92,14 @@ class _OtpScreenState extends State<OtpScreen> {
     final String otp = _generateOtp();
     _currentOtp = otp;
     await Future.delayed(const Duration(seconds: 1));
+    final String languageCode = AppText.currentLanguageCode(context);
     await NotificationService().showNotification(
-      title: 'CCP BANK',
-      body: 'Mã OTP của bạn là $otp. Vui lòng không chia sẻ cho bất kỳ ai.',
+      title: AppText.textByCode(languageCode, 'otp_notification_title'),
+      body: AppText.textByCodeWithParams(
+        languageCode,
+        'otp_notification_body',
+        <String, String>{'otp': otp},
+      ),
     );
 
     if (!mounted) return;

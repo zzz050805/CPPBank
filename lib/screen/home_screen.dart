@@ -279,13 +279,17 @@ class _HomeScreenState extends State<HomeScreen> {
   String _resolveHeadsUpTitle(Map<String, dynamic> data) {
     final String type = (data['type'] ?? '').toString().trim().toLowerCase();
     final String rawTitle = (data['title'] ?? '').toString().trim();
+    final String defaultTitle = AppText.text(
+      context,
+      'notification_default_title',
+    );
     final String fallback = rawTitle.isNotEmpty
         ? rawTitle
         : (type == 'uu_dai'
-              ? _t('Uu d�i m?i', 'New offer')
+              ? _t('Ưu đãi mới', 'New offer')
               : (type == 'new_service'
                     ? AppText.text(context, 'notify_new_service_title')
-                    : _t('Th�ng b�o m?i', 'New notification')));
+                    : defaultTitle));
 
     String titleKey = (data['titleKey'] ?? '').toString().trim();
     if (titleKey.isEmpty) {
@@ -315,17 +319,21 @@ class _HomeScreenState extends State<HomeScreen> {
         .toString()
         .trim();
     final String rawBody = (data['body'] ?? '').toString().trim();
+    final String defaultBody = AppText.text(
+      context,
+      'notification_no_description',
+    );
     final String fallback = rawBody.isNotEmpty
         ? rawBody
         : (type == 'uu_dai'
-              ? _t('B?n v?a nh?n du?c uu d�i m?i.', 'You received a new offer.')
+              ? _t('Bạn vừa nhận được ưu đãi mới.', 'You received a new offer.')
               : (type == 'new_service'
                     ? AppText.textWithParams(
                         context,
                         'notify_new_service_body',
                         <String, String>{'serviceName': serviceName},
                       )
-                    : _t('Kh�ng c� m� t?', 'No description')));
+                    : defaultBody));
 
     String bodyKey = (data['bodyKey'] ?? '').toString().trim();
     if (bodyKey.isEmpty) {
@@ -572,15 +580,15 @@ class _HomeScreenState extends State<HomeScreen> {
     final String uid = _resolveUid();
     if (uid.isEmpty) {
       // ignore: avoid_print
-      print('--- DEBUG T?NG CHI TI�U ---');
+      print('--- DEBUG TỔNG CHI TIÊU ---');
       // ignore: avoid_print
-      print('T?ng Chuy?n kho?n: 0.0');
+      print('Tổng Chuyển khoản: 0.0');
       // ignore: avoid_print
-      print('T?ng N?p �T: 0.0');
+      print('Tổng Nạp ĐT: 0.0');
       // ignore: avoid_print
-      print('T?ng H�a don: 0.0');
+      print('Tổng Hóa đơn: 0.0');
       // ignore: avoid_print
-      print('T?ng Mua s?m: 0.0');
+      print('Tổng Mua sắm: 0.0');
       return <String, double>{
         'transfer': 0,
         'bill': 0,
@@ -685,15 +693,15 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     // ignore: avoid_print
-    print('--- DEBUG T?NG CHI TI�U ---');
+    print('--- DEBUG TỔNG CHI TIÊU ---');
     // ignore: avoid_print
-    print('T?ng Chuy?n kho?n: $transferTotal');
+    print('Tổng Chuyển khoản: $transferTotal');
     // ignore: avoid_print
-    print('T?ng N?p �T: $phoneTotal');
+    print('Tổng Nạp ĐT: $phoneTotal');
     // ignore: avoid_print
-    print('T?ng H�a don: $billTotal');
+    print('Tổng Hóa đơn: $billTotal');
     // ignore: avoid_print
-    print('T?ng Mua s?m: $shoppingTotal');
+    print('Tổng Mua sắm: $shoppingTotal');
 
     return <String, double>{
       'transfer': transferTotal,
@@ -833,11 +841,11 @@ class _HomeScreenState extends State<HomeScreen> {
           ]);
 
           title = provider.isEmpty
-              ? _t('N?p �T', 'Top-up')
-              : '${_t('N?p �T', 'Top-up')} $provider';
+              ? _t('Nạp ĐT', 'Top-up')
+              : '${_t('Nạp ĐT', 'Top-up')} $provider';
           subtitle = phoneNumber.isEmpty
-              ? _t('S�T kh�ng x�c d?nh', 'Unknown phone number')
-              : '${_t('S�T', 'Phone')}: $phoneNumber';
+              ? _t('SĐT không xác định', 'Unknown phone number')
+              : '${_t('SĐT', 'Phone')}: $phoneNumber';
           amount = _extractFirstAmount(data, <String>[
             'amount',
             'amountVnd',
@@ -853,10 +861,10 @@ class _HomeScreenState extends State<HomeScreen> {
             data['transactionCode'],
           ]);
 
-          title = _t('R�t ti?n m?t', 'Cash withdrawal');
+          title = _t('Rút tiền mặt', 'Cash withdrawal');
           subtitle = withdrawCode.isEmpty
-              ? _t('R�t ti?n ATM', 'ATM withdrawal')
-              : '${_t('M� GD', 'Txn code')}: $withdrawCode';
+              ? _t('Rút tiền ATM', 'ATM withdrawal')
+              : '${_t('Mã GD', 'Txn code')}: $withdrawCode';
           amount = _extractFirstAmount(data, <String>[
             'amount',
             'amountVnd',
@@ -884,11 +892,11 @@ class _HomeScreenState extends State<HomeScreen> {
           ]);
 
           title = serviceName.isEmpty
-              ? _t('Thanh to�n d?ch v?', 'Service payment')
-              : '${_t('Thanh to�n', 'Payment')} $serviceName';
+              ? _t('Thanh toán dịch vụ', 'Service payment')
+              : '${_t('Thanh toán', 'Payment')} $serviceName';
           subtitle = targetAccount.isEmpty
-              ? _t('TK d�ch kh�ng x�c d?nh', 'Unknown destination account')
-              : '${_t('TK d�ch', 'To')}: $targetAccount';
+              ? _t('TK đích không xác định', 'Unknown destination account')
+              : '${_t('TK đích', 'To')}: $targetAccount';
           amount = _extractFirstAmount(data, <String>[
             'amount',
             'amountVnd',
@@ -915,11 +923,11 @@ class _HomeScreenState extends State<HomeScreen> {
           ]);
 
           title = recipientName.isEmpty
-              ? _t('Chuy?n kho?n', 'Transfer')
-              : '${_t('Chuy?n kho?n d?n', 'Transfer to')} $recipientName';
+              ? _t('Chuyển khoản', 'Transfer')
+              : '${_t('Chuyển khoản đến', 'Transfer to')} $recipientName';
           subtitle = destinationAccount.isEmpty
-              ? _t('TK d�ch kh�ng x�c d?nh', 'Unknown destination account')
-              : '${_t('TK d�ch', 'To')}: $destinationAccount';
+              ? _t('TK đích không xác định', 'Unknown destination account')
+              : '${_t('TK đích', 'To')}: $destinationAccount';
           amount = _extractFirstAmount(data, <String>[
             'amount',
             'transferAmount',
@@ -966,6 +974,8 @@ class _HomeScreenState extends State<HomeScreen> {
         return Icons.atm_rounded;
       case 'transfer':
         return Icons.swap_horiz_rounded;
+      case 'bill_payment':
+        return Icons.receipt_long_rounded;
       case 'shopping':
         return Icons.shopping_bag_rounded;
       case 'phone_recharge':
@@ -988,6 +998,10 @@ class _HomeScreenState extends State<HomeScreen> {
         break;
       case 'transfer':
         type = 'transfer';
+        break;
+      case 'bill_payment':
+      case 'payment':
+        type = 'bill_payment';
         break;
       case 'shopping':
         type = 'shopping';
@@ -1028,7 +1042,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ]);
       title = AppText.text(context, 'atm_withdrawal');
       subtitle = withdrawCode.isEmpty
-          ? _t('R�t ti?n ATM', 'ATM withdrawal')
+          ? _t('Rút tiền ATM', 'ATM withdrawal')
           : '${AppText.text(context, 'code_label')}: $withdrawCode';
     } else if (type == 'transfer') {
       final String recipientName = _firstNonEmpty(<dynamic>[
@@ -1045,23 +1059,57 @@ class _HomeScreenState extends State<HomeScreen> {
       ]);
 
       title = recipientName.isEmpty
-          ? _t('Chuy?n kho?n', 'Transfer')
-          : '${_t('Chuy?n kho?n d?n', 'Transfer to')} $recipientName';
+          ? _t('Chuyển khoản', 'Transfer')
+          : '${_t('Chuyển khoản đến', 'Transfer to')} $recipientName';
       subtitle = destinationAccount.isEmpty
-          ? _t('TK d�ch kh�ng x�c d?nh', 'Unknown destination account')
-          : '${_t('TK d�ch', 'To')}: $destinationAccount';
+          ? _t('TK đích không xác định', 'Unknown destination account')
+          : '${_t('TK đích', 'To')}: $destinationAccount';
     } else if (type == 'shopping') {
       final String serviceName = _firstNonEmpty(<dynamic>[
         data['serviceName'],
         data['title'],
       ]);
       title = serviceName.isEmpty
-          ? _t('Thanh to�n d?ch v?', 'Service payment')
-          : '${_t('Thanh to�n', 'Payment')} $serviceName';
-      subtitle = _t('Mua s?m', 'Shopping');
+          ? _t('Thanh toán dịch vụ', 'Service payment')
+          : '${_t('Thanh toán', 'Payment')} $serviceName';
+      subtitle = _t('Mua sắm', 'Shopping');
+    } else if (type == 'bill_payment') {
+      final String billType = (data['billType'] ?? '')
+          .toString()
+          .trim()
+          .toLowerCase();
+      final String customerCode = _firstNonEmpty(<dynamic>[
+        data['customerCode'],
+        data['billId'],
+        data['id'],
+      ]);
+
+      String serviceName;
+      switch (billType) {
+        case 'electric':
+          serviceName = AppText.text(context, 'bill_type_electric');
+          break;
+        case 'water':
+          serviceName = AppText.text(context, 'bill_type_water');
+          break;
+        case 'internet':
+          serviceName = AppText.text(context, 'bill_type_internet');
+          break;
+        case 'mobile':
+        case 'mobile_postpaid':
+          serviceName = AppText.text(context, 'bill_type_mobile');
+          break;
+        default:
+          serviceName = AppText.text(context, 'service');
+      }
+
+      title = '${_t('Thanh toán', 'Payment')} $serviceName';
+      subtitle = customerCode.isEmpty
+          ? _t('Mã hóa đơn chưa xác định', 'Unknown bill id')
+          : '${AppText.customerCode(context)}: $customerCode';
     } else {
-      title = _t('N?p �T', 'Top-up');
-      subtitle = _t('N?p di?n tho?i', 'Phone recharge');
+      title = _t('Nạp ĐT', 'Top-up');
+      subtitle = _t('Nạp điện thoại', 'Phone recharge');
     }
 
     return _HomeTransactionModel(
@@ -1158,7 +1206,7 @@ class _HomeScreenState extends State<HomeScreen> {
         }
 
         final String name = cacheData.userName.trim().isEmpty
-            ? _t('Kh�ch h�ng', 'Customer')
+            ? _t('Khách hàng', 'Customer')
             : cacheData.userName;
 
         return Align(
@@ -1318,7 +1366,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: const Color(
         0xFF000DC0,
-      ), // N?n xanh d? m�p header kh�ng h? tr?ng
+      ), // Nền xanh để mép header không hở trắng
       body: widget.showBottomNav
           ? Stack(children: [_buildSlivers(), _buildPillBottomNav()])
           : _buildSlivers(),
@@ -1331,7 +1379,7 @@ class _HomeScreenState extends State<HomeScreen> {
         return <Widget>[
           SliverAppBar(
             pinned: true,
-            // S?A CH�NH: T?o Header Xanh Bo Tr�n Mu?t M�
+            // SỬA CHÍNH: Tạo Header xanh bo tròn mượt mà
             backgroundColor: const Color(0xFF000DC0), // Xanh d?m CCP
             elevation: 0,
             expandedHeight: 120, // Tang nh? chi?u cao
@@ -1339,7 +1387,7 @@ class _HomeScreenState extends State<HomeScreen> {
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.vertical(
                 bottom: Radius.circular(20),
-              ), // Bo mu?t ph?n du�i header
+              ), // Bo mượt phần dưới header
             ),
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
@@ -1363,7 +1411,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
-                            _t("Xin ch�o,", "Hello,"),
+                            _t("Xin chào,", "Hello,"),
                             style: GoogleFonts.poppins(
                               color: Colors.white70,
                               fontSize: 16,
@@ -1382,7 +1430,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ];
       },
-      // --- PH?N BODY B�N DU?I ---
+      // --- PHẦN BODY BÊN DƯỚI ---
       body: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -1490,18 +1538,18 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- S?A CH�NH: TH? S? DU N?I L�N, BO G�C CHU?N X?N ---
+  // --- SỬA CHÍNH: THẺ SỐ DƯ NỔI LÊN, BO GÓC CHUẨN XỊN ---
   Widget _buildBalanceCard() {
     return Transform.translate(
       offset: const Offset(
         0,
         16,
-      ), // Gi? v? tr� th? c�n hon v?i vi?n tr?ng bo g�c
+      ), // Giữ vị trí thẻ cân hơn với viền trắng bo góc
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 30),
         child: Container(
           height: 140,
-          // Ch?nh gradient v� bo g�c cho x?n
+          // Chỉnh gradient và bo góc cho xịn
           decoration: BoxDecoration(
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
@@ -1509,19 +1557,19 @@ class _HomeScreenState extends State<HomeScreen> {
               colors: [
                 Color(0xFF3122AB),
                 Color(0xFF050C9C),
-              ], // Gradient xanh chuy�n nghi?p
+              ], // Gradient xanh chuyên nghiệp
             ),
-            borderRadius: BorderRadius.circular(20), // Bo g�c chu?n 20
+            borderRadius: BorderRadius.circular(20), // Bo góc chuẩn 20
             border: Border.all(
               color: Colors.white.withOpacity(0.1),
               width: 1,
-            ), // Vi?n tr?ng m?nh, d?u hon
+            ), // Viền trắng mảnh, đều hơn
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.18),
                 blurRadius: 14,
                 offset: const Offset(0, 7),
-              ), // B�ng d? s�u
+              ), // Bóng đổ sâu
               BoxShadow(
                 color: const Color(0xFF000B7A).withOpacity(0.22),
                 blurRadius: 24,
@@ -1531,7 +1579,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 color: const Color(0xFF4BD4FF).withOpacity(0.15),
                 blurRadius: 20,
                 offset: const Offset(0, 2),
-              ), // �nh xanh nh? th� ra
+              ), // Ánh xanh nhẹ thở ra
             ],
           ),
           child: ClipRRect(
@@ -1570,7 +1618,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 ),
-                // Th�m x�u h?a ti?t v�ng tr�n ch�m cho th? n� sang
+                // Thêm xíu họa tiết vòng tròn chìm cho thẻ nó sang
                 Positioned(
                   left: 0,
                   right: 0,
@@ -1632,7 +1680,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         children: [
                           Text(
                             _t(
-                              'T?ng s? du kh? d?ng',
+                              'Tổng số dư khả dụng',
                               'Total available balance',
                             ),
                             style: GoogleFonts.poppins(
@@ -1677,7 +1725,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 children: [
                                   Text(
                                     _t(
-                                      'L?ch s? giao d?ch',
+                                      'Lịch sử giao dịch',
                                       'Transaction history',
                                     ),
                                     style: GoogleFonts.poppins(
@@ -1697,7 +1745,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ),
                           const Spacer(),
-                          // Icon 2 v�ng tr�n l?ng nhau
+                          // Icon 2 vòng tròn lồng nhau
                           SizedBox(
                             width: 28,
                             height: 18,
@@ -1936,46 +1984,46 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- C�C PH?N DU?I GI? NGUY�N ---
+  // --- CÁC PHẦN DƯỚI GIỮ NGUYÊN ---
   Widget _buildActionGrid() {
     final List<_ActionItemData> items = <_ActionItemData>[
       _ActionItemData(
         icon: Icons.account_balance_wallet,
         color: Colors.purple,
-        title: _t('Chuy?n ti?n', 'Transfer'),
+        title: _t('Chuyển tiền', 'Transfer'),
         onTap: () =>
             _pushPremium(const TransferMoneyScreen(), refreshOnReturn: true),
       ),
       _ActionItemData(
         icon: Icons.receipt_long,
         color: Colors.green,
-        title: _t('Thanh to�n\nh�a don', 'Bill\npayment'),
+        title: _t('Thanh toán\nhóa đơn', 'Bill\npayment'),
         onTap: () => _pushPremium(const BillScreen(), refreshOnReturn: true),
       ),
       _ActionItemData(
         icon: Icons.atm,
         color: Colors.blue,
-        title: _t('R�t ti?n', 'Withdraw'),
+        title: _t('Rút tiền', 'Withdraw'),
         onTap: () =>
             _pushPremium(const WithdrawATMPage(), refreshOnReturn: true),
       ),
       _ActionItemData(
         icon: Icons.qr_code_scanner,
         color: Colors.pink,
-        title: _t('Qu�t QR', 'Scan QR'),
+        title: _t('Quét QR', 'Scan QR'),
         onTap: () => _pushPremium(const QrScreen()),
       ),
       _ActionItemData(
         icon: Icons.phone_android,
         color: Colors.orange,
-        title: _t('N?p ti?n\ndi?n tho?i', 'Phone\nTop up'),
+        title: _t('Nạp tiền\nđiện thoại', 'Phone\nTop up'),
         onTap: () =>
             _pushPremium(const PhoneRechargeScreen(), refreshOnReturn: true),
       ),
       _ActionItemData(
         icon: Icons.credit_card,
         color: Colors.deepOrange,
-        title: _t('Th? t�n d?ng', 'Credit card'),
+        title: _t('Thẻ tín dụng', 'Credit card'),
         onTap: () {
           _pushPremium(const CreditCardScreen(), refreshOnReturn: true);
         },
@@ -2293,7 +2341,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         children: [
                           Text(
                             _t(
-                              "Mua s?m - Gi?i tr�",
+                              "Mua sắm - Giải trí",
                               "Shopping - Entertainment",
                             ),
                             style: GoogleFonts.poppins(
@@ -2409,7 +2457,7 @@ class _HomeScreenState extends State<HomeScreen> {
           if (hasPromotion) ...<Widget>[
             const SizedBox(height: 2),
             Text(
-              _t('�ang gi?m gi�', 'On sale'),
+              _t('Đang giảm giá', 'On sale'),
               textAlign: TextAlign.center,
               maxLines: 2,
               softWrap: true,
@@ -2528,7 +2576,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     );
                   },
                   child: Text(
-                    _t('Ti?p t?c ?', 'Continue ?'),
+                    _t('Tiếp tục', 'Continue'),
                     style: GoogleFonts.poppins(
                       color: Colors.white,
                       fontSize: 16,
@@ -2613,28 +2661,28 @@ class _HomeScreenState extends State<HomeScreen> {
 
           final List<_SpendingSlice> displaySlices = <_SpendingSlice>[
             _SpendingSlice(
-              labelVi: 'Chuy?n kho?n',
+              labelVi: 'Chuyển khoản',
               labelEn: 'Transfer',
               value: transferValue,
               color: darkBlue,
               gradientColors: transferGradient,
             ),
             _SpendingSlice(
-              labelVi: 'Thanh to�n h�a don',
+              labelVi: 'Thanh toán hóa đơn',
               labelEn: 'Bill payment',
               value: billValue,
               color: lightBlue,
               gradientColors: billGradient,
             ),
             _SpendingSlice(
-              labelVi: 'N?p �T',
+              labelVi: 'Nạp ĐT',
               labelEn: 'Top up',
               value: phoneValue,
               color: silverGrey,
               gradientColors: phoneGradient,
             ),
             _SpendingSlice(
-              labelVi: 'Mua s?m - Gi?i tr�',
+              labelVi: 'Mua sắm - Giải trí',
               labelEn: 'Shopping & Entertainment',
               value: shoppingValue,
               color: shoppingPurple,
@@ -2659,7 +2707,7 @@ class _HomeScreenState extends State<HomeScreen> {
               : -1;
 
           final String centerLabel = activeIndex == -1
-              ? _t('T?ng chi ti�u', 'Total spending')
+              ? _t('Tổng chi tiêu', 'Total spending')
               : _t(
                   displaySlices[activeIndex].labelVi,
                   displaySlices[activeIndex].labelEn,
@@ -2676,7 +2724,7 @@ class _HomeScreenState extends State<HomeScreen> {
           final List<_SpendingSlice> pieSlices = totalSpending == 0
               ? const <_SpendingSlice>[
                   _SpendingSlice(
-                    labelVi: 'Kh�ng c� chi ti�u',
+                    labelVi: 'Không có chi tiêu',
                     labelEn: 'No spending',
                     value: 1,
                     color: emptyGrey,
@@ -2706,7 +2754,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Text(
-                    _t('Th?ng k� ti�u d�ng', 'Spending statistics'),
+                    _t('Thống kê tiêu dùng', 'Spending statistics'),
                     style: GoogleFonts.poppins(
                       color: Colors.grey.shade700,
                       fontSize: 13,
@@ -3021,7 +3069,7 @@ class _HomeScreenState extends State<HomeScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                _t('Giao d?ch g?n d�y', 'Recent transactions'),
+                _t('Giao dịch gần đây', 'Recent transactions'),
                 style: GoogleFonts.poppins(
                   fontWeight: FontWeight.bold,
                   fontSize: 14,
@@ -3037,7 +3085,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
                 child: Text(
-                  _t('Xem t?t c?', 'View all'),
+                  _t('Xem tất cả', 'View all'),
                   style: GoogleFonts.poppins(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -3051,7 +3099,7 @@ class _HomeScreenState extends State<HomeScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 10),
               child: Text(
-                _t('B?n chua dang nh?p.', 'You are not logged in.'),
+                _t('Bạn chưa đăng nhập.', 'You are not logged in.'),
                 style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey),
               ),
             )
@@ -3084,7 +3132,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     child: Text(
                       _t(
-                        'Kh�ng t?i du?c l?ch s? giao d?ch.',
+                        'Không tải được lịch sử giao dịch.',
                         'Unable to load transaction history.',
                       ),
                       style: GoogleFonts.poppins(
@@ -3106,7 +3154,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   return Padding(
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     child: Text(
-                      _t('Chua c� giao d?ch n�o.', 'No transactions yet.'),
+                      _t('Chưa có giao dịch nào.', 'No transactions yet.'),
                       style: GoogleFonts.poppins(
                         fontSize: 12,
                         color: Colors.grey,
@@ -3236,7 +3284,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            _pillNavItem(Icons.home, _t("Trang ch�nh", "Home"), 0),
+            _pillNavItem(Icons.home, _t("Trang chính", "Home"), 0),
             _pillNavItem(Icons.search, "", 1),
             _pillNavItem(Icons.chat_bubble_outline, "", 2),
             _pillNavItem(Icons.settings_outlined, "", 3),

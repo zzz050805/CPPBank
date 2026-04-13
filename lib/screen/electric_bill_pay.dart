@@ -19,6 +19,7 @@ class ElectricBillPayScreen extends StatefulWidget {
     this.usageKwh = 450,
     this.billingPeriod = '10/2023',
     this.totalAmount = 1120500,
+    this.sourceCardId,
   });
 
   final String customerCode;
@@ -27,6 +28,7 @@ class ElectricBillPayScreen extends StatefulWidget {
   final double usageKwh;
   final String billingPeriod;
   final double totalAmount;
+  final String? sourceCardId;
 
   @override
   State<ElectricBillPayScreen> createState() => _ElectricBillPayScreenState();
@@ -82,6 +84,7 @@ class _ElectricBillPayScreenState extends State<ElectricBillPayScreen>
         amount: widget.totalAmount,
         billType: 'electric',
         billId: widget.customerCode,
+        sourceCardId: widget.sourceCardId,
       );
 
       if (!mounted) {

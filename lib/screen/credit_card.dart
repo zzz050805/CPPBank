@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -15,64 +13,12 @@ import 'branch_screen.dart';
 class CreditCardScreen extends StatelessWidget {
   const CreditCardScreen({super.key});
 
-  static final Set<String> _repairInFlight = <String>{};
-
   String _t(BuildContext context, String vi, String en) {
     return AppText.tr(context, vi, en);
   }
 
   String formatCardNumber(String cardNumber) {
     return CardNumberService.formatCardNumber(cardNumber);
-  }
-
-  Future<void> _repairMissingCardNumber({
-    required String userId,
-    required Map<String, dynamic> userData,
-  }) async {
-    if (_repairInFlight.contains(userId)) {
-      return;
-    }
-
-    final String existing = CardNumberService.readStoredCardNumber(userData);
-    if (existing.isNotEmpty) {
-      return;
-    }
-
-    _repairInFlight.add(userId);
-    try {
-      final String generated = CardNumberService.generatePermanentCardNumber(
-        userData,
-      );
-      final DocumentReference<Map<String, dynamic>> userRef = FirebaseFirestore
-          .instance
-          .collection('users')
-          .doc(userId);
-
-      final WriteBatch batch = FirebaseFirestore.instance.batch();
-      batch.set(userRef, <String, dynamic>{
-        'card_number': generated,
-        'cardNumber': generated,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-
-      // Keep both card documents in sync with the permanent card number.
-      batch.set(userRef.collection('cards').doc('standard'), <String, dynamic>{
-        'card_number': generated,
-        'cardNumber': generated,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-      batch.set(userRef.collection('cards').doc('vip'), <String, dynamic>{
-        'card_number': generated,
-        'cardNumber': generated,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-
-      await batch.commit();
-    } catch (_) {
-      // Non-blocking self-heal path for legacy users.
-    } finally {
-      _repairInFlight.remove(userId);
-    }
   }
 
   @override
@@ -129,19 +75,6 @@ class CreditCardScreen extends StatelessWidget {
 
                 final Map<String, dynamic> userData =
                     userSnapshot.data?.data() ?? <String, dynamic>{};
-                final String userCardNumberRaw =
-                    CardNumberService.readStoredCardNumber(userData);
-                final String userCardNumberDisplay = userCardNumberRaw.isEmpty
-                    ? _t(context, 'Đang cập nhật...', 'Updating...')
-                    : formatCardNumber(userCardNumberRaw);
-                if (userCardNumberRaw.isEmpty) {
-                  unawaited(
-                    _repairMissingCardNumber(
-                      userId: userId,
-                      userData: userData,
-                    ),
-                  );
-                }
                 final String holderName =
                     (userData['fullname'] ??
                             userData['fullName'] ??
@@ -180,10 +113,12 @@ class CreditCardScreen extends StatelessWidget {
                         <QueryDocumentSnapshot<Map<String, dynamic>>>[];
 
                     final _CardData regularCard = _resolveCard(
+                      context: context,
                       docs: docs,
                       preferredId: 'standard',
                     );
                     final _CardData vipCard = _resolveCard(
+                      context: context,
                       docs: docs,
                       preferredId: 'vip',
                     );
@@ -225,7 +160,7 @@ class CreditCardScreen extends StatelessWidget {
                       addEntry(
                         _RegularCardVisual(
                           holderName: holderName,
-                          cardNumber: userCardNumberDisplay,
+                          cardNumber: regularCard.cardNumberDisplay,
                           isLocked: false,
                           cardTypeLabel: _t(
                             context,
@@ -254,14 +189,15 @@ class CreditCardScreen extends StatelessWidget {
                     }
 
                     if (showVipCard) {
+                      final String cardType = 'VIP';
                       if (showStandardCard) {
                         addGap(20);
                         addEntry(
                           _SmallHintTitle(
                             text: _t(
                               context,
-                              'Danh sách thẻ của bạn',
-                              'Your card list',
+                              'Thẻ VIP của bạn',
+                              'Your VIP card',
                             ),
                           ),
                         );
@@ -275,7 +211,7 @@ class CreditCardScreen extends StatelessWidget {
                       addEntry(
                         _VipCardVisual(
                           holderName: holderName,
-                          cardNumber: userCardNumberDisplay,
+                          cardNumber: vipCard.cardNumberDisplay,
                           isLocked: false,
                           cardTypeLabel: _t(context, 'THẺ VIP', 'VIP CARD'),
                         ),
@@ -297,6 +233,10 @@ class CreditCardScreen extends StatelessWidget {
                           ),
                         ),
                       );
+                      if (cardType == 'VIP') {
+                        addGap(10);
+                        addEntry(_VipPrivilegesBox(t: _t));
+                      }
                     }
 
                     return SingleChildScrollView(
@@ -314,6 +254,7 @@ class CreditCardScreen extends StatelessWidget {
   }
 
   _CardData _resolveCard({
+    required BuildContext context,
     required List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
     required String preferredId,
   }) {
@@ -327,11 +268,18 @@ class CreditCardScreen extends StatelessWidget {
     }
 
     if (selected == null) {
-      return const _CardData(balance: 0);
+      return _CardData(
+        balance: 0,
+        cardNumberDisplay: AppText.text(context, 'loading'),
+      );
     }
 
     final Map<String, dynamic> data = selected.data();
     final dynamic rawBalance = data['balance'];
+    final String rawCard = CardNumberService.readStoredCardNumber(data);
+    final String cardDisplay = rawCard.isEmpty
+        ? AppText.text(context, 'loading')
+        : formatCardNumber(rawCard);
 
     double balance = 0;
     if (rawBalance is num) {
@@ -340,14 +288,83 @@ class CreditCardScreen extends StatelessWidget {
       balance = double.tryParse(rawBalance) ?? 0;
     }
 
-    return _CardData(balance: balance);
+    return _CardData(balance: balance, cardNumberDisplay: cardDisplay);
   }
 }
 
 class _CardData {
-  const _CardData({required this.balance});
+  const _CardData({required this.balance, required this.cardNumberDisplay});
 
   final double balance;
+  final String cardNumberDisplay;
+}
+
+class _VipPrivilegesBox extends StatelessWidget {
+  const _VipPrivilegesBox({required this.t});
+
+  final String Function(BuildContext context, String vi, String en) t;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<String> items = <String>[
+      AppText.text(context, 'vip_perk_interest'),
+      AppText.text(context, 'vip_perk_fee'),
+      AppText.text(context, 'vip_perk_support'),
+    ];
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3F6FF),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFD6E1FF)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            AppText.text(context, 'vip_perks_title'),
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF1C2A6E),
+            ),
+          ),
+          const SizedBox(height: 8),
+          ...items.map(
+            (String item) => Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  const Padding(
+                    padding: EdgeInsets.only(top: 2),
+                    child: Icon(
+                      Icons.check_circle_rounded,
+                      size: 14,
+                      color: Color(0xFF1D4ED8),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      item,
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFF334155),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _SectionTitle extends StatelessWidget {

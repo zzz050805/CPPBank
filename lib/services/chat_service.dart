@@ -97,6 +97,7 @@ class ChatApiService {
       - Rút tiền không cần thẻ:
         + Tạo mã rút tiền có thời hạn để giao dịch tại ATM theo luồng xác thực bảo mật.
       - Tiện ích bổ sung:
+        + Ngân hàng có hơn 20 chi nhánh và 50 ATM trên toàn quốc, hỗ trợ định vị và chỉ đường.
         + Bản đồ chi nhánh/ATM, hỗ trợ định vị.
         + Trung tâm trợ giúp và khối tìm kiếm nhanh tính năng.
         + Công cụ ngoại tệ, tỷ giá và tính lãi suất.

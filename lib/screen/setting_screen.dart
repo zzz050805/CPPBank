@@ -28,7 +28,7 @@ class SettingScreen extends StatefulWidget {
 
 class _SettingScreenState extends State<SettingScreen> {
   final int _selectedIndex = 3;
-  bool _isDarkMode = false; // Ch?c nang Dark Mode
+  bool _isDarkMode = false; // Chức năng Dark Mode
 
   String _t(String vi, String en) => AppText.tr(context, vi, en);
   String _logoutT(String vi, String en) => vi;
@@ -36,10 +36,10 @@ class _SettingScreenState extends State<SettingScreen> {
   String get _languageLabel {
     return AppPreferences.instance.locale.languageCode == 'en'
         ? 'English'
-        : 'Ti?ng Vi?t';
+        : 'Tiếng Việt';
   }
 
-  // --- H? TH?NG MÀU S?C THEO THEME ---
+  // --- HỆ THỐNG MÀU SẮC THEO THEME ---
   Color get _primaryBlue => const Color(0xFF000DC0);
   Color get _bg =>
       _isDarkMode ? const Color(0xFF0B0B0F) : const Color(0xFFF8F9FE);
@@ -50,7 +50,7 @@ class _SettingScreenState extends State<SettingScreen> {
   _MembershipRankData getMembershipRank(double totalBalance) {
     if (totalBalance > 10000000000) {
       return const _MembershipRankData(
-        name: 'H?NG KING',
+        name: 'HẠNG KING',
         color: Color(0xFF1B0E2D),
         gradient: [Color(0xFF0C0818), Color.fromARGB(255, 214, 222, 46)],
         icon: Icons.all_inclusive,
@@ -58,7 +58,7 @@ class _SettingScreenState extends State<SettingScreen> {
     }
     if (totalBalance > 2000000000) {
       return const _MembershipRankData(
-        name: 'H?NG ROYAL',
+        name: 'HẠNG ROYAL',
         color: Color(0xFFC7193E),
         gradient: [Color(0xFF880D2F), Color.fromARGB(255, 206, 206, 83)],
         icon: Icons.local_fire_department_outlined,
@@ -66,7 +66,7 @@ class _SettingScreenState extends State<SettingScreen> {
     }
     if (totalBalance > 500000000) {
       return const _MembershipRankData(
-        name: 'H?NG KIM CUONG',
+        name: 'HẠNG KIM CƯƠNG',
         color: Color.fromARGB(255, 243, 248, 255),
         gradient: [
           Color.fromARGB(255, 100, 151, 247),
@@ -77,7 +77,7 @@ class _SettingScreenState extends State<SettingScreen> {
     }
     if (totalBalance > 100000000) {
       return const _MembershipRankData(
-        name: 'H?NG B?CH KIM',
+        name: 'HẠNG BẠCH KIM',
         color: Color.fromARGB(255, 20, 161, 60),
         gradient: [Color.fromARGB(255, 88, 239, 134), Color(0xFF45C8FF)],
         icon: Icons.diamond_outlined,
@@ -85,7 +85,7 @@ class _SettingScreenState extends State<SettingScreen> {
     }
     if (totalBalance > 50000000) {
       return const _MembershipRankData(
-        name: 'H?NG VÀNG',
+        name: 'HẠNG VÀNG',
         color: Color(0xFFE5B93C),
         gradient: [Color(0xFFB38719), Color(0xFFF6D365)],
         icon: Icons.emoji_events_outlined,
@@ -93,7 +93,7 @@ class _SettingScreenState extends State<SettingScreen> {
     }
     if (totalBalance > 5000000) {
       return const _MembershipRankData(
-        name: 'H?NG B?C',
+        name: 'HẠNG BẠC',
         color: Color(0xFFA8B1C2),
         gradient: [Color(0xFF8D97AA), Color(0xFFC9D0DE)],
         icon: Icons.military_tech_outlined,
@@ -166,13 +166,13 @@ class _SettingScreenState extends State<SettingScreen> {
     if (normalized.contains('kim cuong') || normalized.contains('diamond')) {
       return Icons.workspace_premium_outlined;
     }
-    if (normalized.contains('b?ch kim') || normalized.contains('platinum')) {
+    if (normalized.contains('bạch kim') || normalized.contains('platinum')) {
       return Icons.diamond_outlined;
     }
     if (normalized.contains('vàng') || normalized.contains('gold')) {
       return Icons.emoji_events_outlined;
     }
-    if (normalized.contains('b?c') || normalized.contains('silver')) {
+    if (normalized.contains('bạc') || normalized.contains('silver')) {
       return Icons.military_tech_outlined;
     }
     return Icons.person_outline;
@@ -183,22 +183,22 @@ class _SettingScreenState extends State<SettingScreen> {
     if (normalized.isEmpty) return rawName;
 
     if (normalized.contains('king')) {
-      return _t('H?NG KING', 'KING');
+      return _t('HẠNG KING', 'KING');
     }
     if (normalized.contains('royal')) {
-      return _t('H?NG ROYAL', 'ROYAL');
+      return _t('HẠNG ROYAL', 'ROYAL');
     }
     if (normalized.contains('kim cuong') || normalized.contains('diamond')) {
-      return _t('H?NG KIM CUONG', 'DIAMOND');
+      return _t('HẠNG KIM CƯƠNG', 'DIAMOND');
     }
-    if (normalized.contains('b?ch kim') || normalized.contains('platinum')) {
-      return _t('H?NG B?CH KIM', 'PLATINUM');
+    if (normalized.contains('bạch kim') || normalized.contains('platinum')) {
+      return _t('HẠNG BẠCH KIM', 'PLATINUM');
     }
     if (normalized.contains('vàng') || normalized.contains('gold')) {
-      return _t('H?NG VÀNG', 'GOLD');
+      return _t('HẠNG VÀNG', 'GOLD');
     }
-    if (normalized.contains('b?c') || normalized.contains('silver')) {
-      return _t('H?NG B?C', 'SILVER');
+    if (normalized.contains('bạc') || normalized.contains('silver')) {
+      return _t('HẠNG BẠC', 'SILVER');
     }
     if (normalized.contains('thành viên') || normalized.contains('member')) {
       return _t('THÀNH VIÊN', 'MEMBER');
@@ -229,7 +229,7 @@ class _SettingScreenState extends State<SettingScreen> {
         children: [
           CustomScrollView(
             slivers: [
-              // 1. HEADER GRADIENT X?N
+              // 1. HEADER GRADIENT XỊN
               SliverAppBar(
                 expandedHeight: 180,
                 pinned: true,
@@ -258,7 +258,7 @@ class _SettingScreenState extends State<SettingScreen> {
                 ),
               ),
 
-              // 2. DANH SÁCH CÀI Đ?T
+              // 2. DANH SÁCH CÀI ĐẶT
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
@@ -266,12 +266,12 @@ class _SettingScreenState extends State<SettingScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _sectionTitle(
-                        _t("GIAO DI?N & TI?N ÍCH", "DISPLAY & UTILITIES"),
+                        _t("GIAO DIỆN & TIỆN ÍCH", "DISPLAY & UTILITIES"),
                       ),
                       _buildSettingsGroup([
                         _buildToggleItem(
                           Icons.dark_mode_outlined,
-                          _t("Ch? d? t?i", "Dark mode"),
+                          _t("Chế độ tối", "Dark mode"),
                           _isDarkMode,
                           (v) {
                             setState(() => _isDarkMode = v);
@@ -279,18 +279,18 @@ class _SettingScreenState extends State<SettingScreen> {
                         ),
                         _buildSettingItem(
                           Icons.language_outlined,
-                          _t("Ngôn ng?", "Language"),
+                          _t("Ngôn ngữ", "Language"),
                           trailingText: _languageLabel,
                           onTap: _showLanguagePicker,
                         ),
                       ]),
 
                       const SizedBox(height: 25),
-                      _sectionTitle(_t("B?O M?T", "SECURITY")),
+                      _sectionTitle(_t("BẢO MẬT", "SECURITY")),
                       _buildSettingsGroup([
                         _buildSettingItem(
                           Icons.key_outlined,
-                          _t("Qu?n lư Smart OTP", "Manage Smart OTP"),
+                          _t("Quản lý Smart OTP", "Manage Smart OTP"),
                           onTap: () {
                             final String? uid =
                                 UserFirestoreService.instance.currentUserDocId;
@@ -299,7 +299,7 @@ class _SettingScreenState extends State<SettingScreen> {
                                 SnackBar(
                                   content: Text(
                                     _t(
-                                      'Không t́m th?y tài kho?n d? m? Smart OTP.',
+                                      'Không tìm thấy tài khoản để mở Smart OTP.',
                                       'Account not found to open Smart OTP.',
                                     ),
                                   ),
@@ -322,11 +322,11 @@ class _SettingScreenState extends State<SettingScreen> {
                         ),
                         _buildSettingItem(
                           Icons.devices_outlined,
-                          _t("Thi?t b? tin c?y", "Trusted devices"),
+                          _t("Thiết bị tin cậy", "Trusted devices"),
                         ),
                         _buildSettingItem(
                           Icons.lock_outline,
-                          _t("Đ?i m?t kh?u", "Change password"),
+                          _t("Đổi mật khẩu", "Change password"),
                           onTap: () {
                             Navigator.push(
                               context,
@@ -357,12 +357,12 @@ class _SettingScreenState extends State<SettingScreen> {
                         ),
                         _buildSettingItem(
                           Icons.info_outline,
-                          _t("V? ?ng d?ng", "About app"),
+                          _t("Về ứng dụng", "About app"),
                           trailingText: "v2.0.4",
                         ),
                         _buildSettingItem(
                           Icons.help_outline,
-                          _t("Trung tâm tr? giúp", "Help center"),
+                          _t("Trung tâm trợ giúp", "Help center"),
                           onTap: _openHelpCenterInBrowser,
                         ),
                       ]),
@@ -376,14 +376,14 @@ class _SettingScreenState extends State<SettingScreen> {
             ],
           ),
 
-          // 3. BOTTOM NAV (KH?P 100% V?I CÁC TRANG TRU?C)
+          // 3. BOTTOM NAV (KHỚP 100% VỚI CÁC TRANG TRƯỚC)
           if (widget.showBottomNav) _buildPillBottomNav(),
         ],
       ),
     );
   }
 
-  // --- WIDGET PH? TR? ---
+  // --- WIDGET PHỤ TRỢ ---
 
   Widget _buildAvatar() {
     return CircleAvatar(
@@ -624,7 +624,14 @@ class _SettingScreenState extends State<SettingScreen> {
 
     if (!launched && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Không th? m? Trung tâm tr? giúp.')),
+        SnackBar(
+          content: Text(
+            _t(
+              'Không thể mở Trung tâm trợ giúp.',
+              'Unable to open Help Center.',
+            ),
+          ),
+        ),
       );
     }
   }
@@ -643,7 +650,7 @@ class _SettingScreenState extends State<SettingScreen> {
             children: [
               ListTile(
                 title: Text(
-                  'Ti?ng Vi?t',
+                  'Tiếng Việt',
                   style: GoogleFonts.poppins(color: _textColor),
                 ),
                 trailing: AppPreferences.instance.locale.languageCode == 'vi'
@@ -704,7 +711,7 @@ class _SettingScreenState extends State<SettingScreen> {
           padding: const EdgeInsets.symmetric(vertical: 15),
         ),
         child: Text(
-          _logoutT("Đang xu?t", "Log out"),
+          _logoutT("Đăng xuất", "Log out"),
           style: TextStyle(
             color: Colors.redAccent,
             fontWeight: FontWeight.bold,
@@ -740,7 +747,7 @@ class _SettingScreenState extends State<SettingScreen> {
               backgroundColor: Colors.red,
               content: Text(
                 _logoutT(
-                  'Đang xu?t th?t b?i, vui ḷng th? l?i.',
+                  'Đăng xuất thất bại, vui lòng thử lại.',
                   'Logout failed, please try again.',
                 ),
               ),
@@ -751,7 +758,7 @@ class _SettingScreenState extends State<SettingScreen> {
     );
   }
 
-  // --- THANH NAV Đ?NG B? ---
+  // --- THANH NAV ĐỒNG BỘ ---
   Widget _buildPillBottomNav() {
     return Positioned(
       bottom: 20,
@@ -776,7 +783,7 @@ class _SettingScreenState extends State<SettingScreen> {
             _pillNavItem(Icons.home, _t("Trang chính", "Home"), 0),
             _pillNavItem(Icons.search, "", 1),
             _pillNavItem(Icons.chat_bubble_outline, "", 2),
-            _pillNavItem(Icons.settings, _t("Cài d?t", "Settings"), 3),
+            _pillNavItem(Icons.settings, _t("Cài đặt", "Settings"), 3),
           ],
         ),
       ),

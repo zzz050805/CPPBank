@@ -61,7 +61,7 @@ class CCPLogoWidget extends StatelessWidget {
         ),
         const SizedBox(height: 15),
         Text(
-          "CCP Credit",
+          "CCP Bank",
           style: GoogleFonts.poppins(
             fontSize: 35,
             fontWeight: FontWeight.bold,
@@ -70,7 +70,7 @@ class CCPLogoWidget extends StatelessWidget {
         ),
         const SizedBox(height: 5),
         Text(
-          "Tài chính c?a m?i nhà",
+          "Tài chính của mọi nhà",
           style: GoogleFonts.poppins(
             fontSize: 16,
             fontWeight: FontWeight.w600,

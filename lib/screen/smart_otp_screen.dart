@@ -173,10 +173,14 @@ class _SmartOTPScreenState extends State<SmartOTPScreen>
     });
 
     await Future.delayed(const Duration(seconds: 1));
+    final String languageCode = AppText.currentLanguageCode(context);
     await NotificationService().showNotification(
-      title: 'Tin nhan moi',
-      body:
-          'CCP BANK: Ma OTP cua ban la $_demoOtp. Vui long khong chia se cho bat ky ai.',
+      title: AppText.textByCode(languageCode, 'otp_notification_title'),
+      body: AppText.textByCodeWithParams(
+        languageCode,
+        'otp_notification_body',
+        <String, String>{'otp': _demoOtp},
+      ),
     );
 
     if (!mounted) {

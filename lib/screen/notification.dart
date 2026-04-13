@@ -264,7 +264,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
   String _resolveNotificationTitle(Map<String, dynamic> data) {
     final String fallbackRaw = (data['title'] ?? '').toString().trim();
     final String fallback = fallbackRaw.isEmpty
-        ? _t('Thông báo mới', 'New notification')
+        ? AppText.text(context, 'notification_default_title')
         : fallbackRaw;
 
     String titleKey = (data['titleKey'] ?? '').toString().trim();
@@ -287,7 +287,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
   String _resolveNotificationBody(Map<String, dynamic> data) {
     final String fallbackRaw = (data['body'] ?? '').toString().trim();
     final String fallback = fallbackRaw.isEmpty
-        ? _t('Không có mô tả', 'No description')
+        ? AppText.text(context, 'notification_no_description')
         : fallbackRaw;
 
     String bodyKey = (data['bodyKey'] ?? '').toString().trim();

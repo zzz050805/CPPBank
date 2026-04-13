@@ -70,30 +70,30 @@ void main() async {
 
   try {
     await dotenv.load(fileName: ".env");
-    print('Ki?m tra .env: ${dotenv.env.keys}');
+    print('Kiểm tra .env: ${dotenv.env.keys}');
     debugPrint(
-      '? DotEnv loaded: ${dotenv.env['VIETQR_CLIENT_ID']?.substring(0, 5)}***',
+      'DotEnv loaded: ${dotenv.env['VIETQR_CLIENT_ID']?.substring(0, 5)}***',
     );
   } catch (e) {
-    debugPrint('? Error loading .env: $e');
+    debugPrint('Error loading .env: $e');
   }
 
   try {
     await FirebaseHelper.initializeFirebase();
   } catch (e) {
-    debugPrint('? Firebase init failed: $e');
+    debugPrint('Firebase init failed: $e');
   }
 
   try {
     await UserFirestoreService.instance.syncCurrentUserData();
   } catch (e) {
-    debugPrint('? Initial user sync failed: $e');
+    debugPrint('Initial user sync failed: $e');
   }
 
   try {
     await NotificationService().init();
   } catch (e) {
-    debugPrint('? Local notification init failed: $e');
+    debugPrint('Local notification init failed: $e');
   }
 
   runApp(const MyApp());

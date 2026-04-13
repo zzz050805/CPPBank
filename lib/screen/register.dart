@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../l10n/app_text.dart';
-import 'register_password_screen.dart'; // Đă d?i sang trang Password
+import 'register_password_screen.dart'; // Đã đổi sang trang Password
 
-// --- FORMATTER ÉP VI?T HOA TOÀN B? CH? ---
+// --- FORMATTER ÉP VIẾT HOA TOÀN BỘ CHỮ ---
 class UpperCaseTextFormatter extends TextInputFormatter {
   @override
   TextEditingValue formatEditUpdate(
@@ -18,7 +18,7 @@ class UpperCaseTextFormatter extends TextInputFormatter {
   }
 }
 
-// --- FORMATTER T? Đ?NG THÊM D?U "/" VÀ RÀNG BU?C NGÀY THÁNG ---
+// --- FORMATTER TỰ ĐỘNG THÊM DẤU "/" VÀ RÀNG BUỘC NGÀY THÁNG ---
 class DateTextFormatter extends TextInputFormatter {
   @override
   TextEditingValue formatEditUpdate(
@@ -111,36 +111,36 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
   }
 
-  // --- S?A HÀM X? LƯ: CHUY?N SANG TRANG PASSWORD VÀ TRUY?N D? LI?U ---
+  // --- SỬA HÀM XỬ LÝ: CHUYỂN SANG TRANG PASSWORD VÀ TRUYỀN DỮ LIỆU ---
   void _handleRegister() {
     setState(() {
       if (_nameController.text.isEmpty) {
         _nameError = _t(
-          'B?n c?n nh?p h? và tên',
+          'Bạn cần nhập họ và tên',
           'Please enter your full name',
         );
       }
       if (_phoneController.text.length < 10) {
         _phoneError = _t(
-          'S? di?n tho?i ph?i d? 10 s?',
+          'Số điện thoại phải đủ 10 số',
           'Phone number must have 10 digits',
         );
       }
       if (_cccdController.text.length < 12) {
         _cccdError = _t(
-          'S? CCCD ph?i d? 12 s?',
+          'Số CCCD phải đủ 12 số',
           'ID card number must have 12 digits',
         );
       }
       if (_dateController.text.length < 10) {
         _dateError = _t(
-          'Nh?p d? d?nh d?ng DD/MM/YYYY',
+          'Nhập đúng định dạng DD/MM/YYYY',
           'Please use DD/MM/YYYY format',
         );
       }
       if (_addressController.text.isEmpty) {
         _addressError = _t(
-          'B?n c?n nh?p d?a ch? thu?ng trú',
+          'Bạn cần nhập địa chỉ thường trú',
           'Please enter your permanent address',
         );
       }
@@ -150,7 +150,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           SnackBar(
             content: Text(
               _t(
-                'Vui ḷng d?ng ư v?i Đi?u kho?n',
+                'Vui lòng đồng ý với Điều khoản',
                 'Please agree to the Terms and Conditions',
               ),
             ),
@@ -161,7 +161,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
 
     if (_isFormValid) {
-      // ĐĂ S?A: Chuy?n hu?ng và truy?n d? li?u sang RegisterPasswordScreen
+      // ĐÃ SỬA: Chuyển hướng và truyền dữ liệu sang RegisterPasswordScreen
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -189,7 +189,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          _t('Đang kư', 'Register'),
+          _t('Đăng ký', 'Register'),
           style: GoogleFonts.poppins(
             color: Colors.white,
             fontWeight: FontWeight.bold,
@@ -224,7 +224,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _t('Đang kư ngay!', 'Register now!'),
+                      _t('Đăng ký ngay!', 'Register now!'),
                       style: GoogleFonts.poppins(
                         color: const Color(0xFF000DC0),
                         fontSize: 28,
@@ -234,7 +234,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     const SizedBox(height: 5),
                     Text(
                       _t(
-                        'Đ? tr? thành thành viên c?a CCPBank',
+                        'Để trở thành thành viên của CCPBank',
                         'Become a CCPBank member',
                       ),
                       style: GoogleFonts.poppins(
@@ -272,7 +272,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                     _buildTextField(
                       controller: _nameController,
-                      hintText: _t('H? & Tên c?a b?n', 'Your full name'),
+                      hintText: _t('Họ & Tên của bạn', 'Your full name'),
                       icon: Icons.person_outline,
                       errorText: _nameError,
                       textCapitalization: TextCapitalization.characters,
@@ -281,7 +281,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                     _buildTextField(
                       controller: _phoneController,
-                      hintText: _t('S? di?n tho?i (+84)', 'Phone number (+84)'),
+                      hintText: _t('Số điện thoại (+84)', 'Phone number (+84)'),
                       icon: Icons.phone_android_outlined,
                       errorText: _phoneError,
                       keyboardType: TextInputType.phone,
@@ -291,7 +291,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                     _buildTextField(
                       controller: _cccdController,
-                      hintText: _t('S? CCCD', 'ID card number'),
+                      hintText: _t('Số CCCD', 'ID card number'),
                       icon: Icons.credit_card_outlined,
                       errorText: _cccdError,
                       keyboardType: TextInputType.number,
@@ -302,7 +302,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     _buildTextField(
                       controller: _dateController,
                       hintText: _t(
-                        'Ngày c?p (DD/MM/YYYY)',
+                        'Ngày cấp (DD/MM/YYYY)',
                         'Issue date (DD/MM/YYYY)',
                       ),
                       icon: Icons.calendar_month_outlined,
@@ -314,7 +314,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                     _buildTextField(
                       controller: _addressController,
-                      hintText: _t('Đ?a ch? thu?ng trú', 'Permanent address'),
+                      hintText: _t('Địa chỉ thường trú', 'Permanent address'),
                       icon: Icons.location_on_outlined,
                       errorText: _addressError,
                     ),
@@ -351,13 +351,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               children: [
                                 TextSpan(
                                   text: _t(
-                                    'B?ng vi?c t?o tài kho?n, b?n d?ng ư v?i các\n',
+                                    'Bằng việc tạo tài khoản, bạn đồng ý với các\n',
                                     'By creating an account, you agree to the\n',
                                   ),
                                 ),
                                 TextSpan(
                                   text: _t(
-                                    'Đi?u kho?n và Đi?u ki?n',
+                                    'Điều khoản và Điều kiện',
                                     'Terms and Conditions',
                                   ),
                                   style: GoogleFonts.poppins(
@@ -395,7 +395,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ),
                         onPressed: _handleRegister,
                         child: Text(
-                          _t('TI?P THEO', 'NEXT'),
+                          _t('TIẾP THEO', 'NEXT'),
                           style: GoogleFonts.poppins(
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
@@ -421,12 +421,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             children: [
                               TextSpan(
                                 text: _t(
-                                  'B?n dă có tài kho?n! ',
+                                  'Bạn đã có tài khoản! ',
                                   'Already have an account? ',
                                 ),
                               ),
                               TextSpan(
-                                text: _t('Đang nh?p', 'Log in'),
+                                text: _t('Đăng nhập', 'Log in'),
                                 style: GoogleFonts.poppins(
                                   color: const Color(0xFF000DC0),
                                   fontWeight: FontWeight.w600,

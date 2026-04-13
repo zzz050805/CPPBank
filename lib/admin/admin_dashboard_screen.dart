@@ -138,7 +138,7 @@ class AdminDashboardScreen extends StatefulWidget {
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   static const Color _primaryBlue = Color(0xFF000DC0);
-  static const Color _pageBg = Color(0xFFF5F7FF);
+  static const Color _pageBg = Color(0xFF060D2B);
   static const Color _sidebarStart = Color(0xFF0B1E4D);
   static const Color _sidebarEnd = Color(0xFF020617);
   static const Color _neonBlue = Color(0xFF22D3EE);
@@ -1536,7 +1536,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                     Expanded(
                                       child: Text(
                                         _t(
-                                          'Giao dịch theo User',
+                                          'Giao dịch theo người dùng',
                                           'Transactions by user',
                                         ),
                                         style: GoogleFonts.poppins(
@@ -1987,19 +1987,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                               !user.isVipCardLocked)
                                           ? nextVipBalance
                                           : 0);
-                                  final String currentCardRaw = user
-                                      .cardNumberRaw
-                                      .trim();
-                                  final String nextCardNumber =
-                                      currentCardRaw.isEmpty
-                                      ? CardNumberService.generatePermanentCardNumber(
-                                          <String, dynamic>{
-                                            'cccd': nextCccd,
-                                            'phoneNumber': nextPhone,
-                                            'hasVipCard': user.hasVipCard,
-                                          },
-                                        )
-                                      : currentCardRaw;
 
                                   if (nextName.isEmpty) {
                                     if (!parentContext.mounted) {
@@ -2035,8 +2022,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                           .doc('standard'),
                                       <String, dynamic>{
                                         'balance': nextNormalBalance,
-                                        'card_number': nextCardNumber,
-                                        'cardNumber': nextCardNumber,
                                         'updatedAt':
                                             FieldValue.serverTimestamp(),
                                       },
@@ -2047,8 +2032,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                       userRef.collection('cards').doc('vip'),
                                       <String, dynamic>{
                                         'balance': nextVipBalance,
-                                        'card_number': nextCardNumber,
-                                        'cardNumber': nextCardNumber,
                                         'updatedAt':
                                             FieldValue.serverTimestamp(),
                                       },
@@ -2062,8 +2045,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                       'cccd': nextCccd,
                                       'idNumber': nextCccd,
                                       'address': nextAddress,
-                                      'card_number': nextCardNumber,
-                                      'cardNumber': nextCardNumber,
                                       'balance_normal': nextNormalBalance,
                                       'balance_vip': nextVipBalance,
                                       'balance': nextTotalBalance,
@@ -2157,6 +2138,40 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
+  Widget _glassPanel({
+    required Widget child,
+    EdgeInsetsGeometry? padding,
+    EdgeInsetsGeometry? margin,
+    double radius = 20,
+  }) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+        child: Container(
+          margin: margin,
+          padding: padding,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.05),
+            borderRadius: BorderRadius.circular(radius),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.2),
+              width: 1.5,
+            ),
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: const Color(0xFF22D3EE).withValues(alpha: 0.18),
+                blurRadius: 20,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
+
   Widget _statusBadge({
     required String label,
     required Color background,
@@ -2197,9 +2212,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     return Container(
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: <Color>[Color(0xFF1D4ED8), Color(0xFF0B1E4D)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: <Color>[Color(0xFF2563EB), Color(0xFF0EA5E9)],
         ),
         borderRadius: BorderRadius.circular(999),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: const Color(0xFF38BDF8).withValues(alpha: 0.5),
+            blurRadius: 10,
+          ),
+        ],
       ),
       child: ElevatedButton.icon(
         onPressed: onPressed,
@@ -2235,28 +2258,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               ? 1
               : topUsers.first.totalBalance * 1.2);
 
-    return Container(
+    return _glassPanel(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 15,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
-            _t('Biểu đồ số dư user', 'User balance chart'),
+            _t('Biểu đồ số dư người dùng', 'User balance chart'),
             style: GoogleFonts.poppins(
               fontSize: 14,
               fontWeight: FontWeight.w700,
+              color: Colors.white,
             ),
           ),
           const SizedBox(height: 12),
@@ -2266,7 +2278,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ? Center(
                     child: Text(
                       _t('Chưa có dữ liệu', 'No data available'),
-                      style: GoogleFonts.poppins(color: Colors.grey.shade600),
+                      style: GoogleFonts.poppins(color: Colors.white70),
                     ),
                   )
                 : BarChart(
@@ -2321,7 +2333,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                 '${idx + 1}',
                                 style: GoogleFonts.poppins(
                                   fontSize: 11,
-                                  color: Colors.grey.shade700,
+                                  color: Colors.white70,
                                 ),
                               );
                             },
@@ -2338,7 +2350,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                 ).format(value),
                                 style: GoogleFonts.poppins(
                                   fontSize: 10,
-                                  color: Colors.grey.shade600,
+                                  color: Colors.white70,
                                 ),
                               );
                             },
@@ -2373,7 +2385,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   '${idx + 1}. ${user.fullName}',
                   style: GoogleFonts.poppins(
                     fontSize: 11,
-                    color: Colors.grey.shade700,
+                    color: Colors.white70,
                     fontWeight: FontWeight.w500,
                   ),
                 );
@@ -2386,28 +2398,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Widget _buildUserBalancesCard(List<_AdminUserSummary> users) {
-    return Container(
+    return _glassPanel(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 15,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
-            _t('Tổng số dư từng user', 'User balances'),
+            _t('Tổng số dư từng người dùng', 'User balances'),
             style: GoogleFonts.poppins(
               fontSize: 14,
               fontWeight: FontWeight.w700,
+              color: Colors.white,
             ),
           ),
           const SizedBox(height: 8),
@@ -2428,9 +2429,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     vertical: 8,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
+                    color: Colors.white.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFFE5E7EB)),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.18),
+                    ),
                   ),
                   child: Row(
                     children: <Widget>[
@@ -2445,6 +2448,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               style: GoogleFonts.poppins(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
+                                color: Colors.white,
                               ),
                             ),
                             Text(
@@ -2453,7 +2457,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.poppins(
                                 fontSize: 11,
-                                color: Colors.grey.shade600,
+                                color: Colors.white70,
                               ),
                             ),
                           ],
@@ -2465,11 +2469,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         style: GoogleFonts.poppins(
                           fontSize: 13,
                           fontWeight: FontWeight.w800,
-                          color: const Color(0xFF101828),
+                          color: Colors.white,
                         ),
                       ),
                       const SizedBox(width: 4),
-                      const Icon(Icons.chevron_right_rounded, size: 18),
+                      const Icon(
+                        Icons.chevron_right_rounded,
+                        size: 18,
+                        color: Colors.white70,
+                      ),
                     ],
                   ),
                 ),
@@ -3639,7 +3647,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
                                 final List<Widget> metricCards = <Widget>[
                                   _metricCard(
-                                    title: _t('Tổng User', 'Total users'),
+                                    title: _t('Tổng người dùng', 'Total users'),
                                     value: '$totalUsers',
                                     icon: Icons.people_alt_rounded,
                                     onTap: _openUsersManagementTab,
@@ -3719,19 +3727,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     required IconData icon,
     VoidCallback? onTap,
   }) {
-    final Widget card = Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 15,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+    final Widget card = _glassPanel(
       padding: const EdgeInsets.all(16),
       child: Row(
         children: <Widget>[
@@ -3739,10 +3735,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: const Color(0xFFE7EEFF),
+              color: Colors.white.withValues(alpha: 0.16),
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, color: _primaryBlue),
+            child: Icon(icon, color: Colors.white),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -3755,7 +3751,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   style: GoogleFonts.poppins(
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
-                    color: Colors.grey.shade600,
+                    color: Colors.white70,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -3768,7 +3764,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     style: GoogleFonts.poppins(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
-                      color: const Color(0xFF111827),
+                      color: Colors.white,
                     ),
                   ),
                 ),
@@ -3824,19 +3820,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
                 return LayoutBuilder(
                   builder: (BuildContext context, BoxConstraints constraints) {
-                    return Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: const Color(0xFFE5E7EB)),
-                        boxShadow: <BoxShadow>[
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.04),
-                            blurRadius: 15,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
+                    return _glassPanel(
                       padding: const EdgeInsets.all(12),
                       child: SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
@@ -4054,14 +4038,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             return Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: Colors.white.withValues(alpha: 0.06),
                 borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: const Color(0xFFE5E7EB)),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
                 boxShadow: <BoxShadow>[
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
-                    blurRadius: 15,
-                    offset: const Offset(0, 4),
+                    color: _neonBlue.withValues(alpha: 0.16),
+                    blurRadius: 14,
                   ),
                 ],
               ),
@@ -4071,7 +4054,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     width: 46,
                     height: 46,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF5F7FF),
+                      color: Colors.white.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     clipBehavior: Clip.antiAlias,
@@ -4111,7 +4094,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           style: GoogleFonts.poppins(
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
-                            color: const Color(0xFF0F172A),
+                            color: Colors.white,
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -4120,7 +4103,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           style: GoogleFonts.poppins(
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
-                            color: const Color(0xFF475467),
+                            color: Colors.white70,
                           ),
                         ),
                       ],
@@ -4173,13 +4156,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           children: <Widget>[
             Align(
               alignment: Alignment.centerRight,
-              child: ElevatedButton.icon(
+              child: _gradientActionButton(
                 onPressed: _addBanner,
-                icon: const Icon(Icons.add_photo_alternate_rounded),
-                label: Text(
-                  _t('Thêm banner', 'Add banner'),
-                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
-                ),
+                icon: Icons.add_photo_alternate_rounded,
+                label: _t('Thêm banner', 'Add banner'),
               ),
             ),
             const SizedBox(height: 10),
@@ -4193,13 +4173,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   final String imageUrl = (data['imageUrl'] ?? '').toString();
                   final bool isActive = data['isActive'] == true;
 
-                  return Card(
+                  return _glassPanel(
                     margin: const EdgeInsets.only(bottom: 8),
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      side: const BorderSide(color: Color(0xFFE5E7EB)),
-                    ),
+                    padding: EdgeInsets.zero,
+                    radius: 16,
                     child: ListTile(
                       leading: Container(
                         width: 64,
@@ -4345,14 +4322,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             );
             final bool vipUpdating = _pendingCardLockUpdates.contains(vipKey);
 
-            return Card(
+            return _glassPanel(
               margin: const EdgeInsets.only(bottom: 10),
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: const BorderSide(color: Color(0xFFE5E7EB)),
-              ),
+              padding: EdgeInsets.zero,
+              radius: 16,
               child: ExpansionTile(
+                key: PageStorageKey<String>('admin-card-tile-${doc.id}'),
                 tilePadding: const EdgeInsets.symmetric(
                   horizontal: 14,
                   vertical: 2,
@@ -4418,6 +4393,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     required bool isUpdating,
     bool isEnabled = true,
   }) {
+    final String actionText = !isEnabled
+        ? _t('Không khả dụng', 'Unavailable')
+        : isLocked
+        ? AppText.text(context, 'unlock_card')
+        : AppText.text(context, 'lock_card');
     final String statusText = !isEnabled
         ? _t('Chưa có thẻ VIP', 'No VIP card')
         : isLocked
@@ -4428,6 +4408,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         : isLocked
         ? const Color(0xFFB91C1C)
         : const Color(0xFF166534);
+    final String cardId = fieldName == 'is_vip_locked' ? 'vip' : 'standard';
 
     return ListTile(
       dense: true,
@@ -4438,53 +4419,68 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       ),
       subtitle: Padding(
         padding: const EdgeInsets.only(top: 4),
-        child: Text(
-          statusText,
-          style: GoogleFonts.poppins(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: statusColor,
-          ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Text(
+              statusText,
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: statusColor,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              actionText,
+              style: GoogleFonts.poppins(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Colors.white70,
+              ),
+            ),
+          ],
         ),
       ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Text(
-            !isEnabled
-                ? _t('Không khả dụng', 'Unavailable')
-                : isLocked
-                ? AppText.text(context, 'unlock_card')
-                : AppText.text(context, 'lock_card'),
-            style: GoogleFonts.poppins(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: const Color(0xFF344054),
-            ),
-          ),
-          const SizedBox(width: 8),
-          if (isUpdating)
-            const SizedBox(
-              width: 18,
-              height: 18,
+      trailing: isUpdating
+          ? const SizedBox(
+              width: 22,
+              height: 22,
               child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                IconButton(
+                  icon: const Icon(Icons.edit_rounded, size: 20),
+                  color: _primaryBlue,
+                  tooltip: _t('Chỉnh số dư thẻ', 'Edit card balance'),
+                  onPressed: !isEnabled
+                      ? null
+                      : () {
+                          _showEditCardBalanceDialog(
+                            userId: userId,
+                            cardId: cardId,
+                            cardName: cardName,
+                          );
+                        },
+                ),
+                Switch(
+                  value: isLocked,
+                  onChanged: !isEnabled
+                      ? null
+                      : (bool newValue) {
+                          _updateCardLockState(
+                            userId: userId,
+                            fieldName: fieldName,
+                            currentValue: isLocked,
+                            newValue: newValue,
+                          );
+                        },
+                ),
+              ],
             ),
-          if (isUpdating) const SizedBox(width: 8),
-          Switch(
-            value: isLocked,
-            onChanged: (!isEnabled || isUpdating)
-                ? null
-                : (bool newValue) {
-                    _updateCardLockState(
-                      userId: userId,
-                      fieldName: fieldName,
-                      currentValue: isLocked,
-                      newValue: newValue,
-                    );
-                  },
-          ),
-        ],
-      ),
     );
   }
 
@@ -4493,6 +4489,116 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     required String fieldName,
   }) {
     return '$userId::$fieldName';
+  }
+
+  Future<void> _showEditCardBalanceDialog({
+    required String userId,
+    required String cardId,
+    required String cardName,
+  }) async {
+    final DocumentReference<Map<String, dynamic>> cardRef = _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('cards')
+        .doc(cardId);
+
+    final DocumentSnapshot<Map<String, dynamic>> snap = await cardRef.get();
+    final double current = _toDouble(
+      (snap.data() ?? <String, dynamic>{})['balance'],
+    );
+    final TextEditingController controller = TextEditingController(
+      text: current.round().toString(),
+    );
+
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: Text(
+            _t('Chỉnh số dư thẻ', 'Edit card balance'),
+            style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                cardName,
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  color: const Color(0xFF667085),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: controller,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: _t('Số dư mới', 'New balance'),
+                  border: const OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+            ],
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(_t('Hủy', 'Cancel')),
+            ),
+            FilledButton(
+              onPressed: () async {
+                final double nextBalance = _parseBalanceInput(controller.text);
+                if (nextBalance < 0) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        _t('Số dư không hợp lệ', 'Invalid balance value'),
+                      ),
+                    ),
+                  );
+                  return;
+                }
+
+                try {
+                  await cardRef.set(<String, dynamic>{
+                    'balance': nextBalance,
+                    'updatedAt': FieldValue.serverTimestamp(),
+                  }, SetOptions(merge: true));
+
+                  if (dialogContext.mounted) {
+                    Navigator.pop(dialogContext);
+                  }
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        _t('Đã cập nhật số dư thẻ', 'Card balance updated'),
+                      ),
+                      backgroundColor: const Color(0xFF16A34A),
+                    ),
+                  );
+                } catch (_) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        _t(
+                          'Không thể cập nhật số dư thẻ',
+                          'Unable to update card balance',
+                        ),
+                      ),
+                      backgroundColor: const Color(0xFFDC2626),
+                    ),
+                  );
+                }
+              },
+              child: Text(_t('Lưu', 'Save')),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> _updateCardLockState({
@@ -4714,21 +4820,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Widget _mobileTabBar() {
-    return Container(
+    return _glassPanel(
       margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 15,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+      radius: 16,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
@@ -4770,14 +4865,26 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(999),
-          color: selected
-              ? _primaryBlue.withValues(alpha: 0.12)
-              : const Color(0xFFF8FAFC),
+          gradient: selected
+              ? const LinearGradient(
+                  colors: <Color>[Color(0xFF1E40AF), Color(0xFF0EA5E9)],
+                )
+              : null,
+          color: selected ? null : Colors.white.withValues(alpha: 0.08),
           border: Border.all(
             color: selected
-                ? _primaryBlue.withValues(alpha: 0.22)
-                : const Color(0xFFE5E7EB),
+                ? Colors.white.withValues(alpha: 0.3)
+                : Colors.white.withValues(alpha: 0.18),
           ),
+          boxShadow: selected
+              ? <BoxShadow>[
+                  BoxShadow(
+                    color: const Color(0xFF0EA5E9).withValues(alpha: 0.5),
+                    blurRadius: 12,
+                    spreadRadius: 1,
+                  ),
+                ]
+              : null,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -4785,7 +4892,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             Icon(
               icon,
               size: 18,
-              color: selected ? _primaryBlue : Colors.grey.shade600,
+              color: selected ? Colors.white : Colors.white70,
             ),
             const SizedBox(width: 6),
             Text(
@@ -4793,7 +4900,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               style: GoogleFonts.poppins(
                 fontSize: 12,
                 fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                color: selected ? _primaryBlue : Colors.grey.shade700,
+                color: selected ? Colors.white : Colors.white70,
               ),
             ),
           ],
@@ -4870,13 +4977,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Widget _contentPanel({EdgeInsetsGeometry? margin}) {
-    return Container(
+    return _glassPanel(
       margin: margin ?? const EdgeInsets.fromLTRB(0, 12, 12, 12),
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(20),
-      ),
       child: _buildContent(),
     );
   }
@@ -4886,21 +4989,24 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final bool wide = MediaQuery.of(context).size.width >= 900;
 
     return Scaffold(
-      backgroundColor: _pageBg,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         flexibleSpace: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: <Color>[Color(0xFF0B1E4D), Color(0xFF020617)],
+              colors: <Color>[
+                const Color(0xFF0A1A5A).withValues(alpha: 0.9),
+                const Color(0xFF040B2B).withValues(alpha: 0.85),
+              ],
             ),
           ),
         ),
         title: Text(
-          _t('CCPBank Admin Dashboard', 'CCPBank Admin Dashboard'),
+          _t('CCPBank Quản lý Dashboard', 'CCPBank Management Dashboard'),
           style: GoogleFonts.poppins(
             fontWeight: FontWeight.w700,
             color: Colors.white,
@@ -4909,7 +5015,30 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         actions: <Widget>[
           PopupMenuButton<int>(
             tooltip: AppText.text(context, 'menu_settings'),
-            icon: const Icon(Icons.settings, color: Colors.white),
+            icon: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.28),
+                    ),
+                    boxShadow: <BoxShadow>[
+                      BoxShadow(
+                        color: _neonBlue.withValues(alpha: 0.35),
+                        blurRadius: 12,
+                      ),
+                    ],
+                  ),
+                  child: const Icon(Icons.settings, color: Colors.white),
+                ),
+              ),
+            ),
             onSelected: _onSettingsMenuSelected,
             itemBuilder: (BuildContext context) => <PopupMenuEntry<int>>[
               PopupMenuItem<int>(
@@ -4948,29 +5077,53 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: wide
-          ? Row(
-              children: <Widget>[
-                _desktopSidebar(wide),
-                Expanded(child: _contentPanel()),
-              ],
-            )
-          : Column(
-              children: <Widget>[
-                _mobileTabBar(),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                    child: _contentPanel(margin: EdgeInsets.zero),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: <Color>[Color(0xFF08133F), Color(0xFF03081E)],
+          ),
+        ),
+        child: wide
+            ? Row(
+                children: <Widget>[
+                  _desktopSidebar(wide),
+                  Expanded(child: _contentPanel()),
+                ],
+              )
+            : Column(
+                children: <Widget>[
+                  _mobileTabBar(),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                      child: _contentPanel(margin: EdgeInsets.zero),
+                    ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
+      ),
       floatingActionButton: _selectedTab == 2
-          ? FloatingActionButton(
-              onPressed: () => _showAddServiceDialog(context),
-              backgroundColor: _primaryBlue,
-              child: const Icon(Icons.add, color: Colors.white),
+          ? Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                gradient: const LinearGradient(
+                  colors: <Color>[Color(0xFF2563EB), Color(0xFF22D3EE)],
+                ),
+                boxShadow: <BoxShadow>[
+                  BoxShadow(
+                    color: const Color(0xFF22D3EE).withValues(alpha: 0.55),
+                    blurRadius: 16,
+                  ),
+                ],
+              ),
+              child: FloatingActionButton(
+                onPressed: () => _showAddServiceDialog(context),
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                child: const Icon(Icons.add, color: Colors.white),
+              ),
             )
           : null,
     );

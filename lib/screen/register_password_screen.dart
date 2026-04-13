@@ -8,7 +8,6 @@ import '../services/card_number_service.dart';
 import 'OTP_screen.dart';
 
 class RegisterPasswordScreen extends StatefulWidget {
-  
   final String fullName;
   final String phoneNumber;
   final String cccd;
@@ -80,31 +79,31 @@ class _RegisterPasswordScreenState extends State<RegisterPasswordScreen> {
         _isValid = true;
 
         if (pass.length > 15 && specialCount >= 2) {
-          _strengthText = _t('M?nh', 'Strong');
+          _strengthText = _t('Mạnh', 'Strong');
           _strengthColor = Colors.green;
         } else if (pass.length > 15) {
-          _strengthText = _t('Trung b�nh', 'Medium');
+          _strengthText = _t('Trung bình', 'Medium');
           _strengthColor = Colors.orange;
         } else {
-          _strengthText = _t('Y?u', 'Weak');
+          _strengthText = _t('Yếu', 'Weak');
           _strengthColor = Colors.red;
         }
       } else {
-        _strengthText = _t('M?t kh?u chua h?p l?', 'Password is not valid');
+        _strengthText = _t('Mật khẩu chưa hợp lệ', 'Password is not valid');
         _strengthColor = Colors.red;
         _isValid = false;
       }
     });
   }
 
-  // --- S?A H�M LUU D? LI?U: G?P T?T C? TH�NG TIN ---
+  // --- SỬA HÀM LƯU DỮ LIỆU: GỘP TẤT CẢ THÔNG TIN ---
   void _handleFinalRegister() async {
     if (_passController.text != _rePassController.text) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             _t(
-              'M?t kh?u nh?p l?i kh�ng kh?p!',
+              'Mật khẩu nhập lại không khớp!',
               'Password confirmation does not match!',
             ),
           ),
@@ -151,7 +150,7 @@ class _RegisterPasswordScreenState extends State<RegisterPasswordScreen> {
       if (uid == null || uid.isEmpty) {
         throw Exception(
           _t(
-            'Kh�ng t?o du?c d?nh danh t�i kho?n.',
+            'Không tạo được định danh tài khoản.',
             'Unable to create account identifier.',
           ),
         );
@@ -164,7 +163,7 @@ class _RegisterPasswordScreenState extends State<RegisterPasswordScreen> {
             'hasVipCard': false,
           });
 
-      // Luu d? li?u user v� kh?i t?o c?u tr�c Firestore chu?n cho t�i kho?n m?i.
+      // Lưu dữ liệu user và khởi tạo cấu trúc Firestore chuẩn cho tài khoản mới.
       await UserFirestoreService.instance.initUserData(
         userId: uid,
         userData: {
@@ -184,7 +183,7 @@ class _RegisterPasswordScreenState extends State<RegisterPasswordScreen> {
           'address': widget.address,
           'card_number': generatedCardNumber,
           'cardNumber': generatedCardNumber,
-          // Gi? tuong th�ch lu?ng dang nh?p legacy dang ki?m tra password t? Firestore.
+          // Giữ tương thích luồng đăng nhập legacy đang kiểm tra password từ Firestore.
           'password': _passController.text,
           'authUid': usedAuthFallback ? null : uid,
           'lastLoginAt': FieldValue.serverTimestamp(),
@@ -209,7 +208,7 @@ class _RegisterPasswordScreenState extends State<RegisterPasswordScreen> {
       if (mounted) Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${_t('L?i luu d? li?u', 'Data save error')}: $e'),
+          content: Text('${_t('Lỗi lưu dữ liệu', 'Data save error')}: $e'),
           backgroundColor: Colors.red,
         ),
       );
@@ -234,7 +233,7 @@ class _RegisterPasswordScreenState extends State<RegisterPasswordScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          _t('�ang k�', 'Register'),
+          _t('Đăng ký', 'Register'),
           style: GoogleFonts.poppins(
             color: Colors.white,
             fontWeight: FontWeight.bold,
@@ -258,7 +257,7 @@ class _RegisterPasswordScreenState extends State<RegisterPasswordScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _t('�ang k� ngay!', 'Register now!'),
+                      _t('Đăng ký ngay!', 'Register now!'),
                       style: GoogleFonts.poppins(
                         color: const Color(0xFF000DC0),
                         fontSize: 28,
@@ -267,7 +266,7 @@ class _RegisterPasswordScreenState extends State<RegisterPasswordScreen> {
                     ),
                     Text(
                       _t(
-                        '�? tr? th�nh th�nh vi�n c?a CCPBank',
+                        'Để trở thành thành viên của CCPBank',
                         'Become a CCPBank member',
                       ),
                       style: GoogleFonts.poppins(
@@ -292,7 +291,7 @@ class _RegisterPasswordScreenState extends State<RegisterPasswordScreen> {
 
                     _buildPassField(
                       controller: _passController,
-                      hint: _t('T?o m?t kh?u', 'Create password'),
+                      hint: _t('Tạo mật khẩu', 'Create password'),
                       isObscure: _isObscure,
                       onToggle: () => setState(() => _isObscure = !_isObscure),
                     ),
@@ -309,9 +308,9 @@ class _RegisterPasswordScreenState extends State<RegisterPasswordScreen> {
                           children: [
                             Text(
                               _isValid
-                                  ? _t('M?t kh?u h?p l?', 'Password is valid')
+                                  ? _t('Mật khẩu hợp lệ', 'Password is valid')
                                   : _t(
-                                      'M?t kh?u chua h?p l?',
+                                      'Mật khẩu chưa hợp lệ',
                                       'Password is not valid',
                                     ),
                               style: GoogleFonts.poppins(
@@ -336,7 +335,7 @@ class _RegisterPasswordScreenState extends State<RegisterPasswordScreen> {
 
                     _buildPassField(
                       controller: _rePassController,
-                      hint: _t('Nh?p l?i m?t kh?u', 'Confirm password'),
+                      hint: _t('Nhập lại mật khẩu', 'Confirm password'),
                       isObscure: _isReObscure,
                       onToggle: () =>
                           setState(() => _isReObscure = !_isReObscure),
@@ -345,8 +344,8 @@ class _RegisterPasswordScreenState extends State<RegisterPasswordScreen> {
                     const SizedBox(height: 12),
                     Text(
                       _t(
-                        'Luu �:\n� �t nh?t 8 k� t?\n� C� ch? hoa, s?, k� t? d?c bi?t (@,!,#,...)\n� Kh�ng tr�ng th�ng tin c� nh�n',
-                        'Notes:\n� At least 8 characters\n� Include uppercase letters, numbers, and special characters (@,!,#,...)\n� Must not match personal information',
+                        'Lưu ý:\n- Ít nhất 8 ký tự\n- Có chữ hoa, số, ký tự đặc biệt (@,!,#,...)\n- Không trùng thông tin cá nhân',
+                        'Notes:\n- At least 8 characters\n- Include uppercase letters, numbers, and special characters (@,!,#,...)\n- Must not match personal information',
                       ),
                       style: GoogleFonts.poppins(
                         color: Colors.grey,
@@ -381,13 +380,13 @@ class _RegisterPasswordScreenState extends State<RegisterPasswordScreen> {
                               children: [
                                 TextSpan(
                                   text: _t(
-                                    'B?ng vi?c t?o t�i kho?n, b?n d?ng � v?i c�c ',
+                                    'Bằng việc tạo tài khoản, bạn đồng ý với các ',
                                     'By creating an account, you agree to the ',
                                   ),
                                 ),
                                 TextSpan(
                                   text: _t(
-                                    '�i?u kho?n v� �i?u ki?n',
+                                    'Điều khoản và Điều kiện',
                                     'Terms and Conditions',
                                   ),
                                   style: GoogleFonts.poppins(
@@ -397,7 +396,7 @@ class _RegisterPasswordScreenState extends State<RegisterPasswordScreen> {
                                 ),
                                 TextSpan(
                                   text: _t(
-                                    ' c?a ch�ng t�i.',
+                                    ' của chúng tôi.',
                                     ' of our service.',
                                   ),
                                 ),
@@ -425,7 +424,7 @@ class _RegisterPasswordScreenState extends State<RegisterPasswordScreen> {
                         ),
                         onPressed: canRegister ? _handleFinalRegister : null,
                         child: Text(
-                          _t('�ANG K�', 'REGISTER'),
+                          _t('ĐĂNG KÝ', 'REGISTER'),
                           style: GoogleFonts.poppins(
                             color: canRegister
                                 ? Colors.white

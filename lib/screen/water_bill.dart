@@ -7,7 +7,9 @@ import 'bill_mock_data.dart';
 import 'water_bill_pay.dart';
 
 class WaterBillScreen extends StatefulWidget {
-  const WaterBillScreen({super.key});
+  const WaterBillScreen({super.key, this.sourceCardId});
+
+  final String? sourceCardId;
 
   @override
   State<WaterBillScreen> createState() => _WaterBillScreenState();
@@ -122,6 +124,7 @@ class _WaterBillScreenState extends State<WaterBillScreen>
           usageM3: result.usageM3,
           billingPeriod: result.billingPeriod,
           totalAmount: result.totalAmount,
+          sourceCardId: widget.sourceCardId,
         ),
       ),
     );

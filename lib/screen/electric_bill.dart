@@ -9,7 +9,9 @@ import '../l10n/app_text.dart';
 import '../widget/ccp_app_bar.dart';
 
 class ElectricBillScreen extends StatefulWidget {
-  const ElectricBillScreen({super.key});
+  const ElectricBillScreen({super.key, this.sourceCardId});
+
+  final String? sourceCardId;
 
   @override
   State<ElectricBillScreen> createState() => _ElectricBillScreenState();
@@ -297,6 +299,7 @@ class _ElectricBillScreenState extends State<ElectricBillScreen>
                           usageKwh: result.usageKwh,
                           billingPeriod: result.billingPeriod,
                           totalAmount: result.amountVnd,
+                          sourceCardId: widget.sourceCardId,
                         ),
                       ),
                     );

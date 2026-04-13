@@ -13,6 +13,7 @@ import '../l10n/app_text.dart';
 import '../services/card_number_service.dart';
 import '../services/notification_service.dart';
 import '../widget/ccp_app_bar.dart';
+import '../widget/custom_card_selector.dart';
 import '../widget/pin_popup.dart';
 import '../widget/custom_confirm_dialog.dart';
 import 'withdraw_receipt_screen.dart';
@@ -58,6 +59,8 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
   double _lastKnownTotalBalance = 0;
   bool _hasLoadedBalance = false;
   bool _isSubmitting = false;
+  String? _selectedCardId;
+  List<_WithdrawSourceCardOption> _sourceCards = <_WithdrawSourceCardOption>[];
 
   final Color _brandColor = const Color(0xFF000DC0);
   final Color _bgColor = const Color(0xFFF8F9FE);
@@ -170,6 +173,129 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
     return formatter.format(value).replaceAll(',', '.');
   }
 
+  List<_WithdrawSourceCardOption> _buildSourceCards(
+    Map<String, dynamic> userData,
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+  ) {
+    double parseBalance(dynamic raw) {
+      if (raw is num) {
+        return raw.toDouble();
+      }
+      if (raw is String) {
+        return double.tryParse(raw) ?? 0;
+      }
+      return 0;
+    }
+
+    final bool hasVipCard = userData['hasVipCard'] == true;
+    final bool isStandardLocked = userData['is_standard_locked'] == true;
+    final bool isVipLocked = userData['is_vip_locked'] == true;
+
+    final Map<String, Map<String, dynamic>> byId =
+        <String, Map<String, dynamic>>{};
+    for (final QueryDocumentSnapshot<Map<String, dynamic>> doc in docs) {
+      byId[doc.id.toLowerCase()] = doc.data();
+    }
+
+    final String rawCard = CardNumberService.readStoredCardNumber(userData);
+    final String formattedCard = rawCard.isEmpty
+        ? '****'
+        : CardNumberService.formatCardNumber(rawCard);
+
+    final List<_WithdrawSourceCardOption> cards = <_WithdrawSourceCardOption>[];
+
+    if (!isStandardLocked) {
+      cards.add(
+        _WithdrawSourceCardOption(
+          id: 'standard',
+          title: AppText.text(context, 'card_standard'),
+          account: formattedCard,
+          balance: parseBalance(
+            (byId['standard'] ?? <String, dynamic>{})['balance'],
+          ),
+        ),
+      );
+    }
+
+    if (hasVipCard && !isVipLocked) {
+      cards.add(
+        _WithdrawSourceCardOption(
+          id: 'vip',
+          title: AppText.text(context, 'card_vip'),
+          account: formattedCard,
+          balance: parseBalance(
+            (byId['vip'] ?? <String, dynamic>{})['balance'],
+          ),
+        ),
+      );
+    }
+
+    return cards;
+  }
+
+  _WithdrawSourceCardOption? _findSelectedSourceCard() {
+    final String selected = (_selectedCardId ?? '').trim();
+    if (selected.isEmpty) {
+      return null;
+    }
+
+    for (final _WithdrawSourceCardOption option in _sourceCards) {
+      if (option.id == selected) {
+        return option;
+      }
+    }
+    return null;
+  }
+
+  void _syncSourceCards(List<_WithdrawSourceCardOption> nextOptions) {
+    final _WithdrawSourceCardOption? currentSelected =
+        _findSelectedSourceCard();
+    final bool hasCurrentSelected = nextOptions.any(
+      (_WithdrawSourceCardOption option) => option.id == currentSelected?.id,
+    );
+
+    final _WithdrawSourceCardOption? nextSelected = nextOptions.isEmpty
+        ? null
+        : hasCurrentSelected
+        ? nextOptions.firstWhere(
+            (_WithdrawSourceCardOption option) =>
+                option.id == currentSelected!.id,
+          )
+        : nextOptions.first;
+
+    bool optionsChanged = _sourceCards.length != nextOptions.length;
+    if (!optionsChanged) {
+      for (int i = 0; i < _sourceCards.length; i++) {
+        final _WithdrawSourceCardOption oldOption = _sourceCards[i];
+        final _WithdrawSourceCardOption newOption = nextOptions[i];
+        if (oldOption.id != newOption.id ||
+            oldOption.title != newOption.title ||
+            oldOption.account != newOption.account ||
+            oldOption.balance != newOption.balance) {
+          optionsChanged = true;
+          break;
+        }
+      }
+    }
+
+    final String? nextSelectedId = nextSelected?.id;
+    final double nextBalance = nextSelected?.balance ?? 0;
+
+    if (!optionsChanged &&
+        _selectedCardId == nextSelectedId &&
+        _lastKnownTotalBalance == nextBalance &&
+        _hasLoadedBalance) {
+      return;
+    }
+
+    setState(() {
+      _sourceCards = nextOptions;
+      _selectedCardId = nextSelectedId;
+      _lastKnownTotalBalance = nextBalance;
+      _hasLoadedBalance = true;
+    });
+  }
+
   void _onQuickSelect(int value) {
     setState(() {
       _selectedQuickAmount = value;
@@ -202,6 +328,7 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
   Future<_WithdrawReceiptData> _createWithdrawCodeAfterPin({
     required String uid,
     required int amount,
+    required String selectedCardId,
   }) async {
     double parseCardBalance(dynamic value) {
       if (value is num) {
@@ -308,46 +435,35 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
       );
       final double vipBalance = parseCardBalance(vipCardData['balance']);
 
-      double remaining = amount.toDouble();
-      double standardDeduction = 0;
-      double vipDeduction = 0;
+      final String normalizedCardId = selectedCardId.trim().toLowerCase();
+      final bool useStandard = normalizedCardId == 'standard';
+      final bool useVip = normalizedCardId == 'vip';
+      final bool selectedAvailable = useStandard
+          ? standardAvailable
+          : vipAvailable;
+      final double selectedBalance = useStandard ? standardBalance : vipBalance;
 
-      if (standardAvailable && remaining > 0) {
-        standardDeduction = remaining <= standardBalance
-            ? remaining
-            : standardBalance;
-        remaining -= standardDeduction;
+      if (!useStandard && !useVip) {
+        throw Exception(AppText.text(context, 'card_unavailable'));
       }
-
-      if (vipAvailable && remaining > 0) {
-        vipDeduction = remaining <= vipBalance ? remaining : vipBalance;
-        remaining -= vipDeduction;
+      if (!selectedAvailable) {
+        throw Exception(AppText.text(context, 'card_unavailable'));
       }
-
-      if (remaining > 0) {
+      if (selectedBalance < amount) {
         throw Exception(AppText.text(context, 'insufficient_balance'));
       }
 
-      if (standardDeduction > 0) {
+      if (useStandard) {
         transaction.set(standardCardRef, <String, dynamic>{
-          'balance': FieldValue.increment(-standardDeduction),
+          'balance': FieldValue.increment(-amount),
           'updatedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
-      }
-
-      if (vipDeduction > 0) {
+      } else {
         transaction.set(vipCardRef, <String, dynamic>{
-          'balance': FieldValue.increment(-vipDeduction),
+          'balance': FieldValue.increment(-amount),
           'updatedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
       }
-
-      transaction.set(userRef, <String, dynamic>{
-        'balance': FieldValue.increment(-amount),
-        'availableBalance': FieldValue.increment(-amount),
-        'totalBalance': FieldValue.increment(-amount),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
 
       transaction.set(withdrawalRef, <String, dynamic>{
         'uid': uid,
@@ -380,6 +496,7 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
       transaction.set(transactionRef, <String, dynamic>{
         'type': 'atm_withdrawal',
         'amount': amount,
+        'cardId': normalizedCardId,
         'status': 'success',
         'timestamp': FieldValue.serverTimestamp(),
         'timestamp_client': Timestamp.fromDate(createdAt),
@@ -431,6 +548,14 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
       return;
     }
 
+    final String selectedCardId = (_selectedCardId ?? '').trim();
+    if (selectedCardId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppText.text(context, 'select_source_card'))),
+      );
+      return;
+    }
+
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -448,7 +573,11 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
 
             try {
               final _WithdrawReceiptData receipt =
-                  await _createWithdrawCodeAfterPin(uid: uid, amount: amount);
+                  await _createWithdrawCodeAfterPin(
+                    uid: uid,
+                    amount: amount,
+                    selectedCardId: selectedCardId,
+                  );
 
               if (!mounted) {
                 return;
@@ -490,79 +619,17 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
   }
 
   Widget _buildAvailableBalanceValue() {
-    return StreamBuilder<UserProfileData?>(
-      stream: _profileStream,
-      initialData: UserFirestoreService.instance.latestProfile,
-      builder: (context, profileSnapshot) {
-        final UserProfileData? profile =
-            profileSnapshot.data ?? UserFirestoreService.instance.latestProfile;
-        final String? resolvedUserId = profile?.uid;
-
-        if (resolvedUserId == null || resolvedUserId.isEmpty) {
-          return _buildBalanceNumber(_lastKnownTotalBalance);
-        }
-
-        return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-          stream: FirebaseFirestore.instance
-              .collection('users')
-              .doc(resolvedUserId)
-              .snapshots(),
-          builder: (context, userSnapshot) {
-            final Map<String, dynamic> userData =
-                userSnapshot.data?.data() ?? <String, dynamic>{};
-
-            return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: FirebaseFirestore.instance
-                  .collection('users')
-                  .doc(resolvedUserId)
-                  .collection('cards')
-                  .snapshots(),
-              builder: (context, cardsSnapshot) {
-                if (cardsSnapshot.hasData) {
-                  final double updatedTotal = UserFirestoreService.instance
-                      .calculateAvailableBalance(
-                        userData: userData,
-                        cardDocs: cardsSnapshot.data!.docs,
-                      );
-
-                  if (updatedTotal != _lastKnownTotalBalance ||
-                      !_hasLoadedBalance) {
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (!mounted) {
-                        return;
-                      }
-                      setState(() {
-                        _lastKnownTotalBalance = updatedTotal;
-                        _hasLoadedBalance = true;
-                      });
-                    });
-                  }
-                }
-
-                if (cardsSnapshot.connectionState == ConnectionState.waiting &&
-                    !_hasLoadedBalance) {
-                  return const Text(
-                    '...',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  );
-                }
-
-                if ((cardsSnapshot.hasError || userSnapshot.hasError) &&
-                    !_hasLoadedBalance) {
-                  return _buildBalanceNumber(0);
-                }
-
-                return _buildBalanceNumber(_lastKnownTotalBalance);
-              },
-            );
-          },
-        );
-      },
-    );
+    if (!_hasLoadedBalance) {
+      return const Text(
+        '...',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 28,
+          fontWeight: FontWeight.w700,
+        ),
+      );
+    }
+    return _buildBalanceNumber(_lastKnownTotalBalance);
   }
 
   Widget _buildBalanceNumber(double totalBalance) {
@@ -600,55 +667,51 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
   }
 
   Widget _buildSourceCardText() {
-    return StreamBuilder<UserProfileData?>(
-      stream: _profileStream,
-      initialData: UserFirestoreService.instance.latestProfile,
-      builder: (context, profileSnapshot) {
-        final UserProfileData? profile =
-            profileSnapshot.data ?? UserFirestoreService.instance.latestProfile;
-        final String uid = (profile?.uid ?? _resolveUid()).trim();
+    final _WithdrawSourceCardOption? selected = _findSelectedSourceCard();
+    final String display =
+        selected?.account ?? AppText.text(context, 'loading');
 
-        if (uid.isEmpty) {
-          return Text(
-            AppText.text(context, 'loading'),
-            style: GoogleFonts.poppins(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.1,
-            ),
-          );
+    return Text(
+      display,
+      style: GoogleFonts.poppins(
+        color: Colors.white,
+        fontSize: 16,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 1.1,
+      ),
+    );
+  }
+
+  Widget _buildSourceCardSelector() {
+    final String uid = _resolveUid();
+    if (uid.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return CustomCardSelector(
+      uid: uid,
+      selectedCardId: _selectedCardId,
+      margin: const EdgeInsets.only(bottom: 14),
+      backgroundColor: Colors.white.withValues(alpha: 0.15),
+      textColor: Colors.white,
+      onChanged: (CustomCardSelection selection) {
+        final _WithdrawSourceCardOption synthetic = _WithdrawSourceCardOption(
+          id: selection.id,
+          title: selection.title,
+          account: selection.account,
+          balance: selection.balance,
+        );
+
+        if (!mounted) {
+          return;
         }
 
-        return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-          stream: FirebaseFirestore.instance
-              .collection('users')
-              .doc(uid)
-              .snapshots(),
-          builder: (context, userSnapshot) {
-            String display = AppText.text(context, 'loading');
-            if (userSnapshot.hasData) {
-              final Map<String, dynamic> userData =
-                  userSnapshot.data?.data() ?? <String, dynamic>{};
-              final String rawCard = CardNumberService.readStoredCardNumber(
-                userData,
-              );
-              if (rawCard.isNotEmpty) {
-                display = CardNumberService.formatCardNumber(rawCard);
-              }
-            }
-
-            return Text(
-              display,
-              style: GoogleFonts.poppins(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.1,
-              ),
-            );
-          },
-        );
+        setState(() {
+          _selectedCardId = selection.id;
+          _sourceCards = <_WithdrawSourceCardOption>[synthetic];
+          _lastKnownTotalBalance = selection.balance;
+          _hasLoadedBalance = true;
+        });
       },
     );
   }
@@ -720,6 +783,7 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
                   padding: const EdgeInsets.symmetric(vertical: 15),
                   child: Divider(color: Colors.white.withValues(alpha: 0.13)),
                 ),
+                _buildSourceCardSelector(),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.end,
@@ -1487,4 +1551,18 @@ class _WithdrawHistoryCardState extends State<_WithdrawHistoryCard> {
       ),
     );
   }
+}
+
+class _WithdrawSourceCardOption {
+  const _WithdrawSourceCardOption({
+    required this.id,
+    required this.title,
+    required this.account,
+    required this.balance,
+  });
+
+  final String id;
+  final String title;
+  final String account;
+  final double balance;
 }

@@ -20,7 +20,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        // Thi?t l?p font Poppins làm m?c d?nh toàn app
+        // Thiết lập font Poppins làm mặc định toàn app
         textTheme: GoogleFonts.poppinsTextTheme(),
       ),
       home: const ConfirmTransferScreen(),
@@ -37,6 +37,7 @@ class ConfirmTransferScreen extends StatelessWidget {
     this.recipientAccountName = '',
     this.recipientBankName = '',
     this.recipientBankId = '',
+    this.sourceCardId = 'standard',
   });
 
   final String amountText;
@@ -45,6 +46,7 @@ class ConfirmTransferScreen extends StatelessWidget {
   final String recipientAccountName;
   final String recipientBankName;
   final String recipientBankId;
+  final String sourceCardId;
 
   static const Color primaryBlue = Color(0xFF000DC0);
   static const Color pageBackground = Color(0xFFF6F8FF);
@@ -64,7 +66,7 @@ class ConfirmTransferScreen extends StatelessWidget {
   String _safeRecipientAccount(BuildContext context) {
     final String value = recipientAccountNumber.trim();
     if (value.isEmpty) {
-      return _t(context, 'Chua nh?p', 'Not provided');
+      return _t(context, 'Chưa nhập', 'Not provided');
     }
     return CardNumberService.formatCardNumber(value);
   }
@@ -77,7 +79,7 @@ class ConfirmTransferScreen extends StatelessWidget {
         final UserProfileData? profile =
             snapshot.data ?? UserFirestoreService.instance.latestProfile;
         final String senderName = snapshot.hasError
-            ? _t(context, 'Không t́m th?y user', 'User not found')
+            ? _t(context, 'Không tìm thấy người dùng', 'User not found')
             : ((profile?.fullname.isNotEmpty == true)
                   ? profile!.fullname
                   : _t(context, 'Khách hàng', 'Customer'));
@@ -86,7 +88,7 @@ class ConfirmTransferScreen extends StatelessWidget {
         if (uid.isEmpty) {
           return _buildAccountCard(
             name: senderName.toUpperCase(),
-            id: _t(context, 'Đang t?i...', 'Loading...'),
+            id: _t(context, 'Đang tải...', 'Loading...'),
             isSource: true,
           );
         }
@@ -97,7 +99,7 @@ class ConfirmTransferScreen extends StatelessWidget {
               .doc(uid)
               .snapshots(),
           builder: (context, userSnapshot) {
-            String sourceCardDisplay = _t(context, 'Đang t?i...', 'Loading...');
+            String sourceCardDisplay = _t(context, 'Đang tải...', 'Loading...');
             if (userSnapshot.hasData) {
               final Map<String, dynamic> userData =
                   userSnapshot.data?.data() ?? <String, dynamic>{};
@@ -174,13 +176,14 @@ class ConfirmTransferScreen extends StatelessWidget {
     required String recipientAccount,
     required String recipientName,
     required String transferContent,
+    required String selectedCardId,
   }) async {
     final String uid = _resolveUid();
     if (uid.isEmpty) {
       throw _TransferConfirmationException(
         _t(
           context,
-          'Không t́m th?y phiên dang nh?p h?p l?.',
+          'Không tìm thấy phiên đăng nhập hợp lệ.',
           'No valid signed-in session found.',
         ),
       );
@@ -191,7 +194,7 @@ class ConfirmTransferScreen extends StatelessWidget {
       throw _TransferConfirmationException(
         _t(
           context,
-          'S? ti?n ph?i l?n hon 0.',
+          'Số tiền phải lớn hơn 0.',
           'Amount must be greater than 0.',
         ),
       );
@@ -226,12 +229,12 @@ class ConfirmTransferScreen extends StatelessWidget {
     final DateTime transferCompletedAt = DateTime.now();
     final String accountNotFoundMessage = _t(
       context,
-      'Không t́m th?y thông tin tài kho?n.',
+      'Không tìm thấy thông tin tài khoản.',
       'Account information not found.',
     );
     final String insufficientBalanceMessage = _t(
       context,
-      'S? du không d?.',
+      'Số dư không đủ.',
       'Insufficient balance.',
     );
 
@@ -277,8 +280,13 @@ class ConfirmTransferScreen extends StatelessWidget {
             userData: userData,
           );
 
-      double standardBalance = _toDouble(standardCardData['balance']);
-      double vipBalance = _toDouble(vipCardData['balance']);
+      final String normalizedCardId = selectedCardId.trim().toLowerCase();
+      final bool useVip = normalizedCardId == 'vip';
+      final bool useStandard = normalizedCardId == 'standard';
+      final bool selectedAvailable = useVip ? vipAvailable : standardAvailable;
+      final double selectedBalance = useVip
+          ? _toDouble(vipCardData['balance'])
+          : _toDouble(standardCardData['balance']);
 
       final double currentBalance = UserFirestoreService.instance
           .calculateAvailableBalanceFromMaps(
@@ -290,46 +298,33 @@ class ConfirmTransferScreen extends StatelessWidget {
         throw _TransferConfirmationException(insufficientBalanceMessage);
       }
 
-      double remaining = amount;
-      double standardDeduction = 0;
-      double vipDeduction = 0;
-
-      if (standardAvailable) {
-        standardDeduction = remaining <= standardBalance
-            ? remaining
-            : standardBalance;
-        remaining -= standardDeduction;
+      if (!useStandard && !useVip) {
+        throw _TransferConfirmationException(
+          AppText.text(context, 'card_unavailable'),
+        );
       }
 
-      if (remaining > 0 && vipAvailable) {
-        vipDeduction = remaining <= vipBalance ? remaining : vipBalance;
-        remaining -= vipDeduction;
+      if (!selectedAvailable) {
+        throw _TransferConfirmationException(
+          AppText.text(context, 'card_unavailable'),
+        );
       }
 
-      if (remaining > 0) {
+      if (selectedBalance < amount) {
         throw _TransferConfirmationException(insufficientBalanceMessage);
       }
 
-      if (standardDeduction > 0) {
+      if (useStandard) {
         transaction.set(standardCardRef, <String, dynamic>{
-          'balance': FieldValue.increment(-standardDeduction),
+          'balance': FieldValue.increment(-amount),
           'updatedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
-      }
-
-      if (vipDeduction > 0) {
+      } else {
         transaction.set(vipCardRef, <String, dynamic>{
-          'balance': FieldValue.increment(-vipDeduction),
+          'balance': FieldValue.increment(-amount),
           'updatedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
       }
-
-      transaction.set(userRef, <String, dynamic>{
-        'balance': FieldValue.increment(-amount),
-        'availableBalance': FieldValue.increment(-amount),
-        'totalBalance': FieldValue.increment(-amount),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
 
       transaction.set(notificationRef, <String, dynamic>{
         'titleKey': 'notify_transfer_title',
@@ -366,6 +361,7 @@ class ConfirmTransferScreen extends StatelessWidget {
         'createdAt_client': Timestamp.fromDate(transferCompletedAt),
         'transactionCode': transferCode,
         'recipientName': recipientName,
+        'cardId': normalizedCardId,
         'toCardNumber': recipientAccount,
         'isNegative': true,
       });
@@ -395,19 +391,19 @@ class ConfirmTransferScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final String displayAmount = _formatAmount(amountText);
     final String displayContent = transferContent.trim().isEmpty
-        ? _t(context, 'CHUY?N TI?N', 'TRANSFER')
+        ? _t(context, 'CHUYỂN TIỀN', 'TRANSFER')
         : transferContent.trim();
     final String displayRecipientAccount = _safeRecipientAccount(context);
     final String displayRecipientName = _safeRecipientName().trim().isEmpty
-        ? _t(context, 'Không xác d?nh', 'Unknown')
+        ? _t(context, 'Không xác định', 'Unknown')
         : _safeRecipientName();
     final String displayRecipientBank = _safeRecipientBank().trim().isEmpty
-        ? _t(context, 'Không xác d?nh', 'Unknown')
+        ? _t(context, 'Không xác định', 'Unknown')
         : _safeRecipientBank();
     return Scaffold(
       backgroundColor: pageBackground,
       appBar: CCPAppBar(
-        title: _t(context, 'Xác nh?n chuy?n ti?n', 'Confirm transfer'),
+        title: _t(context, 'Xác nhận chuyển tiền', 'Confirm transfer'),
         backgroundColor: pageBackground,
         actions: [
           TextButton(
@@ -415,7 +411,7 @@ class ConfirmTransferScreen extends StatelessWidget {
               Navigator.of(context).popUntil((route) => route.isFirst);
             },
             child: Text(
-              _t(context, 'H?y', 'Cancel'),
+              _t(context, 'Hủy', 'Cancel'),
               style: GoogleFonts.poppins(
                 color: primaryBlue,
                 fontWeight: FontWeight.w700,
@@ -474,7 +470,7 @@ class ConfirmTransferScreen extends StatelessWidget {
                               Text(
                                 _t(
                                   context,
-                                  'S? ti?n chuy?n',
+                                  'Số tiền chuyển',
                                   'Transfer amount',
                                 ),
                                 style: GoogleFonts.poppins(
@@ -494,7 +490,7 @@ class ConfirmTransferScreen extends StatelessWidget {
                               Text(
                                 _t(
                                   context,
-                                  'Đă nh?p: $displayAmount',
+                                  'Đã nhập: $displayAmount',
                                   'Entered: $displayAmount',
                                 ),
                                 style: GoogleFonts.poppins(
@@ -520,14 +516,14 @@ class ConfirmTransferScreen extends StatelessWidget {
                       children: [
                         _buildSectionLabel(
                           context,
-                          _t(context, 'T? th?', 'From card'),
+                          _t(context, 'Từ thẻ', 'From card'),
                         ),
                         const SizedBox(height: 10),
                         _buildSourceAccountCard(context),
                         const SizedBox(height: 16),
                         _buildSectionLabel(
                           context,
-                          _t(context, 'Đ?n th?', 'To card'),
+                          _t(context, 'Đến thẻ', 'To card'),
                         ),
                         const SizedBox(height: 10),
                         _buildAccountCard(
@@ -539,7 +535,7 @@ class ConfirmTransferScreen extends StatelessWidget {
                         const SizedBox(height: 16),
                         _buildSectionLabel(
                           context,
-                          _t(context, 'N?i dung', 'Content'),
+                          _t(context, 'Nội dung', 'Content'),
                         ),
                         const SizedBox(height: 10),
                         Container(
@@ -580,7 +576,7 @@ class ConfirmTransferScreen extends StatelessWidget {
                                 child: Text(
                                   _t(
                                     context,
-                                    'Vui ḷng ki?m tra k? thông tin tru?c khi xác nh?n.',
+                                    'Vui lòng kiểm tra kỹ thông tin trước khi xác nhận.',
                                     'Please verify details carefully before confirming.',
                                   ),
                                   style: GoogleFonts.poppins(
@@ -613,7 +609,7 @@ class ConfirmTransferScreen extends StatelessWidget {
                         content: Text(
                           _t(
                             context,
-                            'Không t́m th?y tài kho?n d? xác th?c giao d?ch.',
+                            'Không tìm thấy tài khoản để xác thực giao dịch.',
                             'Account not found for transaction verification.',
                           ),
                         ),
@@ -637,6 +633,7 @@ class ConfirmTransferScreen extends StatelessWidget {
                             recipientAccount: recipientAccountNumber.trim(),
                             recipientName: displayRecipientName,
                             transferContent: displayContent,
+                            selectedCardId: sourceCardId,
                           );
                         } on _TransferConfirmationException catch (e) {
                           if (!context.mounted) {
@@ -658,7 +655,7 @@ class ConfirmTransferScreen extends StatelessWidget {
                               content: Text(
                                 _t(
                                   context,
-                                  'Đă x?y ra l?i không xác d?nh, vui ḷng th? l?i.',
+                                  'Đã xảy ra lỗi không xác định, vui lòng thử lại.',
                                   'An unexpected error occurred. Please try again.',
                                 ),
                               ),
@@ -679,7 +676,7 @@ class ConfirmTransferScreen extends StatelessWidget {
                   elevation: 0,
                 ),
                 child: Text(
-                  _t(context, 'Xác nh?n', 'Confirm'),
+                  _t(context, 'Xác nhận', 'Confirm'),
                   style: GoogleFonts.poppins(
                     color: Colors.white,
                     fontSize: 16,

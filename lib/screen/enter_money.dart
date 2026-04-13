@@ -13,6 +13,7 @@ import '../core/app_translations.dart';
 import '../services/user_firestore_service.dart';
 import '../l10n/app_text.dart';
 import '../widget/ccp_app_bar.dart';
+import '../widget/custom_card_selector.dart';
 import 'confirm_money.dart';
 
 void main() => runApp(const MyApp());
@@ -99,6 +100,7 @@ class _TransferScreenState extends State<TransferScreen> {
   double _availableBalance = 0;
   bool _hasAvailableBalanceSnapshot = false;
   bool _isFormattingAmountInput = false;
+  String? _selectedCardId;
 
   String _t(String vi, String en) => AppText.tr(context, vi, en);
 
@@ -163,7 +165,6 @@ class _TransferScreenState extends State<TransferScreen> {
   void initState() {
     super.initState();
     _applyIncomingPrefill();
-    _bindBalanceStreams();
     _fetchBanks();
   }
 
@@ -288,7 +289,7 @@ class _TransferScreenState extends State<TransferScreen> {
       });
     }
     // ignore: avoid_print
-    print('Đang t́m ki?m cho s? th?: $accountNumber');
+    print('Đang tìm kiếm cho số thẻ: $accountNumber');
 
     _lookupDebounce?.cancel();
     _lookupDebounce = Timer(const Duration(milliseconds: 500), () {
@@ -401,7 +402,7 @@ class _TransferScreenState extends State<TransferScreen> {
     final String apiKey = dotenv.get('VIETQR_API_KEY', fallback: '');
 
     // ignore: avoid_print
-    print('Ki?m tra .env: ${dotenv.env.keys}');
+    print('Kiểm tra .env: ${dotenv.env.keys}');
     // ignore: avoid_print
     print('Client ID: $clientId');
 
@@ -431,7 +432,7 @@ class _TransferScreenState extends State<TransferScreen> {
       setState(() {
         _isLookingUpRecipient = true;
         _recipientLookupMessage = _t(
-          'Đang ki?m tra tên ch? th?...',
+          'Đang kiểm tra tên chủ thẻ...',
           'Looking up card holder name...',
         );
       });
@@ -442,7 +443,7 @@ class _TransferScreenState extends State<TransferScreen> {
           SnackBar(
             content: Text(
               _t(
-                'L?i c?u h́nh API (thi?u Key)',
+                'Lỗi cấu hình API (thiếu Key)',
                 'API configuration error (missing key)',
               ),
             ),
@@ -520,17 +521,17 @@ class _TransferScreenState extends State<TransferScreen> {
         _recipientName = accountName.toUpperCase();
         if (_recipientName.isEmpty) {
           _recipientLookupMessage = _t(
-            'Không t́m th?y tên ch? th? cho s? này.',
+            'Không tìm thấy tên chủ thẻ cho số này.',
             'Cannot find card holder name for this card number.',
           );
         } else if (fromFirestoreFallback) {
           _recipientLookupMessage = _t(
-            'Đă dùng d? li?u tên trong h? th?ng.',
+            'Đã dùng dữ liệu tên trong hệ thống.',
             'Using account name from internal system.',
           );
         } else {
           _recipientLookupMessage = _t(
-            'Đă xác th?c tên ch? th?.',
+            'Đã xác thực tên chủ thẻ.',
             'Card holder verified.',
           );
         }
@@ -551,11 +552,11 @@ class _TransferScreenState extends State<TransferScreen> {
         _recipientName = fallbackName.toUpperCase();
         _recipientLookupMessage = _recipientName.isEmpty
             ? _t(
-                'VietQR timeout và không có d? li?u d? pḥng.',
+                'VietQR timeout và không có dữ liệu dự phòng.',
                 'VietQR timeout and no fallback data found.',
               )
             : _t(
-                'VietQR timeout, dă dùng d? li?u h? th?ng.',
+                'VietQR timeout, đã dùng dữ liệu hệ thống.',
                 'VietQR timeout, using internal system data.',
               );
       });
@@ -574,11 +575,11 @@ class _TransferScreenState extends State<TransferScreen> {
         _recipientName = fallbackName.toUpperCase();
         _recipientLookupMessage = _recipientName.isEmpty
             ? _t(
-                'Không tra c?u du?c t? VietQR và cung không th?y trong h? th?ng.',
+                'Không tra cứu được từ VietQR và cũng không thấy trong hệ thống.',
                 'Lookup failed from VietQR and no matching user in system.',
               )
             : _t(
-                'Không tra c?u du?c VietQR, dă dùng d? li?u h? th?ng.',
+                'Không tra cứu được VietQR, đã dùng dữ liệu hệ thống.',
                 'VietQR lookup failed, using internal system data.',
               );
       });
@@ -597,34 +598,37 @@ class _TransferScreenState extends State<TransferScreen> {
   }
 
   void _bindBalanceStreams() {
+    // Kept for backward compatibility. Balance now follows selected source card.
+  }
+
+  Widget _buildSourceCardSelector() {
     final String? uid = _resolveUid();
     if (uid == null || uid.isEmpty) {
-      return;
+      return const SizedBox.shrink();
     }
 
-    _availableBalanceSub = UserFirestoreService.instance
-        .availableBalanceStream(uid)
-        .listen(
-          (double balance) {
-            if (!mounted) {
-              return;
-            }
+    return CustomCardSelector(
+      uid: uid,
+      selectedCardId: _selectedCardId,
+      onChanged: (CustomCardSelection selection) {
+        if (_selectedCardId == selection.id &&
+            _availableBalance == selection.balance &&
+            _hasAvailableBalanceSnapshot) {
+          return;
+        }
 
-            setState(() {
-              _availableBalance = balance;
-              _hasAvailableBalanceSnapshot = true;
-            });
-            _validateAmount(_amountController.text);
-          },
-          onError: (_) {
-            if (!mounted) {
-              return;
-            }
-            setState(() {
-              _hasAvailableBalanceSnapshot = true;
-            });
-          },
-        );
+        if (!mounted) {
+          return;
+        }
+
+        setState(() {
+          _selectedCardId = selection.id;
+          _availableBalance = selection.balance;
+          _hasAvailableBalanceSnapshot = true;
+        });
+        _validateAmount(_amountController.text);
+      },
+    );
   }
 
   @override
@@ -645,7 +649,7 @@ class _TransferScreenState extends State<TransferScreen> {
         _amountError = null;
       } else if (amount <= 0) {
         _amountError = _t(
-          'S? ti?n ph?i l?n hon 0',
+          'Số tiền phải lớn hơn 0',
           'Amount must be greater than 0',
         );
       } else if (_hasAvailableBalanceSnapshot && amount > _availableBalance) {
@@ -785,12 +789,19 @@ class _TransferScreenState extends State<TransferScreen> {
     final String amountRaw = _amountController.text.trim();
     final double amount = _parseAmount(amountRaw);
 
+    if ((_selectedCardId ?? '').isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppText.text(context, 'select_source_card'))),
+      );
+      return;
+    }
+
     if (accountNumber.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             _t(
-              'S? th? ngu?i nh?n không du?c d? tr?ng.',
+              'Số thẻ người nhận không được để trống.',
               'Recipient card number cannot be empty.',
             ),
           ),
@@ -804,14 +815,14 @@ class _TransferScreenState extends State<TransferScreen> {
     if (amount <= 0) {
       setState(() {
         _amountError = _t(
-          'S? ti?n ph?i l?n hon 0',
+          'Số tiền phải lớn hơn 0',
           'Amount must be greater than 0',
         );
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            _t('S? ti?n ph?i l?n hon 0', 'Amount must be greater than 0'),
+            _t('Số tiền phải lớn hơn 0', 'Amount must be greater than 0'),
           ),
           behavior: SnackBarBehavior.floating,
           backgroundColor: Colors.red,
@@ -876,7 +887,7 @@ class _TransferScreenState extends State<TransferScreen> {
           SnackBar(
             content: Text(
               _t(
-                'Không th? luu nhanh ngu?i nh?n lúc này, b?n v?n có th? ti?p t?c giao d?ch.',
+                'Không thể lưu nhanh người nhận lúc này, bạn vẫn có thể tiếp tục giao dịch.',
                 'Unable to save recipient quickly right now, you can still continue.',
               ),
             ),
@@ -905,6 +916,7 @@ class _TransferScreenState extends State<TransferScreen> {
           recipientAccountName: recipientName,
           recipientBankName: recipientBankName,
           recipientBankId: recipientBankId,
+          sourceCardId: _selectedCardId ?? 'standard',
         ),
       ),
     );
@@ -947,7 +959,7 @@ class _TransferScreenState extends State<TransferScreen> {
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    _t('Ch?n ngân hàng', 'Select bank'),
+                    _t('Chọn ngân hàng', 'Select bank'),
                     style: GoogleFonts.poppins(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
@@ -971,7 +983,7 @@ class _TransferScreenState extends State<TransferScreen> {
                           children: [
                             Text(
                               _t(
-                                'Không t?i du?c danh sách ngân hàng.',
+                                'Không tải được danh sách ngân hàng.',
                                 'Unable to load banks.',
                               ),
                               style: GoogleFonts.poppins(
@@ -986,7 +998,7 @@ class _TransferScreenState extends State<TransferScreen> {
                                 _fetchBanks();
                               },
                               child: Text(
-                                _t('T?i l?i', 'Retry'),
+                                _t('Tải lại', 'Retry'),
                                 style: GoogleFonts.poppins(
                                   color: primaryBlue,
                                   fontWeight: FontWeight.w600,
@@ -1138,7 +1150,7 @@ class _TransferScreenState extends State<TransferScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _t('Tên ngu?i nh?n', 'Recipient name'),
+                  _t('Tên người nhận', 'Recipient name'),
                   style: GoogleFonts.poppins(
                     fontSize: 10,
                     color: const Color(0xFF7A8297),
@@ -1188,8 +1200,8 @@ class _TransferScreenState extends State<TransferScreen> {
               ),
               child: Text(
                 _isSaveContactPressed
-                    ? _t('? Đă luu', '? Saved')
-                    : _t('+ Luu', '+ Save'),
+                    ? _t('Đã lưu', 'Saved')
+                    : _t('+ Lưu', '+ Save'),
                 style: GoogleFonts.poppins(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
@@ -1236,7 +1248,7 @@ class _TransferScreenState extends State<TransferScreen> {
 
     if (uid == null || uid.isEmpty) {
       return Text(
-        _t('S? du kh? d?ng: --', 'Available balance: --'),
+        _t('Số dư khả dụng: --', 'Available balance: --'),
         style: GoogleFonts.poppins(
           fontSize: 12,
           color: const Color(0xFF8A90A3),
@@ -1247,7 +1259,7 @@ class _TransferScreenState extends State<TransferScreen> {
 
     if (!_hasAvailableBalanceSnapshot) {
       return Text(
-        _t('S? du kh? d?ng: --', 'Available balance: --'),
+        _t('Số dư khả dụng: --', 'Available balance: --'),
         style: GoogleFonts.poppins(
           fontSize: 12,
           color: const Color(0xFF8A90A3),
@@ -1257,7 +1269,7 @@ class _TransferScreenState extends State<TransferScreen> {
     }
 
     return Text(
-      '${_t('S? du kh? d?ng', 'Available balance')}: ${_formatCurrency(_availableBalance)}',
+      '${_t('Số dư khả dụng', 'Available balance')}: ${_formatCurrency(_availableBalance)}',
       style: GoogleFonts.poppins(
         fontSize: 12,
         color: const Color(0xFF5E667F),
@@ -1271,7 +1283,7 @@ class _TransferScreenState extends State<TransferScreen> {
     return Scaffold(
       backgroundColor: pageBackground,
       appBar: CCPAppBar(
-        title: _t('Chuy?n ti?n', 'Transfer'),
+        title: _t('Chuyển tiền', 'Transfer'),
         backgroundColor: pageBackground,
       ),
       body: SafeArea(
@@ -1300,7 +1312,7 @@ class _TransferScreenState extends State<TransferScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            _t('Chuy?n d?n', 'Transfer to'),
+                            _t('Chuyển đến', 'Transfer to'),
                             style: GoogleFonts.poppins(
                               fontSize: 24,
                               fontWeight: FontWeight.w700,
@@ -1351,7 +1363,7 @@ class _TransferScreenState extends State<TransferScreen> {
                                             children: [
                                               Text(
                                                 _t(
-                                                  'Ngân hàng th? hu?ng',
+                                                  'Ngân hàng thụ hưởng',
                                                   'Beneficiary bank',
                                                 ),
                                                 style: GoogleFonts.poppins(
@@ -1366,7 +1378,7 @@ class _TransferScreenState extends State<TransferScreen> {
                                               Text(
                                                 _selectedBank == null
                                                     ? _t(
-                                                        'Ch?n ngân hàng',
+                                                        'Chọn ngân hàng',
                                                         'Select bank',
                                                       )
                                                     : (_selectedBank!.shortName
@@ -1434,7 +1446,7 @@ class _TransferScreenState extends State<TransferScreen> {
                                         ],
                                         decoration: InputDecoration(
                                           hintText: _t(
-                                            'Nh?p s? th?',
+                                            'Nhập số thẻ',
                                             'Enter card number',
                                           ),
                                           hintStyle: GoogleFonts.poppins(
@@ -1516,7 +1528,7 @@ class _TransferScreenState extends State<TransferScreen> {
                         children: [
                           Text(
                             _t(
-                              'Thông tin giao d?ch',
+                              'Thông tin giao dịch',
                               'Transaction information',
                             ),
                             style: GoogleFonts.poppins(
@@ -1526,6 +1538,8 @@ class _TransferScreenState extends State<TransferScreen> {
                             ),
                           ),
                           const SizedBox(height: 6),
+                          _buildSourceCardSelector(),
+                          const SizedBox(height: 8),
                           Row(
                             children: [
                               const Icon(
@@ -1563,7 +1577,7 @@ class _TransferScreenState extends State<TransferScreen> {
                               FilteringTextInputFormatter.digitsOnly,
                             ],
                             decoration: InputDecoration(
-                              hintText: _t('Nh?p s? ti?n', 'Enter amount'),
+                              hintText: _t('Nhập số tiền', 'Enter amount'),
                               hintStyle: GoogleFonts.poppins(
                                 color: const Color(0xFFA1A8BC),
                                 fontSize: 18,
@@ -1665,7 +1679,7 @@ class _TransferScreenState extends State<TransferScreen> {
                             maxLines: 3,
                             keyboardType: TextInputType.text,
                             decoration: InputDecoration(
-                              hintText: _t('Nh?p l?i nh?n', 'Enter message'),
+                              hintText: _t('Nhập lời nhắn', 'Enter message'),
                               hintStyle: GoogleFonts.poppins(
                                 color: const Color(0xFF9AA1B5),
                                 fontSize: 13,
@@ -1738,7 +1752,7 @@ class _TransferScreenState extends State<TransferScreen> {
                           ),
                         )
                       : Text(
-                          _t('Ti?p t?c', 'Continue'),
+                          _t('Tiếp tục', 'Continue'),
                           style: GoogleFonts.poppins(
                             color: Colors.white,
                             fontSize: 16,
