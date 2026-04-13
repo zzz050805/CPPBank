@@ -13,6 +13,7 @@ import 'package:doan_nganhang/screen/setting_screen.dart';
 
 import 'login.dart';
 import 'search_screen.dart';
+import '../widget/custom_confirm_dialog.dart';
 
 class MainTabShell extends StatefulWidget {
   const MainTabShell({super.key, this.initialIndex = 0});
@@ -27,10 +28,7 @@ class _MainTabShellState extends State<MainTabShell> {
   late final PageController _pageController;
   late int _currentIndex;
   late final List<Widget> _pages;
-  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
-  _lockStatusSubscription;
   StreamSubscription<UserProfileData?>? _profileSubscription;
-  String _lockListeningUid = '';
   bool _isHandlingLockFlow = false;
 
   String _t(String vi, String en) => AppText.tr(context, vi, en);
@@ -51,13 +49,16 @@ class _MainTabShellState extends State<MainTabShell> {
     ];
     _profileSubscription = UserFirestoreService.instance
         .currentUserProfileStream()
-        .listen((_) => _startLockStatusListener());
-    _startLockStatusListener();
+        .listen((_) {
+          if (!mounted) {
+            return;
+          }
+          setState(() {});
+        });
   }
 
   @override
   void dispose() {
-    _lockStatusSubscription?.cancel();
     _profileSubscription?.cancel();
     _pageController.dispose();
     super.dispose();
@@ -83,69 +84,12 @@ class _MainTabShellState extends State<MainTabShell> {
     return '';
   }
 
-  void _startLockStatusListener() {
-    final String uid = _resolveUid();
-    if (uid.isEmpty) {
-      return;
-    }
-
-    if (_lockListeningUid == uid && _lockStatusSubscription != null) {
-      return;
-    }
-
-    _lockListeningUid = uid;
-
-    _lockStatusSubscription?.cancel();
-    _lockStatusSubscription = FirebaseFirestore.instance
-        .collection('users')
-        .doc(uid)
-        .snapshots()
-        .listen((DocumentSnapshot<Map<String, dynamic>> snapshot) {
-          if (!mounted || _isHandlingLockFlow || !snapshot.exists) {
-            return;
-          }
-
-          final Map<String, dynamic> data =
-              snapshot.data() ?? <String, dynamic>{};
-          final bool isLocked = data['isLocked'] == true;
-          final String role = (data['role'] ?? 'user').toString().toLowerCase();
-
-          if (!isLocked || role == 'admin') {
-            return;
-          }
-
-          _handleAccountLocked();
-        });
-  }
-
   Future<void> _handleAccountLocked() async {
     if (!mounted || _isHandlingLockFlow) {
       return;
     }
 
     _isHandlingLockFlow = true;
-
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          title: Text(_t('Thông báo', 'Notice')),
-          content: Text(
-            _t('Tài khoản bạn đã bị khóa', 'Your account has been locked'),
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: Text(_t('Đóng', 'Close')),
-            ),
-          ],
-        );
-      },
-    );
-
-    _lockStatusSubscription?.cancel();
-    _lockStatusSubscription = null;
 
     await FirebaseAuth.instance.signOut();
     UserFirestoreService.instance.setFallbackDocId(null);
@@ -155,9 +99,109 @@ class _MainTabShellState extends State<MainTabShell> {
       return;
     }
 
+    await showCustomConfirmDialog(
+      context: context,
+      barrierDismissible: false,
+      showCancelButton: false,
+      confirmText: AppText.text(context, 'btn_understand'),
+      confirmColor: const Color(0xFF000DC0),
+      title: AppText.text(context, 'account_locked_title'),
+      message: AppText.text(context, 'account_locked_msg'),
+      onConfirm: () async {},
+    );
+
+    if (!mounted) {
+      return;
+    }
+
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginScreen()),
       (Route<dynamic> route) => false,
+    );
+  }
+
+  bool _isUserLocked(Map<String, dynamic> data) {
+    return data['is_locked'] == true || data['isLocked'] == true;
+  }
+
+  Widget _buildShellBody() {
+    return Stack(
+      children: [
+        PageView(
+          controller: _pageController,
+          onPageChanged: (index) {
+            setState(() {
+              _currentIndex = index;
+            });
+          },
+          children: _pages
+              .map((page) => _KeepAlivePage(child: page))
+              .toList(growable: false),
+        ),
+        if (_currentIndex != 2)
+          Positioned(
+            bottom: 20,
+            left: 20,
+            right: 20,
+            child: Container(
+              height: 60,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(30),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.08),
+                    blurRadius: 15,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildNavItem(Icons.home, _t('Trang chính', 'Home'), 0),
+                  _buildNavItem(Icons.search, _t('Tìm kiếm', 'Search'), 1),
+                  _buildNavItem(Icons.chat_bubble_outline, '', 2),
+                  _buildNavItem(Icons.settings_outlined, '', 3),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildRealtimeLockGuard({required Widget child}) {
+    final String uid = _resolveUid();
+    if (uid.isEmpty) {
+      return child;
+    }
+
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .snapshots(),
+      builder:
+          (
+            BuildContext context,
+            AsyncSnapshot<DocumentSnapshot<Map<String, dynamic>>> snapshot,
+          ) {
+            final Map<String, dynamic> data =
+                snapshot.data?.data() ?? <String, dynamic>{};
+            final bool isLocked = _isUserLocked(data);
+            final String role = (data['role'] ?? 'user')
+                .toString()
+                .toLowerCase();
+
+            if (isLocked && role != 'admin' && !_isHandlingLockFlow) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _handleAccountLocked();
+              });
+            }
+
+            return child;
+          },
     );
   }
 
@@ -185,50 +229,7 @@ class _MainTabShellState extends State<MainTabShell> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FE),
-      body: Stack(
-        children: [
-          PageView(
-            controller: _pageController,
-            onPageChanged: (index) {
-              setState(() {
-                _currentIndex = index;
-              });
-            },
-            children: _pages
-                .map((page) => _KeepAlivePage(child: page))
-                .toList(growable: false),
-          ),
-          if (_currentIndex != 2)
-            Positioned(
-              bottom: 20,
-              left: 20,
-              right: 20,
-              child: Container(
-                height: 60,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(30),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.08),
-                      blurRadius: 15,
-                      offset: const Offset(0, 5),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _buildNavItem(Icons.home, _t('Trang chính', 'Home'), 0),
-                    _buildNavItem(Icons.search, _t('Tìm kiếm', 'Search'), 1),
-                    _buildNavItem(Icons.chat_bubble_outline, '', 2),
-                    _buildNavItem(Icons.settings_outlined, '', 3),
-                  ],
-                ),
-              ),
-            ),
-        ],
-      ),
+      body: _buildRealtimeLockGuard(child: _buildShellBody()),
     );
   }
 

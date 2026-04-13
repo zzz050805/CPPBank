@@ -346,6 +346,7 @@ class TransactionDetailPopup {
         return Icons.swap_horiz_rounded;
       case 'shopping':
         return Icons.shopping_bag_rounded;
+      case 'phone_topup':
       case 'phone_recharge':
       default:
         return Icons.phone_android_rounded;

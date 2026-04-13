@@ -118,16 +118,17 @@ class _NotificationScreenState extends State<NotificationScreen> {
         .toString()
         .trim()
         .toLowerCase();
-    if (explicit == 'phone_recharge' ||
+    if (explicit == 'phone_topup' ||
+        explicit == 'phone_recharge' ||
         explicit == 'withdraw' ||
         explicit == 'transfer' ||
         explicit == 'bill_payment' ||
         explicit == 'shopping') {
-      return explicit;
+      return explicit == 'phone_recharge' ? 'phone_topup' : explicit;
     }
 
-    if (data['phoneNumber'] != null) {
-      return 'phone_recharge';
+    if (data['phoneNumber'] != null || data['phone'] != null) {
+      return 'phone_topup';
     }
     if (data['withdrawCode'] != null) {
       return 'withdraw';
@@ -258,10 +259,23 @@ class _NotificationScreenState extends State<NotificationScreen> {
       };
     }
 
+    if (bodyKey == 'notify_topup_body' ||
+        bodyKey == 'notify_phone_recharge_body') {
+      final String phone =
+          (data['phone'] ?? data['phoneNumber'] ?? data['targetAccount'] ?? '')
+              .toString()
+              .trim();
+      return <String, String>{
+        if (amountText.isNotEmpty) 'amount': amountText,
+        if (phone.isNotEmpty) 'phone': phone,
+      };
+    }
+
     return <String, String>{};
   }
 
   String _resolveNotificationTitle(Map<String, dynamic> data) {
+    final String type = (data['type'] ?? '').toString().trim().toLowerCase();
     final String fallbackRaw = (data['title'] ?? '').toString().trim();
     final String fallback = fallbackRaw.isEmpty
         ? AppText.text(context, 'notification_default_title')
@@ -269,6 +283,9 @@ class _NotificationScreenState extends State<NotificationScreen> {
 
     String titleKey = (data['titleKey'] ?? '').toString().trim();
     if (titleKey.isEmpty) {
+      if (type == 'phone_topup' || type == 'phone_recharge') {
+        return AppText.text(context, 'notify_topup_title');
+      }
       return fallback;
     }
 
@@ -285,6 +302,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
   }
 
   String _resolveNotificationBody(Map<String, dynamic> data) {
+    final String type = (data['type'] ?? '').toString().trim().toLowerCase();
     final String fallbackRaw = (data['body'] ?? '').toString().trim();
     final String fallback = fallbackRaw.isEmpty
         ? AppText.text(context, 'notification_no_description')
@@ -292,6 +310,26 @@ class _NotificationScreenState extends State<NotificationScreen> {
 
     String bodyKey = (data['bodyKey'] ?? '').toString().trim();
     if (bodyKey.isEmpty) {
+      if (type == 'phone_topup' || type == 'phone_recharge') {
+        final String amountText = _readAmount(data['amount']) > 0
+            ? '${_formatAmount(_readAmount(data['amount']))} VND'
+            : (data['amountText'] ?? '').toString().trim();
+        final String phone =
+            (data['phone'] ??
+                    data['phoneNumber'] ??
+                    data['targetAccount'] ??
+                    '')
+                .toString()
+                .trim();
+        return AppText.textWithParams(
+          context,
+          'notify_topup_body',
+          <String, String>{
+            if (amountText.isNotEmpty) 'amount': amountText,
+            if (phone.isNotEmpty) 'phone': phone,
+          },
+        );
+      }
       return fallback;
     }
 

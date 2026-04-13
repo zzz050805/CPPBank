@@ -122,5 +122,8 @@
   "logout_failed": "Không thể đăng xuất. Vui lòng thử lại.",
   "select_language": "Chọn ngôn ngữ",
   "language_vietnamese": "Tiếng Việt",
-  "language_english": "English"
+  "language_english": "English",
+  "account_locked_title": "Tài khoản bị khóa",
+  "account_locked_msg": "Tài khoản của bạn đã bị Quản lý khóa. Vui lòng liên hệ bộ phận hỗ trợ.",
+  "btn_understand": "Đã hiểu"
 }

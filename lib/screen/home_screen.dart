@@ -285,11 +285,13 @@ class _HomeScreenState extends State<HomeScreen> {
     );
     final String fallback = rawTitle.isNotEmpty
         ? rawTitle
-        : (type == 'uu_dai'
-              ? _t('Ưu đãi mới', 'New offer')
-              : (type == 'new_service'
-                    ? AppText.text(context, 'notify_new_service_title')
-                    : defaultTitle));
+        : ((type == 'phone_topup' || type == 'phone_recharge')
+              ? AppText.text(context, 'notify_topup_title')
+              : (type == 'uu_dai'
+                    ? _t('Ưu đãi mới', 'New offer')
+                    : (type == 'new_service'
+                          ? AppText.text(context, 'notify_new_service_title')
+                          : defaultTitle)));
 
     String titleKey = (data['titleKey'] ?? '').toString().trim();
     if (titleKey.isEmpty) {
@@ -325,15 +327,32 @@ class _HomeScreenState extends State<HomeScreen> {
     );
     final String fallback = rawBody.isNotEmpty
         ? rawBody
-        : (type == 'uu_dai'
-              ? _t('Bạn vừa nhận được ưu đãi mới.', 'You received a new offer.')
-              : (type == 'new_service'
-                    ? AppText.textWithParams(
-                        context,
-                        'notify_new_service_body',
-                        <String, String>{'serviceName': serviceName},
+        : ((type == 'phone_topup' || type == 'phone_recharge')
+              ? AppText.textWithParams(context, 'notify_topup_body', <
+                  String,
+                  String
+                >{
+                  'amount': _readNotificationAmountValue(data['amount']) > 0
+                      ? '${_formatCurrency(_readNotificationAmountValue(data['amount']).toDouble())} VND'
+                      : (data['amountText'] ?? '').toString().trim(),
+                  'phone': _firstNonEmpty(<dynamic>[
+                    data['phone'],
+                    data['phoneNumber'],
+                    data['targetAccount'],
+                  ]),
+                })
+              : (type == 'uu_dai'
+                    ? _t(
+                        'Bạn vừa nhận được ưu đãi mới.',
+                        'You received a new offer.',
                       )
-                    : defaultBody));
+                    : (type == 'new_service'
+                          ? AppText.textWithParams(
+                              context,
+                              'notify_new_service_body',
+                              <String, String>{'serviceName': serviceName},
+                            )
+                          : defaultBody)));
 
     String bodyKey = (data['bodyKey'] ?? '').toString().trim();
     if (bodyKey.isEmpty) {
@@ -364,6 +383,7 @@ class _HomeScreenState extends State<HomeScreen> {
         if (amount.isNotEmpty) 'amount': amount,
         if (receiverName.isNotEmpty) 'name': receiverName,
         if (receiverName.isNotEmpty) 'receiverName': receiverName,
+        if (receiverName.isNotEmpty) 'phone': receiverName,
         if (serviceName.isNotEmpty) 'service': serviceName,
         if (serviceName.isNotEmpty) 'serviceName': serviceName,
       };
@@ -391,6 +411,8 @@ class _HomeScreenState extends State<HomeScreen> {
         type == 'promotion' ||
         type == 'shopping_discount' ||
         type == 'new_service' ||
+        type == 'phone_topup' ||
+        type == 'phone_recharge' ||
         type == 'transfer' ||
         type == 'withdraw' ||
         type == 'shopping' ||
@@ -978,6 +1000,7 @@ class _HomeScreenState extends State<HomeScreen> {
         return Icons.receipt_long_rounded;
       case 'shopping':
         return Icons.shopping_bag_rounded;
+      case 'phone_topup':
       case 'phone_recharge':
       default:
         return Icons.phone_android_rounded;
@@ -1006,8 +1029,9 @@ class _HomeScreenState extends State<HomeScreen> {
       case 'shopping':
         type = 'shopping';
         break;
+      case 'phone_topup':
       case 'phone_recharge':
-        type = 'phone_recharge';
+        type = 'phone_topup';
         break;
       default:
         return null;
@@ -1108,8 +1132,21 @@ class _HomeScreenState extends State<HomeScreen> {
           ? _t('Mã hóa đơn chưa xác định', 'Unknown bill id')
           : '${AppText.customerCode(context)}: $customerCode';
     } else {
-      title = _t('Nạp ĐT', 'Top-up');
-      subtitle = _t('Nạp điện thoại', 'Phone recharge');
+      final String provider = _firstNonEmpty(<dynamic>[
+        data['network'],
+        data['provider'],
+      ]);
+      final String phone = _firstNonEmpty(<dynamic>[
+        data['phone'],
+        data['phoneNumber'],
+        data['targetAccount'],
+      ]);
+      title = provider.isEmpty
+          ? _t('Nạp ĐT', 'Top-up')
+          : '${_t('Nạp ĐT', 'Top-up')} $provider';
+      subtitle = phone.isEmpty
+          ? _t('Nạp điện thoại', 'Phone recharge')
+          : '${_t('SĐT', 'Phone')}: $phone';
     }
 
     return _HomeTransactionModel(

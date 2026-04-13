@@ -433,6 +433,9 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
     final DocumentReference<Map<String, dynamic>> notificationRef = userRef
         .collection('notifications')
         .doc();
+    final DocumentReference<Map<String, dynamic>> transactionRef = userRef
+        .collection('transactions')
+        .doc();
 
     await firestore.runTransaction((Transaction transaction) async {
       final DocumentSnapshot<Map<String, dynamic>> userDoc = await transaction
@@ -563,6 +566,22 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
         'status': 'success',
         'isNegative': true,
         'isRead': false,
+      });
+
+      transaction.set(transactionRef, <String, dynamic>{
+        'type': 'shopping',
+        'amount': widget.selectedAmount,
+        'status': 'success',
+        'timestamp': FieldValue.serverTimestamp(),
+        'timestamp_client': Timestamp.fromDate(now),
+        'createdAt': FieldValue.serverTimestamp(),
+        'createdAt_client': Timestamp.fromDate(now),
+        'serviceName': serviceName,
+        'targetAccount': targetAccount,
+        'transactionCode': transactionCode,
+        'cardId': selectedCardId,
+        'relatedId': shoppingRef.id,
+        'isNegative': true,
       });
     });
 

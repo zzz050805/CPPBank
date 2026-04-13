@@ -122,5 +122,8 @@
   "logout_failed": "Unable to log out. Please try again.",
   "select_language": "Choose language",
   "language_vietnamese": "Vietnamese",
-  "language_english": "English"
+  "language_english": "English",
+  "account_locked_title": "Account locked",
+  "account_locked_msg": "Your account has been locked by the manager. Please contact support.",
+  "btn_understand": "Understood"
 }

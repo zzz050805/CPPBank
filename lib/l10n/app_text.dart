@@ -283,6 +283,7 @@ class AppText {
     },
     'btn_yes': <String, String>{'vi': 'Có', 'en': 'Yes'},
     'btn_no': <String, String>{'vi': 'Không', 'en': 'No'},
+    'btn_understand': <String, String>{'vi': 'Đã hiểu', 'en': 'Understood'},
     'btn_cancel': <String, String>{'vi': 'Hủy', 'en': 'Cancel'},
     'btn_delete': <String, String>{'vi': 'Xóa', 'en': 'Delete'},
     'action_confirm': <String, String>{'vi': 'Xác nhận', 'en': 'Confirm'},
@@ -331,6 +332,91 @@ class AppText {
     'notification_no_description': <String, String>{
       'vi': 'Không có mô tả',
       'en': 'No description',
+    },
+    'account_locked_title': <String, String>{
+      'vi': 'Tài khoản bị khóa',
+      'en': 'Account locked',
+    },
+    'account_locked_msg': <String, String>{
+      'vi':
+          'Tài khoản của bạn đã bị Quản lý khóa. Vui lòng liên hệ bộ phận hỗ trợ.',
+      'en':
+          'Your account has been locked by the manager. Please contact support.',
+    },
+    'customer_label': <String, String>{'vi': 'Khách hàng', 'en': 'Customer'},
+    'topup_confirm_title': <String, String>{
+      'vi': 'Xác nhận nạp tiền điện thoại',
+      'en': 'Confirm phone top-up',
+    },
+    'topup_receipt_title': <String, String>{
+      'vi': 'Biên lai nạp tiền',
+      'en': 'Top-up receipt',
+    },
+    'topup_success_title': <String, String>{
+      'vi': 'Giao dịch thành công',
+      'en': 'Transaction successful',
+    },
+    'topup_other_amount': <String, String>{
+      'vi': 'Số khác',
+      'en': 'Other amount',
+    },
+    'topup_selected_amount': <String, String>{
+      'vi': 'Số tiền bạn đã chọn',
+      'en': 'Selected amount',
+    },
+    'topup_enter_custom_amount_hint': <String, String>{
+      'vi': 'Vui lòng nhập số tiền mong muốn',
+      'en': 'Please enter your desired amount',
+    },
+    'topup_verify_before_confirm': <String, String>{
+      'vi': 'Vui lòng kiểm tra kỹ thông tin trước khi xác nhận giao dịch.',
+      'en': 'Please verify details carefully before confirming.',
+    },
+    'topup_details_title': <String, String>{
+      'vi': 'Thông tin chi tiết',
+      'en': 'Details',
+    },
+    'topup_service_name': <String, String>{
+      'vi': 'Nạp tiền điện thoại',
+      'en': 'Phone top-up',
+    },
+    'topup_phone_label': <String, String>{
+      'vi': 'Số điện thoại',
+      'en': 'Phone number',
+    },
+    'topup_amount_label': <String, String>{
+      'vi': 'Mệnh giá (VND)',
+      'en': 'Amount (VND)',
+    },
+    'topup_transaction_id': <String, String>{
+      'vi': 'Mã giao dịch',
+      'en': 'Transaction ID',
+    },
+    'topup_status_label': <String, String>{'vi': 'Trạng thái', 'en': 'Status'},
+    'topup_type_label': <String, String>{'vi': 'Loại', 'en': 'Type'},
+    'topup_invalid_amount': <String, String>{
+      'vi': 'Số tiền nạp không hợp lệ.',
+      'en': 'Invalid top-up amount.',
+    },
+    'topup_not_logged_in': <String, String>{
+      'vi': 'Lỗi: Chưa đăng nhập',
+      'en': 'Error: Not logged in',
+    },
+    'topup_user_not_found': <String, String>{
+      'vi': 'Không tìm thấy tài khoản người dùng.',
+      'en': 'User account does not exist.',
+    },
+    'topup_transaction_error': <String, String>{
+      'vi': 'Lỗi giao dịch',
+      'en': 'Transaction error',
+    },
+    'notify_topup_title': <String, String>{
+      'vi': 'Nạp tiền điện thoại thành công',
+      'en': 'Phone top-up successful',
+    },
+    'notify_topup_body': <String, String>{
+      'vi': 'Nạp thành công {amount} cho số điện thoại {phone}',
+      'en': 'Top-up successful: {amount} for phone number {phone}',
     },
     'otp_notification_title': <String, String>{
       'vi': 'CCP BANK',

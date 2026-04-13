@@ -1,20 +1,15 @@
-﻿import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../services/user_firestore_service.dart';
+
 import '../l10n/app_text.dart';
-import '../services/card_number_service.dart';
 import '../services/notification_service.dart';
+import '../services/user_firestore_service.dart';
 import '../widget/custom_card_selector.dart';
 import '../widget/pin_popup.dart';
 
 class ConfirmTopUpScreen extends StatefulWidget {
-  final String selectedAmount;
-  final String selectedProvider;
-  final String selectedPhoneNumber;
-
   const ConfirmTopUpScreen({
     super.key,
     required this.selectedAmount,
@@ -22,24 +17,22 @@ class ConfirmTopUpScreen extends StatefulWidget {
     required this.selectedPhoneNumber,
   });
 
+  final String selectedAmount;
+  final String selectedProvider;
+  final String selectedPhoneNumber;
+
   @override
   State<ConfirmTopUpScreen> createState() => _ConfirmTopUpScreenState();
 }
 
 class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
   static const String _otherAmountKey = '__other_amount__';
+
   bool _isSubmitting = false;
   String? _selectedCardId;
   String _selectedCardDisplay = '****';
 
-  String _t(String vi, String en) => AppText.tr(context, vi, en);
-
-  String _amountDisplay() {
-    if (widget.selectedAmount == _otherAmountKey) {
-      return _t('Số khác', 'Other');
-    }
-    return '${widget.selectedAmount} VND';
-  }
+  String _tx(String key) => AppText.text(context, key);
 
   int _parseAmountValue(String rawAmount) {
     final String digitsOnly = rawAmount.replaceAll(RegExp(r'\D'), '');
@@ -95,64 +88,32 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
     return '';
   }
 
-  Widget _buildSourceCardText(Color primaryColor) {
-    final String uid = _resolveTransactionUid();
-    if (uid.isEmpty) {
-      return _buildSourceCardRichText(
-        primaryColor: primaryColor,
-        cardDisplay: _t('Đang tải...', 'Loading...'),
-      );
+  String _formatAmountWithDots(int value) {
+    final String raw = value.toString();
+    final StringBuffer buffer = StringBuffer();
+    int count = 0;
+
+    for (int i = raw.length - 1; i >= 0; i--) {
+      buffer.write(raw[i]);
+      count++;
+      if (count == 3 && i != 0) {
+        buffer.write('.');
+        count = 0;
+      }
     }
 
-    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .snapshots(),
-      builder: (context, snapshot) {
-        String cardDisplay = _t('Đang tải...', 'Loading...');
-
-        if (snapshot.hasData) {
-          final Map<String, dynamic> userData =
-              snapshot.data?.data() ?? <String, dynamic>{};
-          final String rawCard = CardNumberService.readStoredCardNumber(
-            userData,
-          );
-          if (rawCard.isNotEmpty) {
-            cardDisplay = CardNumberService.formatCardNumber(rawCard);
-          }
-        }
-
-        return _buildSourceCardRichText(
-          primaryColor: primaryColor,
-          cardDisplay: cardDisplay,
-        );
-      },
-    );
+    return buffer.toString().split('').reversed.join();
   }
 
-  Widget _buildSourceCardRichText({
-    required Color primaryColor,
-    required String cardDisplay,
-  }) {
-    return RichText(
-      text: TextSpan(
-        style: GoogleFonts.poppins(
-          color: const Color(0xFF222222),
-          fontSize: 14,
-        ),
-        children: [
-          TextSpan(text: '${_t('Số thẻ', 'Card number')}: '),
-          TextSpan(
-            text: cardDisplay,
-            style: GoogleFonts.poppins(
-              color: primaryColor,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
+  String _amountDisplay() {
+    if (widget.selectedAmount == _otherAmountKey) {
+      return _tx('topup_other_amount');
+    }
+    return '${widget.selectedAmount} VND';
+  }
+
+  String _statusDisplay() {
+    return _tx('payment_success');
   }
 
   Future<void> _handleConfirmRecharge() async {
@@ -172,16 +133,11 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
       return;
     }
 
-    // ignore: avoid_print
-    print('--- BẮT ĐẦU GIAO DỊCH ---');
-
     final int amount = _parseAmountValue(widget.selectedAmount);
     if (amount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            _t('Số tiền nạp không hợp lệ.', 'Invalid top-up amount.'),
-          ),
+          content: Text(_tx('topup_invalid_amount')),
           behavior: SnackBarBehavior.floating,
           backgroundColor: Colors.red,
         ),
@@ -189,24 +145,11 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
       return;
     }
 
-    final User? user = FirebaseAuth.instance.currentUser;
-    // ignore: avoid_print
-    print('User UID: ${user?.uid}');
-    // ignore: avoid_print
-    print(
-      'Fallback UID: ${UserFirestoreService.instance.currentUserDocId ?? UserFirestoreService.instance.latestProfile?.uid}',
-    );
-
     final String uid = _resolveTransactionUid();
-    // ignore: avoid_print
-    print('Resolved UID dÄ‚Â¹ng d? giao d?ch: $uid');
-    // ignore: avoid_print
-    print('Firebase projectId hi?n t?i: ${Firebase.app().options.projectId}');
-
     if (uid.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(_t('L?i: Chua dang nh?p', 'Error: Not logged in')),
+          content: Text(_tx('topup_not_logged_in')),
           behavior: SnackBarBehavior.floating,
           backgroundColor: Colors.red,
         ),
@@ -228,39 +171,31 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
     final DocumentReference<Map<String, dynamic>> notificationRef = userRef
         .collection('notifications')
         .doc();
+    final DocumentReference<Map<String, dynamic>> transactionRef = userRef
+        .collection('transactions')
+        .doc();
+    final DocumentReference<Map<String, dynamic>> standardCardRef = userRef
+        .collection('cards')
+        .doc('standard');
+    final DocumentReference<Map<String, dynamic>> vipCardRef = userRef
+        .collection('cards')
+        .doc('vip');
+
+    final String network = widget.selectedProvider.trim();
+    final String phoneNumber = widget.selectedPhoneNumber.trim();
+    final DateTime completedAt = DateTime.now();
 
     try {
-      // ignore: avoid_print
-      print('Ã„Âang tÌ€Âm document user: users/$uid');
-      final bool ensured = await UserFirestoreService.instance
-          .ensureUserDataExists(userId: uid);
-      // ignore: avoid_print
-      print('ensureUserDataExists(users/$uid) => $ensured');
-      // ignore: avoid_print
-      print('S? ti?n c?n tr?: $amount');
-
-      // B?t bu?c await d? transaction hoÄ‚Â n t?t tru?c khi di?u hu?ng mÄ‚Â n hÌ€Ânh.
       await firestore.runTransaction((transaction) async {
         final DocumentSnapshot<Map<String, dynamic>> userDoc = await transaction
             .get(userRef);
 
         if (!userDoc.exists) {
-          throw Exception('KhÄ‚Â´ng tÌ€Âm th?y document user: users/$uid');
+          throw Exception(_tx('topup_user_not_found'));
         }
-
-        // ignore: avoid_print
-        print(
-          'S? du hi?n t?i trÄ‚Âªn Firestore: ${userDoc.data()?['balance']}',
-        );
 
         final Map<String, dynamic> userData =
             userDoc.data() ?? <String, dynamic>{};
-        final DocumentReference<Map<String, dynamic>> standardCardRef = userRef
-            .collection('cards')
-            .doc('standard');
-        final DocumentReference<Map<String, dynamic>> vipCardRef = userRef
-            .collection('cards')
-            .doc('vip');
 
         final DocumentSnapshot<Map<String, dynamic>> standardCardSnap =
             await transaction.get(standardCardRef);
@@ -271,11 +206,18 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
             standardCardSnap.data() ?? <String, dynamic>{};
         final Map<String, dynamic> vipCardData =
             vipCardSnap.data() ?? <String, dynamic>{};
+
         final Map<String, Map<String, dynamic>> cardsById =
             <String, Map<String, dynamic>>{
               'standard': standardCardData,
               'vip': vipCardData,
             };
+
+        final bool useStandard = selectedCardId == 'standard';
+        final bool useVip = selectedCardId == 'vip';
+        if (!useStandard && !useVip) {
+          throw Exception(_tx('card_unavailable'));
+        }
 
         final bool standardAvailable = UserFirestoreService.instance
             .isCardAvailableForTransactions(
@@ -290,103 +232,92 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
               userData: userData,
             );
 
+        final bool selectedAvailable = useStandard
+            ? standardAvailable
+            : vipAvailable;
+        if (!selectedAvailable) {
+          throw Exception(_tx('card_unavailable'));
+        }
+
         final double availableBalance = UserFirestoreService.instance
             .calculateAvailableBalanceFromMaps(
               userData: userData,
               cardsById: cardsById,
             );
-
         if (availableBalance < amount) {
-          throw Exception('S? du khÄ‚Â´ng d?');
-        }
-
-        final bool useStandard = selectedCardId == 'standard';
-        final bool useVip = selectedCardId == 'vip';
-        if (!useStandard && !useVip) {
-          throw Exception(AppText.text(context, 'card_unavailable'));
-        }
-
-        final bool selectedAvailable = useStandard
-            ? standardAvailable
-            : vipAvailable;
-        if (!selectedAvailable) {
-          throw Exception(AppText.text(context, 'card_unavailable'));
+          throw Exception(_tx('insufficient_balance'));
         }
 
         final num selectedBalance = useStandard
             ? _readNumericBalance(standardCardData['balance'])
             : _readNumericBalance(vipCardData['balance']);
         if (selectedBalance < amount) {
-          throw Exception('S? du khÄ‚Â´ng d?');
+          throw Exception(_tx('insufficient_balance'));
         }
 
-        if (useStandard) {
-          transaction.set(standardCardRef, <String, dynamic>{
-            'balance': FieldValue.increment(-amount),
-            'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
-        } else {
-          transaction.set(vipCardRef, <String, dynamic>{
-            'balance': FieldValue.increment(-amount),
-            'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
-        }
+        final DocumentReference<Map<String, dynamic>> selectedCardRef =
+            useStandard ? standardCardRef : vipCardRef;
 
-        // ignore: avoid_print
-        print(
-          'Ã„Âang chu?n b? ghi vÄ‚Â o: users/$uid/phone_recharge/ID_TU_DONG',
-        );
-        // ignore: avoid_print
-        print(
-          'Ã„Âu?ng d?n th?c t?: users/$uid/phone_recharge/${rechargeRef.id}',
-        );
+        transaction.set(selectedCardRef, <String, dynamic>{
+          'balance': FieldValue.increment(-amount),
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+
         transaction.set(rechargeRef, <String, dynamic>{
           'uid': uid,
           'cardId': selectedCardId,
-          'phoneNumber': widget.selectedPhoneNumber.trim(),
-          'provider': widget.selectedProvider.trim(),
+          'phoneNumber': phoneNumber,
+          'provider': network,
+          'network': network,
           'amount': amount,
           'createdAt': FieldValue.serverTimestamp(),
+          'createdAt_client': Timestamp.fromDate(completedAt),
           'timestamp': FieldValue.serverTimestamp(),
           'status': 'success',
-          'type': 'topup',
+          'type': 'phone_topup',
         });
 
         transaction.set(notificationRef, <String, dynamic>{
+          'type': 'phone_topup',
+          'amount': amount,
+          'network': network,
+          'phone': phoneNumber,
           'timestamp': FieldValue.serverTimestamp(),
-          'createdAt': FieldValue.serverTimestamp(),
-          'type': 'phone_recharge',
-          'isNegative': true,
-          'serviceName': widget.selectedProvider.trim(),
-          'targetAccount': widget.selectedPhoneNumber.trim(),
-          'transactionCode': rechargeRef.id,
-          'cardId': selectedCardId,
-          'status': 'success',
           'isRead': false,
           'relatedId': rechargeRef.id,
+          'cardId': selectedCardId,
+        });
+
+        transaction.set(transactionRef, <String, dynamic>{
+          'type': 'phone_topup',
           'amount': amount,
+          'status': 'success',
+          'timestamp': FieldValue.serverTimestamp(),
+          'timestamp_client': Timestamp.fromDate(completedAt),
+          'createdAt': FieldValue.serverTimestamp(),
+          'createdAt_client': Timestamp.fromDate(completedAt),
+          'details': 'Nạp tiền điện thoại',
+          'network': network,
+          'phoneNumber': phoneNumber,
+          'relatedId': rechargeRef.id,
+          'cardId': selectedCardId,
+          'isNegative': true,
         });
       });
 
-      final DocumentSnapshot<Map<String, dynamic>> savedRecharge =
-          await rechargeRef.get();
-      // ignore: avoid_print
-      print('Sau commit, document t?n t?i: ${savedRecharge.exists}');
-      if (!savedRecharge.exists) {
-        throw Exception('KhÄ‚Â´ng luu du?c hÄ‚Â³a don n?p ti?n');
+      if (!mounted) {
+        return;
       }
 
       final String languageCode = AppText.currentLanguageCode(context);
-      final String amountText = '$amount VND';
+      final String amountText = '${_formatAmountWithDots(amount)} VND';
+
       await NotificationService().showNotification(
-        title: AppText.textByCode(languageCode, 'notify_phone_recharge_title'),
+        title: AppText.textByCode(languageCode, 'notify_topup_title'),
         body: AppText.textByCodeWithParams(
           languageCode,
-          'notify_phone_recharge_body',
-          <String, String>{
-            'amount': amountText,
-            'provider': widget.selectedProvider.trim(),
-          },
+          'notify_topup_body',
+          <String, String>{'amount': amountText, 'phone': phoneNumber},
         ),
       );
 
@@ -403,19 +334,16 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
         MaterialPageRoute(
           builder: (_) => TopUpReceiptScreen(
             transactionId: rechargeRef.id,
-            phoneNumber: widget.selectedPhoneNumber.trim(),
-            provider: widget.selectedProvider.trim(),
+            phoneNumber: phoneNumber,
+            provider: network,
             amount: amount,
-            createdAt: DateTime.now(),
-            status: 'success',
-            type: 'topup',
+            createdAt: completedAt,
+            status: _statusDisplay(),
+            type: 'phone_topup',
           ),
         ),
       );
-    } catch (e, stackTrace) {
-      // ignore: avoid_print
-      print('? L?I TH?C T?: $e');
-      debugPrint(stackTrace.toString());
+    } catch (e) {
       if (!mounted) {
         return;
       }
@@ -427,17 +355,48 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
       await showDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
-          title: Text(_t('L?i giao d?ch', 'Transaction error')),
+          title: Text(_tx('topup_transaction_error')),
           content: Text(e.toString()),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: Text(_t('Ã„ÂÄ‚Â³ng', 'Close')),
+              child: Text(_tx('action_cancel')),
             ),
           ],
         ),
       );
     }
+  }
+
+  Widget _buildInfoRow(String label, String value, {bool isBlue = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 15),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: GoogleFonts.poppins(
+                color: const Color(0xFF1F263D),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: GoogleFonts.poppins(
+                color: isBlue ? const Color(0xFF0046A6) : Colors.black,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -454,7 +413,7 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          _t('N?p ti?n di?n tho?i', 'Phone Top-Up'),
+          _tx('topup_confirm_title'),
           style: GoogleFonts.poppins(
             color: const Color(0xFF1A1A1A),
             fontWeight: FontWeight.bold,
@@ -463,7 +422,6 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
       ),
       body: Column(
         children: [
-          // Header hi?n th? s? ti?n
           Container(
             width: double.infinity,
             padding: const EdgeInsets.fromLTRB(20, 18, 20, 22),
@@ -501,11 +459,8 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
                 const SizedBox(height: 4),
                 Text(
                   widget.selectedAmount == _otherAmountKey
-                      ? _t(
-                          'Vui lÌ€Â£ng nh?p s? ti?n mong mu?n',
-                          'Please enter your desired amount',
-                        )
-                      : _t('S? ti?n b?n dÃ„Æ’ ch?n', 'Selected amount'),
+                      ? _tx('topup_enter_custom_amount_hint')
+                      : _tx('topup_selected_amount'),
                   style: GoogleFonts.poppins(
                     color: Colors.white.withValues(alpha: 0.85),
                     fontSize: 13,
@@ -515,7 +470,6 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
               ],
             ),
           ),
-
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(20),
@@ -548,10 +502,7 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            _t(
-                              'Vui lÌ€Â£ng ki?m tra k? thÄ‚Â´ng tin tru?c khi xÄ‚Â¡c nh?n giao d?ch.',
-                              'Please verify details carefully before confirming.',
-                            ),
+                            _tx('topup_verify_before_confirm'),
                             style: GoogleFonts.poppins(
                               fontSize: 12.5,
                               color: const Color(0xFF2C3A75),
@@ -562,12 +513,9 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 18),
-
-                  // M?c TrÄ‚Â­ch t?
                   Text(
-                    _t('TrÄ‚Â­ch t?', 'From account'),
+                    _tx('source_account'),
                     style: GoogleFonts.poppins(
                       color: const Color(0xFF6D7693),
                       fontWeight: FontWeight.w700,
@@ -610,7 +558,7 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              _t('TÄ‚Â i kho?n ngu?n', 'Source account'),
+                              _tx('source_card'),
                               style: GoogleFonts.poppins(
                                 color: const Color(0xFF6E7490),
                                 fontSize: 12,
@@ -654,13 +602,10 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
                                 snapshot.data ??
                                 UserFirestoreService.instance.latestProfile;
                             final String senderName = snapshot.hasError
-                                ? _t(
-                                    'KhÄ‚Â´ng tÌ€Âm th?y user',
-                                    'User not found',
-                                  )
+                                ? _tx('user_account_not_exists')
                                 : ((profile?.fullname.isNotEmpty == true)
                                       ? profile!.fullname
-                                      : _t('KhÄ‚Â¡ch hÄ‚Â ng', 'Customer'));
+                                      : _tx('customer_label'));
 
                             return Text(
                               senderName.toUpperCase(),
@@ -674,12 +619,9 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 30),
-
-                  // M?c ThÄ‚Â´ng tin chi ti?t
                   Text(
-                    _t('ThÄ‚Â´ng tin chi ti?t', 'Details'),
+                    _tx('topup_details_title'),
                     style: GoogleFonts.poppins(
                       color: const Color(0xFF6D7693),
                       fontWeight: FontWeight.w700,
@@ -703,35 +645,32 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
                     child: Column(
                       children: [
                         _buildInfoRow(
-                          _t('Lo?i d?ch v?', 'Service type'),
-                          _t('N?p Ã„ÂTDD', 'Mobile top-up'),
+                          _tx('service'),
+                          _tx('topup_service_name'),
                           isBlue: true,
                         ),
                         const Divider(height: 1),
                         _buildInfoRow(
-                          _t('NhÄ‚Â  cung c?p', 'Provider'),
+                          _tx('provider'),
                           widget.selectedProvider,
                           isBlue: true,
                         ),
                         const Divider(height: 1),
                         _buildInfoRow(
-                          _t('S? di?n tho?i', 'Phone number'),
+                          _tx('topup_phone_label'),
                           widget.selectedPhoneNumber,
                           isBlue: true,
                         ),
                         const Divider(height: 1),
                         _buildInfoRow(
-                          _t('M?nh giÄ‚Â¡ (VND)', 'Amount (VND)'),
+                          _tx('topup_amount_label'),
                           _amountDisplay(),
                           isBlue: true,
                         ),
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 40),
-
-                  // NÄ‚Âºt XÄ‚Â¡c nh?n
                   SizedBox(
                     width: double.infinity,
                     height: 54,
@@ -766,7 +705,7 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
                               ),
                             )
                           : Text(
-                              _t('XÄ‚Â¡c nh?n', 'Confirm'),
+                              _tx('action_confirm'),
                               style: GoogleFonts.poppins(
                                 color: Colors.white,
                                 fontSize: 17,
@@ -776,38 +715,6 @@ class _ConfirmTopUpScreenState extends State<ConfirmTopUpScreen> {
                     ),
                   ),
                 ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Widget con d? v? t?ng dÌ€Â£ng thÄ‚Â´ng tin
-  Widget _buildInfoRow(String label, String value, {bool isBlue = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 15),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: GoogleFonts.poppins(
-                color: const Color(0xFF1F263D),
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Flexible(
-            child: Text(
-              value,
-              textAlign: TextAlign.right,
-              style: GoogleFonts.poppins(
-                color: isBlue ? const Color(0xFF0046A6) : Colors.black,
-                fontWeight: FontWeight.w700,
               ),
             ),
           ),
@@ -837,9 +744,7 @@ class TopUpReceiptScreen extends StatelessWidget {
   final String status;
   final String type;
 
-  String _t(BuildContext context, String vi, String en) {
-    return AppText.tr(context, vi, en);
-  }
+  String _tx(BuildContext context, String key) => AppText.text(context, key);
 
   String _formatAmountWithDots(int value) {
     final String raw = value.toString();
@@ -910,7 +815,7 @@ class TopUpReceiptScreen extends StatelessWidget {
         elevation: 0,
         automaticallyImplyLeading: false,
         title: Text(
-          _t(context, 'BiÄ‚Âªn lai n?p ti?n', 'Top-up receipt'),
+          _tx(context, 'topup_receipt_title'),
           style: GoogleFonts.poppins(
             color: const Color(0xFF1A1A1A),
             fontWeight: FontWeight.w700,
@@ -948,11 +853,7 @@ class TopUpReceiptScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  _t(
-                    context,
-                    'Giao d?ch thÄ‚Â nh cÄ‚Â´ng',
-                    'Transaction successful',
-                  ),
+                  _tx(context, 'topup_success_title'),
                   style: GoogleFonts.poppins(
                     color: Colors.white,
                     fontSize: 20,
@@ -988,36 +889,33 @@ class TopUpReceiptScreen extends StatelessWidget {
                 child: Column(
                   children: [
                     _buildInfoTile(
-                      _t(context, 'MÃ„Æ’ giao d?ch', 'Transaction ID'),
+                      _tx(context, 'topup_transaction_id'),
                       transactionId,
                     ),
                     const Divider(height: 1),
                     _buildInfoTile(
-                      _t(context, 'S? di?n tho?i', 'Phone number'),
+                      _tx(context, 'topup_phone_label'),
                       phoneNumber,
                     ),
                     const Divider(height: 1),
-                    _buildInfoTile(
-                      _t(context, 'NhÄ‚Â  m?ng', 'Provider'),
-                      provider,
-                    ),
+                    _buildInfoTile(_tx(context, 'provider'), provider),
                     const Divider(height: 1),
                     _buildInfoTile(
-                      _t(context, 'S? ti?n', 'Amount'),
+                      _tx(context, 'topup_amount_label'),
                       '${_formatAmountWithDots(amount)} VND',
                     ),
                     const Divider(height: 1),
                     _buildInfoTile(
-                      _t(context, 'Th?i gian', 'Created at'),
+                      _tx(context, 'created_at_label'),
                       _formatDateTime(createdAt),
                     ),
                     const Divider(height: 1),
-                    _buildInfoTile(
-                      _t(context, 'Tr?ng thÄ‚Â¡i', 'Status'),
-                      status,
-                    ),
+                    _buildInfoTile(_tx(context, 'topup_status_label'), status),
                     const Divider(height: 1),
-                    _buildInfoTile(_t(context, 'Lo?i', 'Type'), type),
+                    _buildInfoTile(
+                      _tx(context, 'topup_type_label'),
+                      _tx(context, 'topup_service_name'),
+                    ),
                   ],
                 ),
               ),
@@ -1040,7 +938,7 @@ class TopUpReceiptScreen extends StatelessWidget {
                   elevation: 0,
                 ),
                 child: Text(
-                  _t(context, 'V? trang ch?', 'Back to home'),
+                  _tx(context, 'back_to_home'),
                   style: GoogleFonts.poppins(
                     color: Colors.white,
                     fontSize: 16,
