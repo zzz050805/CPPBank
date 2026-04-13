@@ -23,14 +23,11 @@ class _ElectricBillScreenState extends State<ElectricBillScreen>
   static const Color _surface = Color(0xFFF6F7FF);
 
   final TextEditingController _customerCodeController = TextEditingController();
-  final NumberFormat _moneyFormat = NumberFormat.decimalPattern('vi_VN');
   late final AnimationController _introController;
 
   String _t(String vi, String en) => AppText.tr(context, vi, en);
 
   bool _isLookingUp = false;
-  String? _lookupError;
-  _ElectricBillLookupResult? _lookupResult;
 
   final Map<String, Map<String, dynamic>> _demoBills =
       <String, Map<String, dynamic>>{
@@ -83,8 +80,21 @@ class _ElectricBillScreenState extends State<ElectricBillScreen>
     return raw.trim().toUpperCase();
   }
 
-  String _formatVnd(num value) {
-    return '${_moneyFormat.format(value)} VND';
+  void _openStep2(_ElectricBillLookupResult result) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ElectricBillPayScreen(
+          customerCode: result.customerCode,
+          customerName: result.customerName,
+          serviceAddress: result.serviceAddress,
+          usageKwh: result.usageKwh,
+          billingPeriod: result.billingPeriod,
+          totalAmount: result.amountVnd,
+          sourceCardId: widget.sourceCardId,
+        ),
+      ),
+    );
   }
 
   Future<void> _lookupBill() async {
@@ -96,10 +106,6 @@ class _ElectricBillScreenState extends State<ElectricBillScreen>
         'Mã khách hàng chưa đúng định dạng PE + 8-13 số.',
         'Customer code must follow PE + 8-13 digits.',
       );
-      setState(() {
-        _lookupError = message;
-        _lookupResult = null;
-      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(message), backgroundColor: Colors.redAccent),
       );
@@ -109,8 +115,6 @@ class _ElectricBillScreenState extends State<ElectricBillScreen>
     FocusScope.of(context).unfocus();
     setState(() {
       _isLookingUp = true;
-      _lookupError = null;
-      _lookupResult = null;
     });
 
     try {
@@ -134,9 +138,6 @@ class _ElectricBillScreenState extends State<ElectricBillScreen>
           'Không tìm thấy hóa đơn cho mã khách hàng này.',
           'No bill found for this customer code.',
         );
-        setState(() {
-          _lookupError = message;
-        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(message), backgroundColor: Colors.orange),
         );
@@ -146,13 +147,8 @@ class _ElectricBillScreenState extends State<ElectricBillScreen>
       final _ElectricBillLookupResult result =
           _ElectricBillLookupResult.fromMap(code, sourceData);
 
-      setState(() {
-        _lookupResult = result;
-        _lookupError = null;
-      });
-
       _saveToRecent(code, result.displayTitleVi, result.displayTitleEn);
-      _showLookupSheet(result);
+      _openStep2(result);
     } on FirebaseException catch (e) {
       final Map<String, dynamic>? demoData = _demoBills[code];
       if (demoData != null) {
@@ -161,12 +157,8 @@ class _ElectricBillScreenState extends State<ElectricBillScreen>
         if (!mounted) {
           return;
         }
-        setState(() {
-          _lookupResult = result;
-          _lookupError = null;
-        });
         _saveToRecent(code, result.displayTitleVi, result.displayTitleEn);
-        _showLookupSheet(result);
+        _openStep2(result);
         return;
       }
 
@@ -177,9 +169,6 @@ class _ElectricBillScreenState extends State<ElectricBillScreen>
         'Lỗi tra cứu: ${e.message ?? e.code}',
         'Lookup failed: ${e.message ?? e.code}',
       );
-      setState(() {
-        _lookupError = message;
-      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(message), backgroundColor: Colors.redAccent),
       );
@@ -191,9 +180,6 @@ class _ElectricBillScreenState extends State<ElectricBillScreen>
         'Không thể tra cứu lúc này, vui lòng thử lại.',
         'Unable to lookup now, please try again.',
       );
-      setState(() {
-        _lookupError = message;
-      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(message), backgroundColor: Colors.redAccent),
       );
@@ -228,127 +214,6 @@ class _ElectricBillScreenState extends State<ElectricBillScreen>
     if (_recentBills.length > 4) {
       _recentBills.removeLast();
     }
-  }
-
-  void _showLookupSheet(_ElectricBillLookupResult result) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (BuildContext context) {
-        return Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          padding: const EdgeInsets.fromLTRB(18, 16, 18, 22),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Center(
-                child: Container(
-                  width: 44,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE2E5F2),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                AppText.lookupResult(context),
-                style: GoogleFonts.poppins(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF1B1E30),
-                ),
-              ),
-              const SizedBox(height: 12),
-              _sheetRow(AppText.customerCode(context), result.customerCode),
-              _sheetRow(
-                AppText.alias(context),
-                _t(result.displayTitleVi, result.displayTitleEn),
-              ),
-              _sheetRow(AppText.billingCycle(context), result.billingPeriod),
-              _sheetRow(AppText.dueDate(context), result.dueDate),
-              _sheetRow(
-                _t('Sản lượng', 'Usage'),
-                '${result.usageKwh.toStringAsFixed(0)} kWh',
-              ),
-              _sheetRow(
-                AppText.paymentAmount(context),
-                _formatVnd(result.amountVnd),
-                valueColor: _primaryBlue,
-              ),
-              const SizedBox(height: 14),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    Navigator.push(
-                      this.context,
-                      MaterialPageRoute(
-                        builder: (_) => ElectricBillPayScreen(
-                          customerCode: result.customerCode,
-                          customerName: result.customerName,
-                          serviceAddress: result.serviceAddress,
-                          usageKwh: result.usageKwh,
-                          billingPeriod: result.billingPeriod,
-                          totalAmount: result.amountVnd,
-                          sourceCardId: widget.sourceCardId,
-                        ),
-                      ),
-                    );
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _primaryBlue,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  child: Text(
-                    _t('Tiếp tục thanh toán', 'Continue to pay'),
-                    style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _sheetRow(String label, String value, {Color? valueColor}) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: Text(
-              label,
-              style: GoogleFonts.poppins(
-                fontSize: 12,
-                color: const Color(0xFF767C96),
-              ),
-            ),
-          ),
-          Text(
-            value,
-            style: GoogleFonts.poppins(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: valueColor ?? const Color(0xFF1B1E30),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   Widget _reveal(int index, Widget child) {
@@ -436,10 +301,6 @@ class _ElectricBillScreenState extends State<ElectricBillScreen>
               ),
               const SizedBox(height: 18),
               _reveal(3, _buildLookupCard()),
-              if (_lookupResult != null || _lookupError != null) ...<Widget>[
-                const SizedBox(height: 10),
-                _reveal(4, _buildLookupFeedbackCard()),
-              ],
               const SizedBox(height: 22),
               _reveal(
                 5,
@@ -481,10 +342,6 @@ class _ElectricBillScreenState extends State<ElectricBillScreen>
                   _buildRecentBillCard(entry.value),
                 );
               }),
-              const SizedBox(height: 18),
-              _reveal(10, _buildInfoCard()),
-              const SizedBox(height: 16),
-              _reveal(11, _buildAutoPayBanner()),
             ],
           ),
         ),
@@ -611,52 +468,6 @@ class _ElectricBillScreenState extends State<ElectricBillScreen>
     );
   }
 
-  Widget _buildLookupFeedbackCard() {
-    final bool isSuccess = _lookupResult != null;
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 220),
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: isSuccess ? const Color(0xFFEAF2FF) : const Color(0xFFFFF3F1),
-        borderRadius: BorderRadius.circular(13),
-        border: Border.all(
-          color: isSuccess
-              ? _primaryBlue.withValues(alpha: 0.22)
-              : const Color(0xFFFFD8D2),
-        ),
-      ),
-      child: Row(
-        children: <Widget>[
-          Icon(
-            isSuccess ? Icons.check_circle_rounded : Icons.error_rounded,
-            color: isSuccess ? _primaryBlue : const Color(0xFFE25A4D),
-            size: 18,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              isSuccess
-                  ? _t(
-                      'Đã tìm thấy hóa đơn: ${_formatVnd(_lookupResult!.amountVnd)}',
-                      'Bill found: ${_formatVnd(_lookupResult!.amountVnd)}',
-                    )
-                  : (_lookupError ?? ''),
-              style: GoogleFonts.poppins(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w600,
-                color: isSuccess
-                    ? const Color(0xFF233487)
-                    : const Color(0xFFAF3C33),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildRecentBillCard(_RecentBillItem item) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -718,130 +529,6 @@ class _ElectricBillScreenState extends State<ElectricBillScreen>
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildInfoCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEFF2FF),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Container(
-                width: 20,
-                height: 20,
-                decoration: BoxDecoration(
-                  color: _primaryBlue.withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.info, color: _primaryBlue, size: 13),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  _t('Tìm mã khách hàng ở đâu?', 'Where is my customer code?'),
-                  style: GoogleFonts.poppins(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF1B1E30),
-                  ),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  'PRO TIP',
-                  style: GoogleFonts.poppins(
-                    fontSize: 9,
-                    color: _primaryBlue,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 9),
-          Text(
-            _t(
-              'Mã khách hàng gồm 11 ký tự bắt đầu bằng PE, có thể tìm thấy trên hóa đơn giấy hoặc trong app EVN.',
-              'Your customer code has 11 characters and starts with PE. You can find it on your paper bill or in the EVN app.',
-            ),
-            style: GoogleFonts.poppins(
-              fontSize: 11,
-              height: 1.4,
-              color: const Color(0xFF717792),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAutoPayBanner() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 13),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: <Color>[Color(0xFF131A57), Color(0xFF0B0F31)],
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            _t('Thanh toán tự động', 'Auto payment'),
-            style: GoogleFonts.poppins(
-              color: Colors.white,
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            _t(
-              'Không bao giờ quên hạn. Kích hoạt thanh toán một chạm ngay.',
-              'Never miss your due date. Enable one-tap auto payment now.',
-            ),
-            style: GoogleFonts.poppins(
-              color: Colors.white.withValues(alpha: 0.78),
-              fontSize: 11,
-              height: 1.35,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: _primaryBlue,
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: Text(
-              _t('CÀI ĐẶT NGAY', 'SET UP NOW'),
-              style: GoogleFonts.poppins(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-                fontSize: 10,
-                letterSpacing: 0.5,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

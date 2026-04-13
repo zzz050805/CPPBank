@@ -177,7 +177,7 @@ class _RegisterPasswordScreenState extends State<RegisterPasswordScreen> {
           'idPlace': '',
           'expiryDate': '',
           'gender': '',
-          'membershipTier': 'onyx',
+          'membershipTier': 'thành viên',
           'cccd': widget.cccd,
           'issueDate': widget.issueDate,
           'address': widget.address,

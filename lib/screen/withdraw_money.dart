@@ -190,6 +190,7 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
     final bool hasVipCard = userData['hasVipCard'] == true;
     final bool isStandardLocked = userData['is_standard_locked'] == true;
     final bool isVipLocked = userData['is_vip_locked'] == true;
+    const double vipEligibilityThreshold = 200000000;
 
     final Map<String, Map<String, dynamic>> byId =
         <String, Map<String, dynamic>>{};
@@ -203,6 +204,12 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
         : CardNumberService.formatCardNumber(rawCard);
 
     final List<_WithdrawSourceCardOption> cards = <_WithdrawSourceCardOption>[];
+    final double standardCardBalance = parseBalance(
+      (byId['standard'] ?? <String, dynamic>{})['balance'],
+    );
+    final bool vipHasAccess =
+        !isVipLocked &&
+        (hasVipCard || standardCardBalance >= vipEligibilityThreshold);
 
     if (!isStandardLocked) {
       cards.add(
@@ -217,7 +224,7 @@ class _WithdrawATMPageState extends State<WithdrawATMPage> {
       );
     }
 
-    if (hasVipCard && !isVipLocked) {
+    if (vipHasAccess) {
       cards.add(
         _WithdrawSourceCardOption(
           id: 'vip',

@@ -1,13 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 
 import '../l10n/app_text.dart';
-import '../services/user_firestore_service.dart';
 import '../widget/ccp_app_bar.dart';
-import '../widget/custom_card_selector.dart';
 import 'data_bill.dart';
 import 'electric_bill.dart';
 import 'internet_bill.dart';
@@ -21,41 +16,8 @@ class BillScreen extends StatefulWidget {
 }
 
 class _BillScreenState extends State<BillScreen> {
-  final NumberFormat _moneyFormat = NumberFormat.decimalPattern('vi_VN');
-  String? _selectedCardId;
-
   String _t(BuildContext context, String vi, String en) =>
       AppText.tr(context, vi, en);
-
-  String _uid() {
-    return (UserFirestoreService.instance.currentUserDocId ??
-            FirebaseAuth.instance.currentUser?.uid ??
-            '')
-        .trim();
-  }
-
-  String _formatBalance(num value) => '${_moneyFormat.format(value)} VND';
-
-  Widget _buildSourceCardSelector(BuildContext context) {
-    final String uid = _uid();
-    if (uid.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return CustomCardSelector(
-      uid: uid,
-      selectedCardId: _selectedCardId,
-      margin: const EdgeInsets.only(bottom: 12),
-      onChanged: (CustomCardSelection selection) {
-        if (!mounted || _selectedCardId == selection.id) {
-          return;
-        }
-        setState(() {
-          _selectedCardId = selection.id;
-        });
-      },
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -75,7 +37,6 @@ class _BillScreenState extends State<BillScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildSourceCardSelector(context),
               Text(
                 _t(context, 'TẤT CẢ DỊCH VỤ', 'ALL SERVICES'),
                 style: GoogleFonts.poppins(
@@ -116,8 +77,7 @@ class _BillScreenState extends State<BillScreen> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) =>
-                          ElectricBillScreen(sourceCardId: _selectedCardId),
+                      builder: (context) => const ElectricBillScreen(),
                     ),
                   );
                 },
@@ -140,7 +100,7 @@ class _BillScreenState extends State<BillScreen> {
                     context,
                     MaterialPageRoute(
                       builder: (BuildContext context) =>
-                          WaterBillScreen(sourceCardId: _selectedCardId),
+                          const WaterBillScreen(),
                     ),
                   );
                 },
@@ -163,7 +123,7 @@ class _BillScreenState extends State<BillScreen> {
                     context,
                     MaterialPageRoute(
                       builder: (BuildContext context) =>
-                          InternetBillScreen(sourceCardId: _selectedCardId),
+                          const InternetBillScreen(),
                     ),
                   );
                 },
@@ -181,8 +141,7 @@ class _BillScreenState extends State<BillScreen> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) =>
-                          DataBillScreen(sourceCardId: _selectedCardId),
+                      builder: (context) => const DataBillScreen(),
                     ),
                   );
                 },

@@ -23,6 +23,7 @@ class _UserInfoScreenState extends State<UserInfoScreen>
   late final AnimationController _transitionController;
   late final Animation<double> _fade;
   late final Animation<Offset> _slide;
+  static const double _vipEligibilityThreshold = 200000000;
 
   String _t(String vi, String en) => AppText.tr(context, vi, en);
 
@@ -41,27 +42,38 @@ class _UserInfoScreenState extends State<UserInfoScreen>
     if (text.isEmpty) return _notUpdated;
 
     final String normalized = text.toLowerCase();
-    if (normalized.contains('prive') ||
-        normalized.contains('privé') ||
-        normalized.contains('vip')) {
-      return 'PRIVÉ';
+    if (normalized.contains('king')) {
+      return _t('HẠNG KING', 'KING');
     }
-    if (normalized.contains('kim cương') || normalized.contains('diamond')) {
-      return _t('KIM CƯƠNG', 'DIAMOND');
+    if (normalized.contains('royal')) {
+      return _t('HẠNG ROYAL', 'ROYAL');
     }
-    if (normalized.contains('bạch kim') || normalized.contains('platinum')) {
-      return _t('BẠCH KIM', 'PLATINUM');
+    if (normalized.contains('kim cương') ||
+        normalized.contains('kim cuong') ||
+        normalized.contains('diamond')) {
+      return _t('HẠNG KIM CƯƠNG', 'DIAMOND');
     }
-    if (normalized.contains('vàng') || normalized.contains('gold')) {
-      return _t('VÀNG', 'GOLD');
+    if (normalized.contains('bạch kim') ||
+        normalized.contains('bach kim') ||
+        normalized.contains('platinum')) {
+      return _t('HẠNG BẠCH KIM', 'PLATINUM');
     }
-    if (normalized.contains('bạc') || normalized.contains('silver')) {
-      return _t('BẠC', 'SILVER');
+    if (normalized.contains('vàng') ||
+        normalized.contains('vang') ||
+        normalized.contains('gold')) {
+      return _t('HẠNG VÀNG', 'GOLD');
     }
-    if (normalized.contains('thành viên') || normalized.contains('member')) {
+    if (normalized.contains('bạc') ||
+        normalized.contains('bac') ||
+        normalized.contains('silver')) {
+      return _t('HẠNG BẠC', 'SILVER');
+    }
+    if (normalized.contains('thành viên') ||
+        normalized.contains('thanh vien') ||
+        normalized.contains('member')) {
       return _t('THÀNH VIÊN', 'MEMBER');
     }
-    return text.toUpperCase();
+    return _notUpdated;
   }
 
   String _localizedRankName(String rawName) {
@@ -89,7 +101,7 @@ class _UserInfoScreenState extends State<UserInfoScreen>
     if (normalized.contains('thành viên') || normalized.contains('member')) {
       return _t('THÀNH VIÊN', 'MEMBER');
     }
-    return rawName.toUpperCase();
+    return _t('THÀNH VIÊN', 'MEMBER');
   }
 
   _MembershipRankData _membershipStyle(String tierLabel) {
@@ -97,9 +109,16 @@ class _UserInfoScreenState extends State<UserInfoScreen>
 
     if (normalized.contains('king')) {
       return const _MembershipRankData(
-        name: 'KING',
+        name: 'HẠNG KING',
         gradient: [Color(0xFF6B4A00), Color(0xFFD4AF37)],
         icon: Icons.workspace_premium_outlined,
+      );
+    }
+    if (normalized.contains('royal')) {
+      return const _MembershipRankData(
+        name: 'HẠNG ROYAL',
+        gradient: [Color(0xFF880D2F), Color.fromARGB(255, 206, 206, 83)],
+        icon: Icons.local_fire_department_outlined,
       );
     }
     if (normalized.contains('kim cương') || normalized.contains('diamond')) {
@@ -133,7 +152,7 @@ class _UserInfoScreenState extends State<UserInfoScreen>
         icon: Icons.military_tech_outlined,
       );
     }
-    if (normalized.contains('THÀNH VIÊN') || normalized.contains('member')) {
+    if (normalized.contains('thành viên') || normalized.contains('member')) {
       return const _MembershipRankData(
         name: 'THÀNH VIÊN',
         gradient: [Color(0xFF101010), Color(0xFF313131)],
@@ -255,6 +274,30 @@ class _UserInfoScreenState extends State<UserInfoScreen>
     return 0;
   }
 
+  bool _hasVipAccess(
+    Map<String, dynamic> userData, {
+    double? fallbackStandardBalance,
+  }) {
+    final bool hasVipCard = userData['hasVipCard'] == true;
+    final bool isVipLocked = userData['is_vip_locked'] == true;
+    if (hasVipCard) {
+      return !isVipLocked;
+    }
+    if (isVipLocked) {
+      return false;
+    }
+
+    final dynamic rawNormal =
+        userData['balance_normal'] ??
+        userData['standardBalance'] ??
+        userData['balanceNormal'];
+    double standardBalance = _readBalance(rawNormal);
+    if (standardBalance <= 0 && fallbackStandardBalance != null) {
+      standardBalance = fallbackStandardBalance;
+    }
+    return standardBalance >= _vipEligibilityThreshold;
+  }
+
   _MembershipRankData _resolveRankFromData({
     required Map<String, dynamic> userData,
     required double totalBalance,
@@ -264,13 +307,19 @@ class _UserInfoScreenState extends State<UserInfoScreen>
         .toString()
         .trim();
 
-    if (manualRank.isNotEmpty) {
+    final String normalizedManualRank = _displayMembershipTier(manualRank);
+    if (!_isMissing(normalizedManualRank)) {
       final Color baseColor = manualRankColor.isEmpty
           ? const Color(0xFF8D8D95)
           : _formatRankColor(manualRankColor);
+
+      if (manualRankColor.isEmpty) {
+        return _membershipStyle(normalizedManualRank);
+      }
+
       final HSLColor hsl = HSLColor.fromColor(baseColor);
       return _MembershipRankData(
-        name: manualRank.toUpperCase(),
+        name: normalizedManualRank,
         gradient: [
           hsl
               .withLightness((hsl.lightness - 0.12).clamp(0, 1).toDouble())
@@ -279,13 +328,8 @@ class _UserInfoScreenState extends State<UserInfoScreen>
               .withLightness((hsl.lightness + 0.12).clamp(0, 1).toDouble())
               .toColor(),
         ],
-        icon: _resolveRankIcon(manualRank),
+        icon: _resolveRankIcon(normalizedManualRank),
       );
-    }
-
-    final String tierLabel = _displayMembershipTier(userData['membershipTier']);
-    if (!_isMissing(tierLabel)) {
-      return _membershipStyle(tierLabel);
     }
 
     return _getMembershipRankByBalance(totalBalance);
@@ -613,20 +657,19 @@ class _UserInfoScreenState extends State<UserInfoScreen>
                               data['balance_vip'] ??
                               data['vipBalance'] ??
                               data['balanceVip'];
-                          final bool hasVipCard = data['hasVipCard'] == true;
                           final bool isStandardLocked =
                               data['is_standard_locked'] == true;
-                          final bool isVipLocked =
-                              data['is_vip_locked'] == true;
+                          final bool vipHasAccess = _hasVipAccess(
+                            data,
+                            fallbackStandardBalance: standardBalance,
+                          );
                           final bool hasSplitBalance =
                               rawNormal != null || rawVip != null;
                           final double fallbackTotal = hasSplitBalance
                               ? (isStandardLocked
                                         ? 0
                                         : _readBalance(rawNormal)) +
-                                    ((hasVipCard && !isVipLocked)
-                                        ? _readBalance(rawVip)
-                                        : 0)
+                                    (vipHasAccess ? _readBalance(rawVip) : 0)
                               : _readBalance(
                                   data['availableBalance'] ??
                                       data['totalBalance'] ??
@@ -635,9 +678,7 @@ class _UserInfoScreenState extends State<UserInfoScreen>
 
                           final double totalBalance = hasCardData
                               ? (isStandardLocked ? 0 : standardBalance) +
-                                    ((hasVipCard && !isVipLocked)
-                                        ? vipBalance
-                                        : 0)
+                                    (vipHasAccess ? vipBalance : 0)
                               : fallbackTotal;
 
                           final _MembershipRankData rank = _resolveRankFromData(
@@ -645,12 +686,9 @@ class _UserInfoScreenState extends State<UserInfoScreen>
                             totalBalance: totalBalance,
                           );
 
-                          final String tierLabel = _displayMembershipTier(
-                            data['membershipTier'],
+                          final String tierValue = _localizedRankName(
+                            rank.name,
                           );
-                          final String tierValue = _isMissing(tierLabel)
-                              ? _localizedRankName(rank.name)
-                              : tierLabel;
 
                           return SingleChildScrollView(
                             padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),

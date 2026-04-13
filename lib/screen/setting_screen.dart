@@ -29,6 +29,7 @@ class SettingScreen extends StatefulWidget {
 class _SettingScreenState extends State<SettingScreen> {
   final int _selectedIndex = 3;
   bool _isDarkMode = false; // Chức năng Dark Mode
+  static const double _vipEligibilityThreshold = 200000000;
 
   String _t(String vi, String en) => AppText.tr(context, vi, en);
   String _logoutT(String vi, String en) => vi;
@@ -121,6 +122,65 @@ class _SettingScreenState extends State<SettingScreen> {
     return Color(value);
   }
 
+  String? _normalizeSupportedRank(String rawRank) {
+    final String normalized = rawRank.trim().toLowerCase();
+    if (normalized.isEmpty) return null;
+
+    if (normalized.contains('king')) return 'HẠNG KING';
+    if (normalized.contains('royal')) return 'HẠNG ROYAL';
+    if (normalized.contains('kim cương') ||
+        normalized.contains('kim cuong') ||
+        normalized.contains('diamond')) {
+      return 'HẠNG KIM CƯƠNG';
+    }
+    if (normalized.contains('bạch kim') ||
+        normalized.contains('bach kim') ||
+        normalized.contains('platinum')) {
+      return 'HẠNG BẠCH KIM';
+    }
+    if (normalized.contains('vàng') ||
+        normalized.contains('vang') ||
+        normalized.contains('gold')) {
+      return 'HẠNG VÀNG';
+    }
+    if (normalized.contains('bạc') ||
+        normalized.contains('bac') ||
+        normalized.contains('silver')) {
+      return 'HẠNG BẠC';
+    }
+    if (normalized.contains('thành viên') ||
+        normalized.contains('thanh vien') ||
+        normalized.contains('member')) {
+      return 'THÀNH VIÊN';
+    }
+
+    return null;
+  }
+
+  bool _hasVipAccess(
+    Map<String, dynamic> userData, {
+    double? fallbackStandardBalance,
+  }) {
+    final bool hasVipCard = userData['hasVipCard'] == true;
+    final bool isVipLocked = userData['is_vip_locked'] == true;
+    if (hasVipCard) {
+      return !isVipLocked;
+    }
+    if (isVipLocked) {
+      return false;
+    }
+
+    final dynamic rawNormal =
+        userData['balance_normal'] ??
+        userData['standardBalance'] ??
+        userData['balanceNormal'];
+    double standardBalance = _readBalance(rawNormal);
+    if (standardBalance <= 0 && fallbackStandardBalance != null) {
+      standardBalance = fallbackStandardBalance;
+    }
+    return standardBalance >= _vipEligibilityThreshold;
+  }
+
   _MembershipRankData _resolveRankFromFirestore({
     required Map<String, dynamic> userData,
     required double totalBalance,
@@ -130,8 +190,9 @@ class _SettingScreenState extends State<SettingScreen> {
     final String manualRankColor = (userData['manualRankColor'] ?? '')
         .toString()
         .trim();
+    final String? supportedManualRank = _normalizeSupportedRank(manualRank);
 
-    if (manualRank.isEmpty) {
+    if (supportedManualRank == null) {
       return autoRank;
     }
 
@@ -141,7 +202,7 @@ class _SettingScreenState extends State<SettingScreen> {
     final HSLColor hsl = HSLColor.fromColor(baseColor);
 
     return _MembershipRankData(
-      name: manualRank.toUpperCase(),
+      name: supportedManualRank,
       color: baseColor,
       gradient: [
         hsl
@@ -151,7 +212,7 @@ class _SettingScreenState extends State<SettingScreen> {
             .withLightness((hsl.lightness + 0.12).clamp(0, 1).toDouble())
             .toColor(),
       ],
-      icon: _resolveRankIcon(manualRank),
+      icon: _resolveRankIcon(supportedManualRank),
     );
   }
 
@@ -203,7 +264,7 @@ class _SettingScreenState extends State<SettingScreen> {
     if (normalized.contains('thành viên') || normalized.contains('member')) {
       return _t('THÀNH VIÊN', 'MEMBER');
     }
-    return rawName.toUpperCase();
+    return _t('THÀNH VIÊN', 'MEMBER');
   }
 
   double _readBalance(dynamic rawBalance) {
@@ -468,14 +529,16 @@ class _SettingScreenState extends State<SettingScreen> {
                 userData['balance_vip'] ??
                 userData['vipBalance'] ??
                 userData['balanceVip'];
-            final bool hasVipCard = userData['hasVipCard'] == true;
             final bool isStandardLocked =
                 userData['is_standard_locked'] == true;
-            final bool isVipLocked = userData['is_vip_locked'] == true;
+            final bool vipHasAccess = _hasVipAccess(
+              userData,
+              fallbackStandardBalance: standardBalance,
+            );
             final bool hasSplitBalance = rawNormal != null || rawVip != null;
             final double fallbackTotal = hasSplitBalance
                 ? (isStandardLocked ? 0 : _readBalance(rawNormal)) +
-                      ((hasVipCard && !isVipLocked) ? _readBalance(rawVip) : 0)
+                      (vipHasAccess ? _readBalance(rawVip) : 0)
                 : _readBalance(
                     userData['availableBalance'] ??
                         userData['totalBalance'] ??
@@ -484,7 +547,7 @@ class _SettingScreenState extends State<SettingScreen> {
 
             final double totalBalance = hasCardData
                 ? (isStandardLocked ? 0 : standardBalance) +
-                      ((hasVipCard && !isVipLocked) ? vipBalance : 0)
+                      (vipHasAccess ? vipBalance : 0)
                 : fallbackTotal;
 
             final _MembershipRankData rank = _resolveRankFromFirestore(

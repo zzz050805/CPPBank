@@ -49,7 +49,7 @@ class UserInfoModel {
   }) {
     final bool hasVipCard = data['hasVipCard'] == true;
     final String membershipTier =
-        _asText(data['membershipTier']) ?? (hasVipCard ? 'prive' : 'Thành viên');
+        _asText(data['membershipTier']) ?? 'Thành viên';
 
     return UserInfoModel(
       uid: uid,

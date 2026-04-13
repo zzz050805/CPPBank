@@ -227,7 +227,7 @@ class _DataBillScreenState extends State<DataBillScreen>
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFEDEBFF),
+        color: const Color(0xFFF1F3F8),
         borderRadius: BorderRadius.circular(18),
       ),
       child: TextField(
@@ -258,7 +258,7 @@ class _DataBillScreenState extends State<DataBillScreen>
             size: 18,
           ),
           filled: true,
-          fillColor: const Color(0xFFDCD2FF),
+          fillColor: Colors.white,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
             borderSide: BorderSide.none,

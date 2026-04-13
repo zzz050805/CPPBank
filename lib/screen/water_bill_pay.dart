@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -8,6 +8,7 @@ import '../l10n/app_text.dart';
 import '../services/payment_service.dart';
 import '../widget/pin_popup.dart';
 import '../widget/ccp_app_bar.dart';
+import '../widget/custom_card_selector.dart';
 import 'water_bill_success.dart';
 
 class WaterBillPayScreen extends StatefulWidget {
@@ -41,15 +42,15 @@ class _WaterBillPayScreenState extends State<WaterBillPayScreen>
 
   final NumberFormat _moneyFormat = NumberFormat.decimalPattern('vi_VN');
   late final AnimationController _introController;
-  late final Stream<UserProfileData?> _profileStream;
   bool _isSubmitting = false;
+  String? _selectedSourceCardId;
 
   String _t(String vi, String en) => AppText.tr(context, vi, en);
 
   @override
   void initState() {
     super.initState();
-    _profileStream = UserFirestoreService.instance.currentUserProfileStream();
+    _selectedSourceCardId = widget.sourceCardId;
     _introController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 700),
@@ -66,8 +67,11 @@ class _WaterBillPayScreenState extends State<WaterBillPayScreen>
     return '${_moneyFormat.format(amount)}d';
   }
 
-  String _formatBalanceLine(double amount) {
-    return '${_t('Số dư', 'Balance')}: ${_moneyFormat.format(amount)} đ';
+  String _resolveUid() {
+    return (UserFirestoreService.instance.currentUserDocId ??
+            FirebaseAuth.instance.currentUser?.uid ??
+            '')
+        .trim();
   }
 
   Future<void> _processPayment() async {
@@ -84,7 +88,7 @@ class _WaterBillPayScreenState extends State<WaterBillPayScreen>
         amount: widget.totalAmount,
         billType: 'water',
         billId: widget.customerCode,
-        sourceCardId: widget.sourceCardId,
+        sourceCardId: _selectedSourceCardId,
       );
 
       if (!mounted) {
@@ -132,148 +136,6 @@ class _WaterBillPayScreenState extends State<WaterBillPayScreen>
         });
       }
     }
-  }
-
-  bool _parseHasVipCard(dynamic value) {
-    if (value is bool) return value;
-    if (value is num) return value != 0;
-    if (value is String) {
-      final String normalized = value.trim().toLowerCase();
-      return normalized == 'true' || normalized == '1';
-    }
-    return false;
-  }
-
-  double _parseBalance(dynamic rawBalance) {
-    if (rawBalance is num) return rawBalance.toDouble();
-    if (rawBalance is String) return double.tryParse(rawBalance) ?? 0;
-    return 0;
-  }
-
-  Widget _buildLiveBalanceSubtitle() {
-    return StreamBuilder<UserProfileData?>(
-      stream: _profileStream,
-      initialData: UserFirestoreService.instance.latestProfile,
-      builder:
-          (
-            BuildContext context,
-            AsyncSnapshot<UserProfileData?> profileSnapshot,
-          ) {
-            final UserProfileData? profile =
-                profileSnapshot.data ??
-                UserFirestoreService.instance.latestProfile;
-            final String? uid = profile?.uid;
-
-            if (uid == null || uid.isEmpty) {
-              return Text(
-                '${_t('Số dư', 'Balance')}: --',
-                style: GoogleFonts.poppins(
-                  fontSize: 12,
-                  color: const Color(0xFF7E85A1),
-                  fontWeight: FontWeight.w500,
-                ),
-              );
-            }
-
-            return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-              stream: FirebaseFirestore.instance
-                  .collection('users')
-                  .doc(uid)
-                  .snapshots(),
-              builder:
-                  (
-                    BuildContext context,
-                    AsyncSnapshot<DocumentSnapshot<Map<String, dynamic>>>
-                    userSnapshot,
-                  ) {
-                    final bool hasVipCard = _parseHasVipCard(
-                      userSnapshot.data?.data()?['hasVipCard'],
-                    );
-
-                    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                      stream: FirebaseFirestore.instance
-                          .collection('users')
-                          .doc(uid)
-                          .collection('cards')
-                          .snapshots(),
-                      builder:
-                          (
-                            BuildContext context,
-                            AsyncSnapshot<QuerySnapshot<Map<String, dynamic>>>
-                            cardsSnapshot,
-                          ) {
-                            if (cardsSnapshot.connectionState ==
-                                    ConnectionState.waiting &&
-                                !cardsSnapshot.hasData) {
-                              return Text(
-                                '${_t('Số dư', 'Balance')}: ...',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 12,
-                                  color: const Color(0xFF7E85A1),
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              );
-                            }
-
-                            if (cardsSnapshot.hasError ||
-                                userSnapshot.hasError) {
-                              return Text(
-                                _t(
-                                  'Không tải được số dư',
-                                  'Unable to load balance',
-                                ),
-                                style: GoogleFonts.poppins(
-                                  fontSize: 12,
-                                  color: const Color(0xFF7E85A1),
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              );
-                            }
-
-                            double standardBalance = 0;
-                            double vipBalance = 0;
-
-                            for (final QueryDocumentSnapshot<
-                                  Map<String, dynamic>
-                                >
-                                doc
-                                in (cardsSnapshot.data?.docs ??
-                                    <
-                                      QueryDocumentSnapshot<
-                                        Map<String, dynamic>
-                                      >
-                                    >[])) {
-                              final Map<String, dynamic> data = doc.data();
-                              final double balance = _parseBalance(
-                                data['balance'],
-                              );
-                              final String docId = doc.id.toLowerCase();
-
-                              if (docId == 'standard') {
-                                standardBalance = balance;
-                              } else if (docId == 'vip') {
-                                vipBalance = balance;
-                              }
-                            }
-
-                            final double totalBalance = hasVipCard
-                                ? standardBalance + vipBalance
-                                : standardBalance;
-
-                            return Text(
-                              _formatBalanceLine(totalBalance),
-                              style: GoogleFonts.poppins(
-                                fontSize: 12,
-                                color: const Color(0xFF7E85A1),
-                                fontWeight: FontWeight.w500,
-                              ),
-                            );
-                          },
-                    );
-                  },
-            );
-          },
-    );
   }
 
   Widget _reveal(int index, Widget child) {
@@ -513,9 +375,9 @@ class _WaterBillPayScreenState extends State<WaterBillPayScreen>
   }
 
   Widget _buildCcpBankPaymentTile() {
-    return Material(
-      color: Colors.transparent,
-      child: Container(
+    final String uid = _resolveUid();
+    if (uid.isEmpty) {
+      return Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         decoration: BoxDecoration(
           color: const Color(0xFFEAF0FF),
@@ -525,47 +387,30 @@ class _WaterBillPayScreenState extends State<WaterBillPayScreen>
             width: 1.6,
           ),
         ),
-        child: Row(
-          children: <Widget>[
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: _primaryBlue.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(
-                Icons.account_balance_rounded,
-                color: _primaryBlue,
-                size: 20,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    'CCP BANK',
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF242842),
-                    ),
-                  ),
-                  const SizedBox(height: 1),
-                  _buildLiveBalanceSubtitle(),
-                ],
-              ),
-            ),
-            const Icon(
-              Icons.check_circle_rounded,
-              color: _primaryBlue,
-              size: 20,
-            ),
-          ],
+        child: Text(
+          AppText.text(context, 'card_unavailable'),
+          style: GoogleFonts.poppins(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: const Color(0xFF5F6682),
+          ),
         ),
-      ),
+      );
+    }
+
+    return CustomCardSelector(
+      uid: uid,
+      selectedCardId: _selectedSourceCardId,
+      backgroundColor: const Color(0xFFEAF0FF),
+      textColor: const Color(0xFF242842),
+      onChanged: (CustomCardSelection selection) {
+        if (!mounted || _selectedSourceCardId == selection.id) {
+          return;
+        }
+        setState(() {
+          _selectedSourceCardId = selection.id;
+        });
+      },
     );
   }
 

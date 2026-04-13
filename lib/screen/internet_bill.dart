@@ -1,11 +1,14 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 import '../l10n/app_text.dart';
 import '../services/payment_service.dart';
+import '../services/user_firestore_service.dart';
 import '../widget/ccp_app_bar.dart';
+import '../widget/custom_card_selector.dart';
 import '../widget/pin_popup.dart';
 import 'bill_mock_data.dart';
 import 'main_tab_shell.dart';
@@ -25,8 +28,6 @@ class _InternetBillScreenState extends State<InternetBillScreen>
   static const Color _surface = Color(0xFFF6F7FF);
 
   final TextEditingController _customerCodeController = TextEditingController();
-
-  final NumberFormat _moneyFormat = NumberFormat.decimalPattern('vi_VN');
   late final AnimationController _introController;
 
   bool _isLookingUp = false;
@@ -103,10 +104,6 @@ class _InternetBillScreenState extends State<InternetBillScreen>
 
   String _normalizeCode(String raw) {
     return raw.trim().toUpperCase();
-  }
-
-  String _formatVnd(num value) {
-    return '${_moneyFormat.format(value)} VND';
   }
 
   RegExp _patternForSelectedService() {
@@ -957,11 +954,65 @@ class _InternetBillConfirmationScreenState
 
   final NumberFormat _moneyFormat = NumberFormat.decimalPattern('vi_VN');
   bool _isPaying = false;
+  String? _selectedSourceCardId;
 
   String _t(String vi, String en) => AppText.tr(context, vi, en);
 
+  @override
+  void initState() {
+    super.initState();
+    _selectedSourceCardId = widget.sourceCardId;
+  }
+
   String _formatVnd(double amount) {
     return '${_moneyFormat.format(amount)} VND';
+  }
+
+  String _resolveUid() {
+    return (UserFirestoreService.instance.currentUserDocId ??
+            FirebaseAuth.instance.currentUser?.uid ??
+            '')
+        .trim();
+  }
+
+  Widget _buildPaymentMethodSelector() {
+    final String uid = _resolveUid();
+    if (uid.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFEAF0FF),
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(
+            color: _primaryBlue.withValues(alpha: 0.9),
+            width: 1.6,
+          ),
+        ),
+        child: Text(
+          AppText.text(context, 'card_unavailable'),
+          style: GoogleFonts.poppins(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: const Color(0xFF5F6682),
+          ),
+        ),
+      );
+    }
+
+    return CustomCardSelector(
+      uid: uid,
+      selectedCardId: _selectedSourceCardId,
+      backgroundColor: const Color(0xFFEAF0FF),
+      textColor: const Color(0xFF242842),
+      onChanged: (CustomCardSelection selection) {
+        if (!mounted || _selectedSourceCardId == selection.id) {
+          return;
+        }
+        setState(() {
+          _selectedSourceCardId = selection.id;
+        });
+      },
+    );
   }
 
   Future<void> _confirmAndPay() async {
@@ -990,7 +1041,7 @@ class _InternetBillConfirmationScreenState
                   amount: widget.lookupResult.amountVnd,
                   billType: 'internet',
                   billId: widget.lookupResult.customerCode,
-                  sourceCardId: widget.sourceCardId,
+                  sourceCardId: _selectedSourceCardId,
                 );
 
             if (!mounted) {
@@ -1187,6 +1238,17 @@ class _InternetBillConfirmationScreenState
                       ],
                     ),
                   ),
+                  const SizedBox(height: 18),
+                  Text(
+                    _t('Phương thức thanh toán', 'Payment method'),
+                    style: GoogleFonts.poppins(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF1B1E30),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  _buildPaymentMethodSelector(),
                   const Spacer(),
                   SizedBox(
                     width: double.infinity,

@@ -23,6 +23,8 @@ class UserProfileData {
 class UserFirestoreService {
   UserFirestoreService._();
 
+  static const double _vipEligibilityThreshold = 200000000;
+
   static final UserFirestoreService instance = UserFirestoreService._();
 
   final ValueNotifier<String?> _fallbackDocId = ValueNotifier<String?>(null);
@@ -105,6 +107,28 @@ class UserFirestoreService {
     return 0;
   }
 
+  double _readStandardBalanceFromUserData(Map<String, dynamic> userData) {
+    return _parseBalance(
+      userData['balance_normal'] ??
+          userData['standardBalance'] ??
+          userData['balanceNormal'],
+    );
+  }
+
+  bool _hasVipAccess(Map<String, dynamic> userData) {
+    if (_parseHasVipCard(userData['hasVipCard'])) {
+      return true;
+    }
+
+    final bool vipLocked = _parseBool(userData['is_vip_locked']);
+    if (!vipLocked) {
+      return true;
+    }
+
+    final double standardBalance = _readStandardBalanceFromUserData(userData);
+    return standardBalance >= _vipEligibilityThreshold;
+  }
+
   bool _isActiveStatus(dynamic value) {
     final String status = (value ?? '').toString().trim().toLowerCase();
     if (status.isEmpty) {
@@ -119,11 +143,6 @@ class UserFirestoreService {
     required Map<String, dynamic> userData,
   }) {
     final String normalizedCardId = cardId.trim().toLowerCase();
-    final bool hasVipCard = _parseHasVipCard(userData['hasVipCard']);
-
-    if (normalizedCardId == 'vip' && !hasVipCard) {
-      return false;
-    }
 
     final bool lockFromCard =
         _parseBool(cardData['is_locked']) || _parseBool(cardData['isLocked']);
@@ -135,6 +154,10 @@ class UserFirestoreService {
               : false);
 
     if (lockFromCard || lockFromUser) {
+      return false;
+    }
+
+    if (normalizedCardId == 'vip' && !_hasVipAccess(userData)) {
       return false;
     }
 

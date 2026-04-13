@@ -25,8 +25,14 @@ class HomeCacheData {
   final bool isReady;
 
   double get totalBalance {
+    const double vipEligibilityThreshold = 200000000;
     final double visibleStandard = isStandardLocked ? 0 : standardBalance;
-    final double visibleVip = (hasVipCard && !isVipLocked) ? vipBalance : 0;
+    final bool vipHasAccess =
+        !isVipLocked &&
+        (hasVipCard ||
+            standardBalance >= vipEligibilityThreshold ||
+            vipBalance > 0);
+    final double visibleVip = vipHasAccess ? vipBalance : 0;
     return visibleStandard + visibleVip;
   }
 

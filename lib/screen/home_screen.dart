@@ -1872,6 +1872,7 @@ class _HomeScreenState extends State<HomeScreen> {
         final bool hasVipCard = userData['hasVipCard'] == true;
         final bool isStandardLocked = userData['is_standard_locked'] == true;
         final bool isVipLocked = userData['is_vip_locked'] == true;
+        const double vipEligibilityThreshold = 200000000;
 
         return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
           stream: userRef
@@ -1919,9 +1920,14 @@ class _HomeScreenState extends State<HomeScreen> {
             double resolvedTotal = 0;
 
             if (hasCardData) {
+              final bool vipHasAccess =
+                  !isVipLocked &&
+                  (hasVipCard ||
+                      normalBalance >= vipEligibilityThreshold ||
+                      vipBalance > 0);
               resolvedTotal =
                   (isStandardLocked ? 0 : normalBalance) +
-                  ((hasVipCard && !isVipLocked) ? vipBalance : 0);
+                  (vipHasAccess ? vipBalance : 0);
             } else {
               final dynamic rawNormal =
                   userData['balance_normal'] ??
@@ -1938,9 +1944,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   rawNormal,
                 );
                 final double vipFallback = _readUserBalanceField(rawVip);
+                final bool vipHasAccessFallback =
+                    !isVipLocked &&
+                    (hasVipCard ||
+                        standardFallback >= vipEligibilityThreshold ||
+                        vipFallback > 0);
                 resolvedTotal =
                     (isStandardLocked ? 0 : standardFallback) +
-                    ((hasVipCard && !isVipLocked) ? vipFallback : 0);
+                    (vipHasAccessFallback ? vipFallback : 0);
               } else {
                 resolvedTotal = _readUserBalanceField(
                   userData['availableBalance'] ??
