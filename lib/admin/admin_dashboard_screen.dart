@@ -808,10 +808,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-  double _readUserTotalBalance(Map<String, dynamic> data) {
-    return _readUserNormalBalance(data) + _readUserVipBalance(data);
-  }
-
   double _parseBalanceInput(String raw) {
     final String trimmed = raw.trim();
     if (trimmed.isEmpty) {
@@ -1830,13 +1826,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           final bool hasVipCard = data['hasVipCard'] == true;
           final bool isStandardLocked = data['is_standard_locked'] == true;
           final bool isVipLocked = data['is_vip_locked'] == true;
-          final double visibleNormalBalance = isStandardLocked
-              ? 0
-              : balanceNormal;
-          final double visibleVipBalance = (hasVipCard && !isVipLocked)
-              ? balanceVip
-              : 0;
-          final double totalBalance = visibleNormalBalance + visibleVipBalance;
+          // System-level totals must include both cards for every user.
+          final double totalBalance = balanceNormal + balanceVip;
           final String rawCardNumber = CardNumberService.readStoredCardNumber(
             data,
           );

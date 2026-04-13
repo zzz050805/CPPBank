@@ -238,14 +238,13 @@ class ConfirmTransferScreen extends StatelessWidget {
       'Insufficient balance.',
     );
 
+    // Always fetch latest card data in transaction
     await firestore.runTransaction((Transaction transaction) async {
       final DocumentSnapshot<Map<String, dynamic>> userSnap = await transaction
           .get(userRef);
-
       if (!userSnap.exists) {
         throw _TransferConfirmationException(accountNotFoundMessage);
       }
-
       final Map<String, dynamic> userData =
           userSnap.data() ?? <String, dynamic>{};
       final bool hasVipCard = userData['hasVipCard'] == true;
@@ -254,7 +253,6 @@ class ConfirmTransferScreen extends StatelessWidget {
           await transaction.get(standardCardRef);
       final DocumentSnapshot<Map<String, dynamic>> vipCardSnap =
           await transaction.get(vipCardRef);
-
       final Map<String, dynamic> standardCardData =
           standardCardSnap.data() ?? <String, dynamic>{};
       final Map<String, dynamic> vipCardData =
@@ -298,18 +296,37 @@ class ConfirmTransferScreen extends StatelessWidget {
         throw _TransferConfirmationException(insufficientBalanceMessage);
       }
 
+      // Fix: If user selects VIP, and hasVipCard, and card is not locked and status is active, allow transfer
       if (!useStandard && !useVip) {
         throw _TransferConfirmationException(
           AppText.text(context, 'card_unavailable'),
         );
       }
-
       if (!selectedAvailable) {
+        // Give more detail for VIP
+        if (useVip && !vipAvailable) {
+          // Check if locked or status
+          final bool isVipLocked =
+              userData['is_vip_locked'] == true ||
+              vipCardData['is_locked'] == true;
+          final String status = (vipCardData['status'] ?? '')
+              .toString()
+              .toLowerCase();
+          if (isVipLocked) {
+            throw _TransferConfirmationException(
+              AppText.text(context, 'card_locked'),
+            );
+          }
+          if (status != 'active') {
+            throw _TransferConfirmationException(
+              AppText.text(context, 'card_unavailable'),
+            );
+          }
+        }
         throw _TransferConfirmationException(
           AppText.text(context, 'card_unavailable'),
         );
       }
-
       if (selectedBalance < amount) {
         throw _TransferConfirmationException(insufficientBalanceMessage);
       }
